@@ -1,0 +1,2 @@
+-- Bootstrap migration. No business tables are introduced in the technical bootstrap.
+-- Add domain models only in their assigned backlog tasks and generate a reviewed migration.

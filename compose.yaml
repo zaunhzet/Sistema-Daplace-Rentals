@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: daplace
+      POSTGRES_PASSWORD: daplace_local_only
+      POSTGRES_DB: daplace_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - daplace-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U daplace -d daplace_dev"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  daplace-postgres:
