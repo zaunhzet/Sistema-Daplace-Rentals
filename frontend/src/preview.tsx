@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
+import { Home, TriangleAlert, Users } from 'lucide-react';
 import './styles.css';
 import { PropertiesPage } from './features/properties';
 import { GuestsPage } from './features/guests';
@@ -8,11 +9,13 @@ import { Sidebar, NAVIGATION_ITEMS } from './shared/navigation';
 import type { NavigationItem } from './shared/navigation';
 
 function PendingModuleView({ item }: { item: NavigationItem }) {
+  const ModuleIcon = item.icon;
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <div className="rounded-3xl border border-stone-200 bg-white p-8 sm:p-12 shadow-xs">
         <div className="flex items-center gap-3 mb-4">
-          <span className="text-3xl" aria-hidden="true">{item.icon}</span>
+          <ModuleIcon className="size-7 text-[#5E6C5B]" strokeWidth={1.7} aria-hidden="true" />
           <div>
             <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-semibold text-stone-600">
               Ruta: {item.path}
@@ -51,7 +54,10 @@ function PendingModuleView({ item }: { item: NavigationItem }) {
         </div>
 
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-xs text-amber-900 leading-5">
-          <p className="font-semibold text-amber-950 mb-0.5">⚠️ Integración pendiente</p>
+          <p className="mb-0.5 flex items-center gap-1.5 font-semibold text-amber-950">
+            <TriangleAlert size={14} aria-hidden="true" />
+            Integración pendiente
+          </p>
           Esta pantalla no simula funcionalidades inexistentes. Se habilitará cuando el responsable correspondiente complete su implementación según el backlog técnico del MVP.
         </div>
       </div>
@@ -67,7 +73,7 @@ function PreviewApp() {
     id: 'unknown',
     name: 'Desconocido',
     path: currentPath,
-    icon: '❓',
+    icon: Home,
     description: 'Ruta no registrada en el catálogo.',
     status: 'PENDIENTE',
     responsible: 'Compartido',
@@ -109,7 +115,8 @@ function PreviewApp() {
                   : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
               }`}
             >
-              🏢 Propiedades
+              <Home size={14} aria-hidden="true" />
+              Propiedades
             </button>
             <button
               type="button"
@@ -120,7 +127,8 @@ function PreviewApp() {
                   : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
               }`}
             >
-              👥 Huéspedes
+              <Users size={14} aria-hidden="true" />
+              Huéspedes
             </button>
           </div>
         </header>

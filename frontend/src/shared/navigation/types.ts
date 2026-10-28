@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+
 export type NavigationItemStatus = 'DISPONIBLE' | 'PENDIENTE';
 
 export type DeveloperResponsible = 'André' | 'Diego' | 'Compartido';
@@ -12,7 +14,7 @@ export interface NavigationItem {
   id: string;
   name: string;
   path: string;
-  icon: string;
+  icon: LucideIcon;
   description: string;
   status: NavigationItemStatus;
   responsible: DeveloperResponsible;

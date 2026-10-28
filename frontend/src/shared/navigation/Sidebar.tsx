@@ -1,6 +1,19 @@
 import React, { useState } from 'react';
+import {
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  X,
+} from 'lucide-react';
 import type { NavigationGroup, NavigationItem, SidebarProps } from './types';
 import { NAVIGATION_ITEMS } from './navItems';
+
+const GROUPS: NavigationGroup[] = [
+  'Principal',
+  'Gestión Inmobiliaria',
+  'Finanzas',
+  'Operaciones',
+];
 
 export const Sidebar: React.FC<SidebarProps> = ({
   currentPath,
@@ -12,81 +25,78 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // Group items by group
-  const groups: NavigationGroup[] = [
-    'Principal',
-    'Gestión Inmobiliaria',
-    'Finanzas',
-    'Operaciones',
-  ];
-
   const handleItemClick = (item: NavigationItem) => {
-    if (onNavigate) {
-      onNavigate(item.path, item);
-    }
+    onNavigate?.(item.path, item);
     setMobileOpen(false);
   };
 
-  const navContent = (
-    <div className="flex h-full flex-col justify-between">
-      {/* Brand & Header */}
-      <div>
-        <div className="flex items-center justify-between px-5 py-5 border-b border-[#243f42]">
-          <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-xl bg-[#5E6C5B] text-sm font-bold text-[#FEFCF6] shadow-xs">
-              D
-            </span>
-            {!collapsed && (
-              <div>
-                <span className="text-base font-bold tracking-tight text-[#FEFCF6]">
-                  daplace <span className="font-normal text-[#D6E0E2]/70">rentals</span>
-                </span>
-                <span className="block text-[10px] tracking-wider uppercase text-[#D6E0E2]/60">
-                  Panel Operativo
-                </span>
-              </div>
-            )}
-          </div>
-
-          {onToggleCollapse && (
-            <button
-              type="button"
-              onClick={onToggleCollapse}
-              aria-label={collapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-              className="hidden lg:flex size-7 items-center justify-center rounded-lg bg-[#243f42] text-[#D6E0E2] hover:bg-[#5E6C5B] hover:text-[#FEFCF6] transition-colors cursor-pointer text-xs"
-            >
-              {collapsed ? '→' : '←'}
-            </button>
+  const renderNavigation = (isCollapsed: boolean, isMobile = false) => (
+    <div className="flex h-full min-h-0 flex-col bg-[#162A2C] text-[#FEFCF6]">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#5E6C5B] text-sm font-semibold tracking-wide text-[#FEFCF6]">
+            D
+          </span>
+          {!isCollapsed && (
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold tracking-[-0.02em] text-[#FEFCF6]">
+                daplace <span className="font-normal text-[#D6E0E2]/75">rentals</span>
+              </p>
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#D6E0E2]/65">
+                Panel operativo
+              </p>
+            </div>
           )}
+        </div>
 
-          {/* Mobile close button */}
+        {isMobile ? (
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
             aria-label="Cerrar menú móvil"
-            className="lg:hidden text-[#D6E0E2] hover:text-[#FEFCF6] text-lg p-1"
+            className="grid size-9 place-items-center rounded-lg text-[#D6E0E2]/80 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2]"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
-        </div>
+        ) : onToggleCollapse ? (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            title={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
+            className="hidden size-8 shrink-0 place-items-center rounded-lg text-[#D6E0E2]/75 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] lg:grid"
+          >
+            {isCollapsed ? (
+              <PanelLeftOpen size={17} aria-hidden="true" />
+            ) : (
+              <PanelLeftClose size={17} aria-hidden="true" />
+            )}
+          </button>
+        ) : null}
+      </div>
 
-        {/* Navigation Groups */}
-        <nav aria-label="Menú del sistema" className="px-3 py-4 space-y-6 overflow-y-auto max-h-[calc(100vh-140px)]">
-          {groups.map((groupName) => {
+      <nav
+        aria-label="Menú del sistema"
+        className={`min-h-0 flex-1 overflow-y-auto py-5 ${isCollapsed ? 'px-2.5' : 'px-3'}`}
+      >
+        <div className="space-y-6">
+          {GROUPS.map((groupName) => {
             const groupItems = items.filter((item) => item.group === groupName);
             if (groupItems.length === 0) return null;
 
             return (
-              <div key={groupName} className="space-y-1">
-                {!collapsed && (
-                  <h3 className="px-3 text-[11px] font-semibold uppercase tracking-wider text-[#D6E0E2]/50">
+              <section key={groupName} aria-label={isCollapsed ? undefined : groupName}>
+                {!isCollapsed && (
+                  <h2 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D6E0E2]/55">
                     {groupName}
-                  </h3>
+                  </h2>
                 )}
-                <ul role="list" className="space-y-1 mt-1.5">
+                <ul className="space-y-1">
                   {groupItems.map((item) => {
                     const isActive = currentPath === item.path;
                     const isAvailable = item.status === 'DISPONIBLE';
+                    const ItemIcon = item.icon;
+                    const statusText = isAvailable ? 'Disponible' : 'Pendiente de desarrollo';
 
                     return (
                       <li key={item.id}>
@@ -94,100 +104,94 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           type="button"
                           onClick={() => handleItemClick(item)}
                           aria-current={isActive ? 'page' : undefined}
-                          title={`${item.name} (${item.status === 'DISPONIBLE' ? 'Módulo Activo' : `Pendiente — ${item.responsible}`})`}
-                          className={`w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors cursor-pointer ${
+                          aria-label={`${item.name}, ${statusText}`}
+                          title={`${item.name} · ${statusText}`}
+                          className={`group flex min-h-10 w-full items-center rounded-xl text-left text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] focus-visible:ring-offset-2 focus-visible:ring-offset-[#162A2C] ${
+                            isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                          } ${
                             isActive
-                              ? 'bg-[#5E6C5B] text-[#FEFCF6] shadow-xs'
-                              : isAvailable
-                              ? 'text-[#FEFCF6]/90 hover:bg-[#243f42] hover:text-[#FEFCF6]'
-                              : 'text-[#D6E0E2]/60 hover:bg-[#1f3739] hover:text-[#D6E0E2]'
+                              ? 'bg-[#5E6C5B] text-[#FEFCF6]'
+                              : 'text-[#D6E0E2]/80 hover:bg-white/[0.07] hover:text-[#FEFCF6]'
                           }`}
                         >
-                          <div className="flex items-center gap-2.5 truncate">
-                            <span className="text-sm shrink-0" aria-hidden="true">
-                              {item.icon}
-                            </span>
-                            {!collapsed && (
-                              <span className="truncate">{item.name}</span>
-                            )}
-                          </div>
-
-                          {!collapsed && (
-                            <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                              {isAvailable ? (
-                                <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                                  {item.badge || 'Listo'}
-                                </span>
-                              ) : (
-                                <span className="rounded-full bg-[#243f42] px-1.5 py-0.5 text-[9px] text-[#D6E0E2]/70 font-mono">
-                                  {item.responsible}
-                                </span>
-                              )}
-                            </div>
+                          <ItemIcon
+                            size={18}
+                            strokeWidth={1.8}
+                            aria-hidden="true"
+                            className={`shrink-0 ${isActive ? 'text-[#FEFCF6]' : 'text-[#D6E0E2]/75 group-hover:text-[#FEFCF6]'}`}
+                          />
+                          {!isCollapsed && (
+                            <>
+                              <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                              <span
+                                aria-hidden="true"
+                                className={`size-1.5 shrink-0 rounded-full ${
+                                  isAvailable ? 'bg-[#B9CDB4]' : 'bg-[#D6E0E2]/35'
+                                }`}
+                              />
+                            </>
                           )}
                         </button>
                       </li>
                     );
                   })}
                 </ul>
-              </div>
+              </section>
             );
           })}
-        </nav>
-      </div>
-
-      {/* Footer / Dev info */}
-      {!collapsed && (
-        <div className="px-4 py-3.5 border-t border-[#243f42] bg-[#122224] text-[11px] text-[#D6E0E2]/60">
-          <p className="font-medium text-[#D6E0E2]/90 flex items-center justify-between">
-            <span>DAPLACE MVP</span>
-            <span className="text-[10px] text-emerald-300 font-mono">v0.1.0</span>
-          </p>
-          <p className="mt-0.5 text-[10px]">André (Gestión) · Diego (Layout)</p>
         </div>
+      </nav>
+
+      {!isCollapsed && (
+        <footer className="border-t border-white/10 px-5 py-4">
+          <p className="text-[11px] font-semibold tracking-wide text-[#D6E0E2]/80">
+            DAPLACE RENTALS
+          </p>
+          <p className="mt-1 text-[10px] text-[#D6E0E2]/50">Panel de gestión de propiedades</p>
+        </footer>
       )}
     </div>
   );
 
   return (
     <>
-      {/* Mobile Toggle Trigger */}
-      <div className="lg:hidden fixed bottom-4 right-4 z-50">
+      <div className="fixed bottom-4 right-4 z-40 lg:hidden">
         <button
           type="button"
-          onClick={() => setMobileOpen(!mobileOpen)}
-          aria-label="Abrir menú de navegación"
-          className="flex items-center gap-2 rounded-2xl bg-[#162A2C] px-4 py-3 text-sm font-semibold text-[#FEFCF6] shadow-lg border border-[#243f42] cursor-pointer"
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-label={mobileOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
+          aria-expanded={mobileOpen}
+          aria-controls="daplace-mobile-navigation"
+          className="flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-[#162A2C] px-4 text-sm font-semibold text-[#FEFCF6] shadow-lg transition-colors hover:bg-[#243f42] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5E6C5B]"
         >
-          <span>☰</span>
+          <Menu size={17} aria-hidden="true" />
           <span>Menú</span>
         </button>
       </div>
 
-      {/* Mobile Drawer Overlay */}
       {mobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
+          className="fixed inset-0 z-50 bg-black/45 lg:hidden"
           onClick={() => setMobileOpen(false)}
         >
           <aside
+            id="daplace-mobile-navigation"
             aria-label="Navegación principal móvil"
-            className="w-72 h-full bg-[#162A2C] shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="h-full w-[min(19rem,calc(100vw-2.5rem))] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
-            {navContent}
+            {renderNavigation(false, true)}
           </aside>
         </div>
       )}
 
-      {/* Desktop Persistent Sidebar */}
       <aside
         aria-label="Navegación principal"
-        className={`hidden lg:flex flex-col shrink-0 bg-[#162A2C] border-r border-[#243f42] transition-all duration-200 ${
+        className={`sticky top-0 hidden h-screen shrink-0 border-r border-white/10 transition-[width] duration-200 lg:flex ${
           collapsed ? 'w-20' : 'w-64'
         } ${className}`}
       >
-        {navContent}
+        {renderNavigation(collapsed)}
       </aside>
     </>
   );
