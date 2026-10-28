@@ -1,0 +1,113 @@
+import type { NavigationItem } from './types';
+
+export const NAVIGATION_ITEMS: NavigationItem[] = [
+  // Grupo: Principal
+  {
+    id: 'nav-dashboard',
+    name: 'Dashboard',
+    path: '/dashboard',
+    icon: '📊',
+    description: 'Indicadores globales y resumen transaccional del negocio',
+    status: 'PENDIENTE',
+    responsible: 'Diego',
+    group: 'Principal',
+  },
+
+  // Grupo: Gestión Inmobiliaria
+  {
+    id: 'nav-propiedades',
+    name: 'Propiedades',
+    path: '/propiedades',
+    icon: '🏢',
+    description: 'Catálogo de inmuebles, vinculación de propietarios y estados (HU-18 / RF01)',
+    status: 'DISPONIBLE',
+    responsible: 'André',
+    group: 'Gestión Inmobiliaria',
+    badge: 'Listo',
+  },
+  {
+    id: 'nav-huespedes',
+    name: 'Huéspedes',
+    path: '/huespedes',
+    icon: '👥',
+    description: 'Directorio de huéspedes, validación de contacto y reservas (HU-04 / RF04)',
+    status: 'DISPONIBLE',
+    responsible: 'André',
+    group: 'Gestión Inmobiliaria',
+    badge: 'Listo',
+  },
+  {
+    id: 'nav-reservas',
+    name: 'Reservas',
+    path: '/reservas',
+    icon: '📅',
+    description: 'Solicitudes y gestión de reservas con prevención de solape (HU-02, HU-03 / RF02, RF03)',
+    status: 'PENDIENTE',
+    responsible: 'André',
+    group: 'Gestión Inmobiliaria',
+  },
+  {
+    id: 'nav-calendario',
+    name: 'Calendario',
+    path: '/calendario',
+    icon: '🗓️',
+    description: 'Visualización temporal y disponibilidad por inmueble (RF01)',
+    status: 'PENDIENTE',
+    responsible: 'André',
+    group: 'Gestión Inmobiliaria',
+  },
+
+  // Grupo: Finanzas
+  {
+    id: 'nav-pagos',
+    name: 'Pagos y Conciliación',
+    path: '/pagos',
+    icon: '💳',
+    description: 'Adelantos, saldos y conciliación de ingresos por alquiler (HU-05 / RF05)',
+    status: 'PENDIENTE',
+    responsible: 'André',
+    group: 'Finanzas',
+  },
+  {
+    id: 'nav-garantias',
+    name: 'Garantías',
+    path: '/garantias',
+    icon: '🛡️',
+    description: 'Custodia, devolución y retención separada de fondos (HU-06 / RF06)',
+    status: 'PENDIENTE',
+    responsible: 'André',
+    group: 'Finanzas',
+  },
+  {
+    id: 'nav-reportes',
+    name: 'Reportes',
+    path: '/reportes',
+    icon: '📈',
+    description: 'Liquidaciones por propiedad y período reproducible (HU-07, HU-12 / RF08, RF12)',
+    status: 'PENDIENTE',
+    responsible: 'Diego',
+    group: 'Finanzas',
+  },
+
+  // Grupo: Operaciones
+  {
+    id: 'nav-mantenimiento',
+    name: 'Mantenimiento',
+    path: '/mantenimiento',
+    icon: '🔧',
+    description: 'Inspecciones post-salida y asignación de trabajos de campo (HU-10, HU-14 / RF07, RF13)',
+    status: 'PENDIENTE',
+    responsible: 'Compartido',
+    group: 'Operaciones',
+  },
+  {
+    id: 'nav-personal',
+    name: 'Personal y Cuentas',
+    path: '/personal',
+    icon: '👤',
+    description: 'Gestión de operadores internos y control de acceso (HU-19 / RF09)',
+    status: 'PENDIENTE',
+    responsible: 'Diego',
+    group: 'Operaciones',
+  },
+];
