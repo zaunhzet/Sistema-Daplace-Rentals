@@ -8,6 +8,7 @@ import type {
   UpdateGuestDto,
 } from '../types';
 import { INITIAL_GUESTS_MOCK } from './mockGuests';
+import { INITIAL_RESERVATIONS_MOCK } from '../../reservations/services/mockReservations';
 
 export function validateGuest(dto: Partial<CreateGuestDto>): GuestValidationResult {
   const errors: Record<string, string> = {};
@@ -100,7 +101,20 @@ class MockGuestService implements IGuestService {
         reservas = [];
       }
     } else {
-      reservas = guest.reservasRelacionadas || [];
+      reservas = (guest.reservasRelacionadas && guest.reservasRelacionadas.length > 0)
+        ? guest.reservasRelacionadas
+        : INITIAL_RESERVATIONS_MOCK
+            .filter((r) => r.huespedId === id)
+            .map((r) => ({
+              id: r.id,
+              propiedadId: r.propiedadId,
+              propiedadNombre: r.propiedadNombre,
+              ingreso: r.ingreso,
+              salida: r.salida,
+              estado: r.estado,
+              montoTotal: r.montoAcordado.toFixed(2),
+              moneda: r.moneda,
+            }));
     }
 
     return {

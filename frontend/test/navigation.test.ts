@@ -29,25 +29,21 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
     assert.equal(loginItem, undefined, 'Login should not be a navigation business item');
   });
 
-  it('marks Propiedades and Huéspedes as DISPONIBLE', () => {
-    const propiedades = NAVIGATION_ITEMS.find((it) => it.path === '/propiedades');
-    const huespedes = NAVIGATION_ITEMS.find((it) => it.path === '/huespedes');
-
-    assert.ok(propiedades);
-    assert.equal(propiedades?.status, 'DISPONIBLE');
-    assert.equal(propiedades?.responsible, 'André');
-
-    assert.ok(huespedes);
-    assert.equal(huespedes?.status, 'DISPONIBLE');
-    assert.equal(huespedes?.responsible, 'André');
+  it('marks Propiedades, Huéspedes, Reservas and Calendario as DISPONIBLE', () => {
+    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario'];
+    for (const path of availablePaths) {
+      const item = NAVIGATION_ITEMS.find((it) => it.path === path);
+      assert.ok(item, `Path ${path} should exist in navigation`);
+      assert.equal(item?.status, 'DISPONIBLE', `Item ${path} should be DISPONIBLE`);
+      assert.equal(item?.responsible, 'André');
+    }
   });
 
-  it('marks other routes as PENDIENTE without simulating non-existent features', () => {
-    const pendingItems = NAVIGATION_ITEMS.filter(
-      (it) => it.path !== '/propiedades' && it.path !== '/huespedes'
-    );
+  it('marks remaining routes as PENDIENTE without simulating non-existent features', () => {
+    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario'];
+    const pendingItems = NAVIGATION_ITEMS.filter((it) => !availablePaths.includes(it.path));
 
-    assert.equal(pendingItems.length, 8);
+    assert.equal(pendingItems.length, 6);
     for (const item of pendingItems) {
       assert.equal(item.status, 'PENDIENTE', `Item ${item.name} should be PENDIENTE`);
       assert.ok(item.description.length > 5);
