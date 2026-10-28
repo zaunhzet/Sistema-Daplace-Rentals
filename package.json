@@ -1,0 +1,39 @@
+{
+  "name": "daplace-rentals",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c blue,green \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "npm run dev --workspace @daplace/backend",
+    "dev:web": "npm run dev --workspace @daplace/frontend",
+    "build": "npm run build --workspace @daplace/backend && npm run build --workspace @daplace/frontend",
+    "typecheck": "npm run typecheck --workspace @daplace/backend && npm run typecheck --workspace @daplace/frontend",
+    "test": "npm run test --workspace @daplace/backend",
+    "db:generate": "npm run db:generate --workspace @daplace/backend",
+    "db:validate": "npm run db:validate --workspace @daplace/backend",
+    "db:migrate:dev": "npm run db:migrate:dev --workspace @daplace/backend",
+    "db:migrate:deploy": "npm run db:migrate:deploy --workspace @daplace/backend",
+    "db:status": "npm run db:status --workspace @daplace/backend",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose stop postgres",
+    "verify": "npm run db:validate && npm run typecheck && npm test && npm run build"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11.0.0 <12"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "typescript": "~5.9.3"
+  },
+  "allowScripts": {
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true,
+    "esbuild@0.28.2": true
+  }
+}
