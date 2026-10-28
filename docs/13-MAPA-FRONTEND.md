@@ -14,8 +14,8 @@
 | `/dashboard` | Dashboard Principal | **Diego** | *Pendiente* | RF09 / HU-08 | Resumen general, KPIs iniciales y accesos directos. |
 | `/propiedades` | Gestión de Propiedades | **André** | **DISPONIBLE (Mock)** | RF01 / HU-18 | Catálogo, alta, edición, filtros, vinculación de propietario e inmunidad financiera (desactivación lógica). |
 | `/huespedes` | Directorio de Huéspedes | **André** | **DISPONIBLE (Mock)** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas relacionadas. Validación de al menos un contacto. |
-| `/reservas` | Gestión de Reservas | **André** | *Próximo (P0)* | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes y transiciones de estado. |
-| `/calendario` | Calendario Operativo | **André** | *Próximo (P0)* | RF01 / HU-01 | Vista temporal de disponibilidad y ocupación por propiedad. |
+| `/reservas` | Gestión de Reservas | **André** | **DISPONIBLE (Mock)** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes con intervalos [ingreso, salida), liberación por cancelación y reprogramación. |
+| `/calendario` | Calendario Operativo | **André** | **DISPONIBLE (Mock)** | RF01 / HU-01 | Vista mensual de disponibilidad, días ocupados, días de transición (check-out/check-in), detección de bloqueos y trazabilidad directa a reservas. |
 | `/pagos` | Pagos y Conciliación | **André** | *Próximo (P0)* | RF05 / HU-05 | Registro de adelantos, saldos pendientes y conciliación explícita e idempotente. |
 | `/garantias` | Control de Garantías | **André** | *Próximo (P0)* | RF06 / HU-06 | Custodia separada de fondos, devoluciones y retenciones limitadas al saldo disponible. |
 | `/reportes` | Reportes de Liquidación | **Diego** | *Próximo (P0)* | RF08, RF12 / HU-07, HU-12 | Reportes por propiedad y período con desglose reproducible y autorización por propietario. |
@@ -62,6 +62,33 @@
   * `GuestFormModal`: Modal de registro y edición con validación estricta de contacto (teléfono o correo).
   * `GuestDetailModal`: Ficha del huésped con tabla de reservas vinculadas.
 
+### Módulo de Reservas (UI-ANDRE-002)
+* **Ubicación:** `frontend/src/features/reservations/`
+* **Importación:**
+  ```tsx
+  import { ReservationsPage, reservationService } from '../features/reservations';
+  import type { Reservation, CreateReservationDto, UpdateReservationDatesDto } from '../features/reservations';
+  ```
+* **Componentes internos reutilizables:**
+  * `ReservationsPage`: Vista completa con KPIs de reservas, filtros combinados, tabla y modales.
+  * `ReservationList`: Tabla de reservas con badges de estado (`SOLICITADA`, `CONFIRMADA`, `COMPLETADA`, `CANCELADA`) y acciones.
+  * `ReservationFilters`: Filtros por texto libre, propiedad, huésped y estado de reserva.
+  * `ReservationFormModal`: Registro de solicitud con cálculo automático de noches y validación de disponibilidad en tiempo real.
+  * `ReservationDetailModal`: Ficha completa de la reserva con acciones de confirmación y cancelación con motivo.
+  * `ReservationDateEditModal`: Modal de reprogramación de fechas con validación de solape excluyendo la propia reserva.
+
+### Módulo de Disponibilidad y Calendario (UI-ANDRE-002)
+* **Ubicación:** `frontend/src/features/calendar/`
+* **Importación:**
+  ```tsx
+  import { CalendarPage, calendarService } from '../features/calendar';
+  import type { CalendarDay, MonthOccupancySummary } from '../features/calendar';
+  ```
+* **Componentes internos reutilizables:**
+  * `CalendarPage`: Vista mensual interactiva con selector de inmuebles, navegación temporal, KPIs de ocupación y detalle modal de reserva.
+  * `CalendarGrid`: Cuadrícula mensual de 7 columnas (Lunes a Domingo) con cálculo de padding, pills de reserva clickeables y badges de transición (Check-out/Check-in).
+  * `CalendarLegend`: Guía visual de estados (Disponible, Ocupado, Transición, Mantenimiento, Inactiva).
+
 ---
 
 ## 3. Contrato de Propiedades del Componente Sidebar
@@ -105,6 +132,8 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router';
 import { Sidebar } from './shared/navigation';
 import { PropertiesPage } from './features/properties';
 import { GuestsPage } from './features/guests';
+import { ReservationsPage } from './features/reservations';
+import { CalendarPage } from './features/calendar';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -127,6 +156,8 @@ export default function AdminLayout() {
           <Routes>
             <Route path="/propiedades" element={<PropertiesPage />} />
             <Route path="/huespedes" element={<GuestsPage />} />
+            <Route path="/reservas" element={<ReservationsPage />} />
+            <Route path="/calendario" element={<CalendarPage />} />
             {/* Rutas de Diego y futuros módulos */}
             <Route path="/dashboard" element={<DashboardPlaceholder />} />
             {/* ... */}
