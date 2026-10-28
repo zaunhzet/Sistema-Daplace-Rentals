@@ -4,6 +4,7 @@ import type {
   GuestFilterParams,
   GuestValidationResult,
   GuestWithReservations,
+  ReservaRelacionada,
   UpdateGuestDto,
 } from '../types';
 import { INITIAL_GUESTS_MOCK } from './mockGuests';
@@ -41,16 +42,20 @@ export function validateGuest(dto: Partial<CreateGuestDto>): GuestValidationResu
   };
 }
 
+export type ReservationProvider = (guestId: string) => Promise<ReservaRelacionada[]>;
+
 export interface IGuestService {
   getGuests(filters?: GuestFilterParams): Promise<Guest[]>;
   getGuestById(id: string): Promise<GuestWithReservations | null>;
   createGuest(dto: CreateGuestDto): Promise<Guest>;
   updateGuest(id: string, dto: UpdateGuestDto): Promise<Guest>;
+  setReservationProvider(provider: ReservationProvider | null): void;
   reset(): void;
 }
 
 class MockGuestService implements IGuestService {
   private guests: GuestWithReservations[] = [];
+  private reservationProvider: ReservationProvider | null = null;
 
   constructor() {
     this.reset();
@@ -58,6 +63,10 @@ class MockGuestService implements IGuestService {
 
   public reset(): void {
     this.guests = JSON.parse(JSON.stringify(INITIAL_GUESTS_MOCK));
+  }
+
+  public setReservationProvider(provider: ReservationProvider | null): void {
+    this.reservationProvider = provider;
   }
 
   public async getGuests(filters?: GuestFilterParams): Promise<Guest[]> {
@@ -81,7 +90,23 @@ class MockGuestService implements IGuestService {
 
   public async getGuestById(id: string): Promise<GuestWithReservations | null> {
     const guest = this.guests.find((g) => g.id === id);
-    return guest ? JSON.parse(JSON.stringify(guest)) : null;
+    if (!guest) return null;
+
+    let reservas: ReservaRelacionada[] = [];
+    if (this.reservationProvider) {
+      try {
+        reservas = await this.reservationProvider(id);
+      } catch {
+        reservas = [];
+      }
+    } else {
+      reservas = guest.reservasRelacionadas || [];
+    }
+
+    return {
+      ...JSON.parse(JSON.stringify(guest)),
+      reservasRelacionadas: reservas,
+    };
   }
 
   public async createGuest(dto: CreateGuestDto): Promise<Guest> {

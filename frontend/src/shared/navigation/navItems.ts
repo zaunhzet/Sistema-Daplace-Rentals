@@ -54,9 +54,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/reservas',
     icon: CalendarCheck,
     description: 'Solicitudes y gestión de reservas con prevención de solape (HU-02, HU-03 / RF02, RF03)',
-    status: 'PENDIENTE',
+    status: 'DISPONIBLE',
     responsible: 'André',
     group: 'Gestión Inmobiliaria',
+    badge: 'Listo',
   },
   {
     id: 'nav-calendario',
@@ -64,9 +65,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/calendario',
     icon: CalendarDays,
     description: 'Visualización temporal y disponibilidad por inmueble (RF01)',
-    status: 'PENDIENTE',
+    status: 'DISPONIBLE',
     responsible: 'André',
     group: 'Gestión Inmobiliaria',
+    badge: 'Listo',
   },
 
   // Grupo: Finanzas

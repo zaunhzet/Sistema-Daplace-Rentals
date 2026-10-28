@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import { Home, TriangleAlert, Users } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Home, TriangleAlert, Users } from 'lucide-react';
 import './styles.css';
 import { PropertiesPage } from './features/properties';
 import { GuestsPage } from './features/guests';
+import { ReservationsPage } from './features/reservations';
+import { CalendarPage } from './features/calendar';
 import { Sidebar, NAVIGATION_ITEMS } from './shared/navigation';
 import type { NavigationItem } from './shared/navigation';
 
@@ -66,7 +68,7 @@ function PendingModuleView({ item }: { item: NavigationItem }) {
 }
 
 function PreviewApp() {
-  const [currentPath, setCurrentPath] = useState<string>('/propiedades');
+  const [currentPath, setCurrentPath] = useState<string>('/reservas');
   const [collapsed, setCollapsed] = useState<boolean>(false);
 
   const currentItem = NAVIGATION_ITEMS.find((it) => it.path === currentPath) || {
@@ -104,31 +106,55 @@ function PreviewApp() {
 
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-600">
-              Vista previa aislada (UI-NAV-001)
+              Vista previa (UI-ANDRE-002)
             </span>
             <button
               type="button"
               onClick={() => setCurrentPath('/propiedades')}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 currentPath === '/propiedades'
                   ? 'bg-[#162A2C] text-white'
                   : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
               }`}
             >
               <Home size={14} aria-hidden="true" />
-              Propiedades
+              <span>Propiedades</span>
             </button>
             <button
               type="button"
               onClick={() => setCurrentPath('/huespedes')}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
                 currentPath === '/huespedes'
                   ? 'bg-[#162A2C] text-white'
                   : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
               }`}
             >
               <Users size={14} aria-hidden="true" />
-              Huéspedes
+              <span>Huéspedes</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPath('/reservas')}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                currentPath === '/reservas'
+                  ? 'bg-[#162A2C] text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <CalendarCheck size={14} aria-hidden="true" />
+              <span>Reservas</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPath('/calendario')}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                currentPath === '/calendario'
+                  ? 'bg-[#162A2C] text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <CalendarDays size={14} aria-hidden="true" />
+              <span>Calendario</span>
             </button>
           </div>
         </header>
@@ -137,9 +163,14 @@ function PreviewApp() {
         <main className="flex-1 pb-12">
           {currentPath === '/propiedades' && <PropertiesPage />}
           {currentPath === '/huespedes' && <GuestsPage />}
-          {currentPath !== '/propiedades' && currentPath !== '/huespedes' && (
-            <PendingModuleView item={currentItem} />
-          )}
+          {currentPath === '/reservas' && <ReservationsPage />}
+          {currentPath === '/calendario' && <CalendarPage />}
+          {currentPath !== '/propiedades' &&
+            currentPath !== '/huespedes' &&
+            currentPath !== '/reservas' &&
+            currentPath !== '/calendario' && (
+              <PendingModuleView item={currentItem} />
+            )}
         </main>
       </div>
     </div>
