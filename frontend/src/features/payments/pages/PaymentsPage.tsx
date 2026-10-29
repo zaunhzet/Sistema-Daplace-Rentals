@@ -118,6 +118,18 @@ export const PaymentsPage: React.FC = () => {
 
   return (
     <div className="w-full space-y-4">
+      {/* Aviso de Modo Simulado / Mock */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
+            Modo Simulado (Mock)
+          </span>
+          <span>
+            Este módulo opera temporalmente con datos en memoria para salvaguarda de trazabilidad contable. Se conectará a PostgreSQL en un incremento posterior.
+          </span>
+        </div>
+      </div>
+
       {/* Cabecera de Página */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

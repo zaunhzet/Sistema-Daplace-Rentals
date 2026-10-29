@@ -7,6 +7,8 @@ import type {
   UpdatePropertyDto,
 } from '../types';
 import { INITIAL_PROPERTIES_MOCK, INITIAL_PROPIETARIOS_MOCK } from './mockProperties';
+import { apiClient, ApiError } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 export function validateProperty(
   dto: Partial<CreatePropertyDto>
@@ -208,4 +210,72 @@ class MockPropertyService implements IPropertyService {
   }
 }
 
-export const propertyService: IPropertyService = new MockPropertyService();
+export { MockPropertyService };
+
+export class ApiPropertyService implements IPropertyService {
+  public async getProperties(filters?: PropertyFilterParams): Promise<Property[]> {
+    const params = new URLSearchParams();
+    if (filters?.search) params.set('search', filters.search);
+    if (filters?.estadoOperativo && filters.estadoOperativo !== 'TODOS') {
+      params.set('estadoOperativo', filters.estadoOperativo);
+    }
+    if (filters?.estadoPublicacion && filters.estadoPublicacion !== 'TODOS') {
+      params.set('estadoPublicacion', filters.estadoPublicacion);
+    }
+    if (filters?.soloActivas) {
+      params.set('soloActivas', 'true');
+    }
+    const qs = params.toString();
+    return apiClient<Property[]>(`/api/propiedades${qs ? `?${qs}` : ''}`);
+  }
+
+  public async getPropertyById(id: string): Promise<Property | null> {
+    try {
+      return await apiClient<Property>(`/api/propiedades/${encodeURIComponent(id)}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async createProperty(dto: CreatePropertyDto): Promise<Property> {
+    const validation = validateProperty(dto);
+    if (!validation.isValid) {
+      const errorMsg = Object.values(validation.errors).join(' ');
+      throw new Error(`Error de validación: ${errorMsg}`);
+    }
+
+    return apiClient<Property>('/api/propiedades', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public async updateProperty(id: string, dto: UpdatePropertyDto): Promise<Property> {
+    return apiClient<Property>(`/api/propiedades/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public async togglePropertyActive(id: string, activa: boolean): Promise<Property> {
+    return apiClient<Property>(`/api/propiedades/${encodeURIComponent(id)}/activa`, {
+      method: 'PATCH',
+      body: JSON.stringify({ activa }),
+    });
+  }
+
+  public async getPropietarios(): Promise<Propietario[]> {
+    return apiClient<Propietario[]>('/api/propietarios');
+  }
+
+  public reset(): void {
+    // En modo API, el reset del cliente no altera la base de datos sin autorización
+  }
+}
+
+export const propertyService: IPropertyService = isMockMode()
+  ? new MockPropertyService()
+  : new ApiPropertyService();

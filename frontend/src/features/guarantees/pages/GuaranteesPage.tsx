@@ -117,6 +117,18 @@ export const GuaranteesPage: React.FC = () => {
 
   return (
     <div className="w-full space-y-4">
+      {/* Aviso de Modo Simulado / Mock */}
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
+            Modo Simulado (Mock)
+          </span>
+          <span>
+            Este módulo opera temporalmente con fondos en custodia simulados. Se conectará al backend transaccional en el incremento BACKEND-002.
+          </span>
+        </div>
+      </div>
+
       {/* Cabecera */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>

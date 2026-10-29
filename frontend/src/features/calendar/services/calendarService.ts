@@ -2,6 +2,8 @@ import type { CalendarDay, DayOccupancyStatus, MonthOccupancySummary } from '../
 import type { Reservation } from '../../reservations/types';
 import { reservationService } from '../../reservations/services/reservationService';
 import { propertyService } from '../../properties/services/propertyService';
+import { apiClient } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 export function formatDateKey(year: number, month: number, day: number): string {
   const y = String(year);
@@ -171,4 +173,43 @@ class CalendarService implements ICalendarService {
   }
 }
 
-export const calendarService: ICalendarService = new CalendarService();
+export { CalendarService as MockCalendarService };
+
+export class ApiCalendarService implements ICalendarService {
+  public async getMonthDays(
+    propiedadId: string,
+    year: number,
+    month: number
+  ): Promise<CalendarDay[]> {
+    const data = await apiClient<{ days: CalendarDay[] }>(
+      `/api/calendario?propiedadId=${encodeURIComponent(propiedadId)}&year=${year}&month=${month}`
+    );
+    return data.days;
+  }
+
+  public getMonthSummary(days: CalendarDay[]): MonthOccupancySummary {
+    const currentMonthDays = days.filter((d) => d.isCurrentMonth);
+    const totalDays = currentMonthDays.length;
+    if (totalDays === 0) {
+      return { totalDays: 0, occupiedDays: 0, availableDays: 0, occupancyRate: 0 };
+    }
+
+    const occupiedDays = currentMonthDays.filter(
+      (d) => d.status === 'CONFIRMADA' || d.status === 'SOLICITADA' || d.status === 'TRANSICION'
+    ).length;
+
+    const availableDays = currentMonthDays.filter((d) => d.status === 'DISPONIBLE').length;
+    const occupancyRate = Math.round((occupiedDays / totalDays) * 100);
+
+    return {
+      totalDays,
+      occupiedDays,
+      availableDays,
+      occupancyRate,
+    };
+  }
+}
+
+export const calendarService: ICalendarService = isMockMode()
+  ? new CalendarService()
+  : new ApiCalendarService();

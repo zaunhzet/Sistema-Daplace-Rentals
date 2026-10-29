@@ -9,6 +9,8 @@ import type {
 import { INITIAL_RESERVATIONS_MOCK } from './mockReservations';
 import { propertyService } from '../../properties/services/propertyService';
 import { guestService } from '../../guests/services/guestService';
+import { apiClient, ApiError } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 /**
  * Calcula la cantidad de noches para el intervalo semiabierto [ingreso, salida).
@@ -413,7 +415,118 @@ class MockReservationService implements IReservationService {
   }
 }
 
-export const reservationService: IReservationService = new MockReservationService();
+export { MockReservationService };
+
+export class ApiReservationService implements IReservationService {
+  public async getReservations(filters?: ReservationFilterParams): Promise<Reservation[]> {
+    const params = new URLSearchParams();
+    if (filters?.propiedadId && filters.propiedadId !== 'TODAS') {
+      params.set('propiedadId', filters.propiedadId);
+    }
+    if (filters?.huespedId && filters.huespedId !== 'TODOS') {
+      params.set('huespedId', filters.huespedId);
+    }
+    if (filters?.estado && filters.estado !== 'TODOS') {
+      params.set('estado', filters.estado);
+    }
+    if (filters?.desde) {
+      params.set('desde', filters.desde);
+    }
+    if (filters?.hasta) {
+      params.set('hasta', filters.hasta);
+    }
+    if (filters?.search) {
+      params.set('search', filters.search);
+    }
+
+    const qs = params.toString();
+    return apiClient<Reservation[]>(`/api/reservas${qs ? `?${qs}` : ''}`);
+  }
+
+  public async getReservationById(id: string): Promise<Reservation | null> {
+    try {
+      return await apiClient<Reservation>(`/api/reservas/${encodeURIComponent(id)}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async getReservationsByGuestId(guestId: string): Promise<Reservation[]> {
+    return apiClient<Reservation[]>(`/api/reservas?huespedId=${encodeURIComponent(guestId)}`);
+  }
+
+  public async getReservationsByPropertyId(propiedadId: string): Promise<Reservation[]> {
+    return apiClient<Reservation[]>(`/api/reservas?propiedadId=${encodeURIComponent(propiedadId)}`);
+  }
+
+  public async checkAvailability(
+    propiedadId: string,
+    ingreso: string,
+    salida: string,
+    excludeReservationId?: string
+  ): Promise<AvailabilityCheckResult> {
+    const params = new URLSearchParams({ ingreso, salida });
+    if (excludeReservationId) {
+      params.set('excludeReservationId', excludeReservationId);
+    }
+    return apiClient<AvailabilityCheckResult>(
+      `/api/propiedades/${encodeURIComponent(propiedadId)}/disponibilidad?${params.toString()}`
+    );
+  }
+
+  public async createReservation(dto: CreateReservationDto): Promise<Reservation> {
+    const validation = validateReservationPayload(dto);
+    if (!validation.isValid) {
+      const errorMsg = Object.values(validation.errors).join(' ');
+      throw new Error(`Error de validación: ${errorMsg}`);
+    }
+
+    return apiClient<Reservation>('/api/reservas', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public async updateReservationDates(
+    id: string,
+    dto: UpdateReservationDatesDto
+  ): Promise<Reservation> {
+    const dateCheck = validateReservationDates(dto.ingreso, dto.salida);
+    if (!dateCheck.isValid) {
+      throw new Error(dateCheck.error || 'Fechas inválidas.');
+    }
+
+    return apiClient<Reservation>(`/api/reservas/${encodeURIComponent(id)}/fechas`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public async confirmReservation(id: string): Promise<Reservation> {
+    return apiClient<Reservation>(`/api/reservas/${encodeURIComponent(id)}/confirmar`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+  }
+
+  public async cancelReservation(id: string, motivo?: string): Promise<Reservation> {
+    return apiClient<Reservation>(`/api/reservas/${encodeURIComponent(id)}/cancelar`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo }),
+    });
+  }
+
+  public reset(): void {
+    // No-op en API mode
+  }
+}
+
+export const reservationService: IReservationService = isMockMode()
+  ? new MockReservationService()
+  : new ApiReservationService();
 
 // Conectar fuente única de datos: el detalle del huésped consulta dinámicamente este almacén
 guestService.setReservationProvider(async (guestId: string) => {

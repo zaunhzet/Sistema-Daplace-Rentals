@@ -9,6 +9,8 @@ import type {
 } from '../types';
 import { INITIAL_GUESTS_MOCK } from './mockGuests';
 import { INITIAL_RESERVATIONS_MOCK } from '../../reservations/services/mockReservations';
+import { apiClient, ApiError } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 export function validateGuest(dto: Partial<CreateGuestDto>): GuestValidationResult {
   const errors: Record<string, string> = {};
@@ -198,4 +200,72 @@ class MockGuestService implements IGuestService {
   }
 }
 
-export const guestService: IGuestService = new MockGuestService();
+export { MockGuestService };
+
+export class ApiGuestService implements IGuestService {
+  private reservationProvider: ReservationProvider | null = null;
+
+  public setReservationProvider(provider: ReservationProvider | null): void {
+    this.reservationProvider = provider;
+  }
+
+  public async getGuests(filters?: GuestFilterParams): Promise<Guest[]> {
+    const params = new URLSearchParams();
+    if (filters?.search) {
+      params.set('search', filters.search);
+    }
+    const qs = params.toString();
+    return apiClient<Guest[]>(`/api/huespedes${qs ? `?${qs}` : ''}`);
+  }
+
+  public async getGuestById(id: string): Promise<GuestWithReservations | null> {
+    try {
+      const guest = await apiClient<GuestWithReservations>(`/api/huespedes/${encodeURIComponent(id)}`);
+      // Si hay un provider explícito configurado, combina sus reservas
+      if (this.reservationProvider) {
+        try {
+          const providerRes = await this.reservationProvider(id);
+          if (providerRes.length > 0 && (!guest.reservasRelacionadas || guest.reservasRelacionadas.length === 0)) {
+            guest.reservasRelacionadas = providerRes;
+          }
+        } catch {
+          // Mantener las de la API si el provider falla
+        }
+      }
+      return guest;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async createGuest(dto: CreateGuestDto): Promise<Guest> {
+    const validation = validateGuest(dto);
+    if (!validation.isValid) {
+      const errorMsg = Object.values(validation.errors).join(' ');
+      throw new Error(`Error de validación: ${errorMsg}`);
+    }
+
+    return apiClient<Guest>('/api/huespedes', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public async updateGuest(id: string, dto: UpdateGuestDto): Promise<Guest> {
+    return apiClient<Guest>(`/api/huespedes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(dto),
+    });
+  }
+
+  public reset(): void {
+    // No-op en API mode
+  }
+}
+
+export const guestService: IGuestService = isMockMode()
+  ? new MockGuestService()
+  : new ApiGuestService();
