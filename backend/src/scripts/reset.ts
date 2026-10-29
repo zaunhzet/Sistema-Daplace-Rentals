@@ -4,8 +4,8 @@ import { createDatabase } from '../shared/database.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) });
 
-export async function safeResetDatabase(options: { forceConfirm?: boolean } = {}) {
-  const databaseUrl = process.env.DATABASE_URL;
+export async function safeResetDatabase(options: { forceConfirm?: boolean; databaseUrl?: string } = {}) {
+  const databaseUrl = options.databaseUrl || process.env.DATABASE_URL;
   if (!databaseUrl) {
     throw new Error('DATABASE_URL no está definida.');
   }

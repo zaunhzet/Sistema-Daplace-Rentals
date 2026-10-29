@@ -2,17 +2,28 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { createDatabase } from '../shared/database.js';
 
+import type { PrismaClient } from '../generated/prisma/client.js';
+
 dotenv.config({ path: fileURLToPath(new URL('../../../.env', import.meta.url)) });
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required to seed the database.');
-}
+export async function seedDatabase(target?: PrismaClient | string) {
+  let prisma: PrismaClient;
+  let shouldClose = false;
+  let closeFn: (() => Promise<void>) | undefined;
 
-const { prisma, close } = createDatabase(databaseUrl);
+  if (target && typeof target === 'object' && '$queryRaw' in target) {
+    prisma = target as PrismaClient;
+  } else {
+    const url = typeof target === 'string' ? target : process.env.DATABASE_URL;
+    if (!url) throw new Error('DATABASE_URL is required to seed the database.');
+    const db = createDatabase(url);
+    prisma = db.prisma;
+    shouldClose = true;
+    closeFn = () => db.close();
+  }
 
-export async function seedDatabase() {
-  console.log('--- Starting DAPLACE Synthetic Seed ---');
+  try {
+    console.log('--- Starting DAPLACE Synthetic Seed ---');
 
   // 1. Usuarios / Propietarios
   const usuariosData = [
@@ -343,13 +354,16 @@ export async function seedDatabase() {
   console.log('✓ Recorded audit event.');
 
   console.log('--- Seed Completed Successfully ---');
+  } finally {
+    if (shouldClose && closeFn) {
+      await closeFn();
+    }
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  seedDatabase()
-    .catch((err) => {
-      console.error('Seed error:', err);
-      process.exitCode = 1;
-    })
-    .finally(() => close());
+  seedDatabase().catch((err) => {
+    console.error('Seed error:', err);
+    process.exitCode = 1;
+  });
 }

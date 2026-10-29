@@ -2,6 +2,8 @@ import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { registerPropertiesRoutes } from '../routes/properties.js';
 import { registerGuestsRoutes } from '../routes/guests.js';
+import { registerReservationsRoutes } from '../routes/reservations.js';
+import { registerCalendarRoutes } from '../routes/calendar.js';
 
 type ReadinessCheck = () => Promise<void>;
 
@@ -94,6 +96,8 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
   if (prisma) {
     app.register(registerPropertiesRoutes(prisma));
     app.register(registerGuestsRoutes(prisma));
+    app.register(registerReservationsRoutes(prisma));
+    app.register(registerCalendarRoutes(prisma));
   }
 
   return app;

@@ -15,8 +15,10 @@ describe('Hito 1 — PostgreSQL, Prisma y Persistencia Real', () => {
 
   before(async () => {
     assert.ok(testDbUrl, 'DATABASE_URL o DATABASE_TEST_URL debe estar configurada');
+    await safeResetDatabase({ forceConfirm: true, databaseUrl: testDbUrl });
     db = createDatabase(testDbUrl);
     await db.check();
+    await seedDatabase(db.prisma);
   });
 
   after(async () => {
@@ -55,7 +57,7 @@ describe('Hito 1 — PostgreSQL, Prisma y Persistencia Real', () => {
 
   it('3. Idempotencia del seed sintético', async () => {
     // Correr de nuevo el seed no debe duplicar ni fallar
-    await seedDatabase();
+    await seedDatabase(db.prisma);
     const count = await db.prisma.propiedad.count();
     assert.equal(count, 5, 'El número de propiedades no debe duplicarse');
   });

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { buildApp } from '../src/app/app.js';
 import { createDatabase } from '../src/shared/database.js';
+import { safeResetDatabase } from '../src/scripts/reset.js';
 import { seedDatabase } from '../src/scripts/seed.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
@@ -16,9 +17,10 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
 
   before(async () => {
     assert.ok(testDbUrl, 'DATABASE_URL o DATABASE_TEST_URL requerida');
+    await safeResetDatabase({ forceConfirm: true, databaseUrl: testDbUrl });
     db = createDatabase(testDbUrl);
     await db.check();
-    await seedDatabase();
+    await seedDatabase(db.prisma);
     app = buildApp({ prisma: db.prisma, checkDatabase: db.check });
   });
 
