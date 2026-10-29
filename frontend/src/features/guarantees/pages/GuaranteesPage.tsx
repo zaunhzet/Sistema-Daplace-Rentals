@@ -12,6 +12,7 @@ import { GuaranteeFormModal } from '../components/GuaranteeFormModal';
 import { GuaranteeDetailModal } from '../components/GuaranteeDetailModal';
 import { GuaranteeMovementModal } from '../components/GuaranteeMovementModal';
 import { fromCents, formatMoney, toCents } from '../../../shared/money';
+import { isMockMode } from '../../../shared/api/config';
 
 export const GuaranteesPage: React.FC = () => {
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
@@ -72,24 +73,36 @@ export const GuaranteesPage: React.FC = () => {
   };
 
   const handleCreateGuarantee = async (dto: CreateGuaranteeDto) => {
-    await guaranteeService.createGuarantee(dto);
-    setFeedback({
-      type: 'success',
-      message: 'Garantía registrada en custodia con su movimiento inicial de RECEPCIÓN.',
-    });
-    await loadData();
+    try {
+      await guaranteeService.createGuarantee(dto);
+      setFeedback({
+        type: 'success',
+        message: 'Garantía registrada en custodia con su movimiento inicial de RECEPCIÓN.',
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al registrar la garantía.';
+      setFeedback({ type: 'error', message: msg });
+      throw err;
+    }
   };
 
   const handleRegisterMovement = async (
     garantiaId: string,
     dto: RegisterGuaranteeMovementDto
   ) => {
-    await guaranteeService.registerMovement(garantiaId, dto);
-    setFeedback({
-      type: 'success',
-      message: `Movimiento de ${dto.tipo} registrado exitosamente. Saldo disponible recalculado.`,
-    });
-    await loadData();
+    try {
+      await guaranteeService.registerMovement(garantiaId, dto);
+      setFeedback({
+        type: 'success',
+        message: `Movimiento de ${dto.tipo} registrado exitosamente. Saldo disponible recalculado.`,
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al registrar el movimiento.';
+      setFeedback({ type: 'error', message: msg });
+      throw err;
+    }
   };
 
   const handleOpenMovement = (
@@ -100,34 +113,51 @@ export const GuaranteesPage: React.FC = () => {
     setMovementDefaultType(type);
   };
 
-  // KPIs de garantías
-  let totalCustodiaCents = 0;
-  let totalRetenidoCents = 0;
-  let totalDevueltoCents = 0;
+  // KPIs de garantías con estricta separación de monedas (PEN y USD)
+  let totalCustodiaPenCents = 0;
+  let totalCustodiaUsdCents = 0;
+  let totalRetenidoPenCents = 0;
+  let totalRetenidoUsdCents = 0;
+  let totalDevueltoPenCents = 0;
+  let totalDevueltoUsdCents = 0;
   let countActivas = 0;
 
   for (const g of guarantees) {
-    totalCustodiaCents += toCents(g.saldoDisponible);
-    totalRetenidoCents += toCents(g.totalRetenido);
-    totalDevueltoCents += toCents(g.totalDevuelto);
-    if (toCents(g.saldoDisponible) > 0) {
+    const isUsd = (g.moneda || 'PEN').toUpperCase() === 'USD';
+    const saldoCents = toCents(g.saldoDisponible);
+    const retenidoCents = toCents(g.totalRetenido);
+    const devueltoCents = toCents(g.totalDevuelto);
+
+    if (isUsd) {
+      totalCustodiaUsdCents += saldoCents;
+      totalRetenidoUsdCents += retenidoCents;
+      totalDevueltoUsdCents += devueltoCents;
+    } else {
+      totalCustodiaPenCents += saldoCents;
+      totalRetenidoPenCents += retenidoCents;
+      totalDevueltoPenCents += devueltoCents;
+    }
+
+    if (saldoCents > 0) {
       countActivas++;
     }
   }
 
   return (
     <div className="w-full space-y-4">
-      {/* Aviso de Modo Simulado / Mock */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
-            Modo Simulado (Mock)
-          </span>
-          <span>
-            Este módulo opera temporalmente con fondos en custodia simulados. Se conectará al backend transaccional en el incremento BACKEND-002.
-          </span>
+      {/* Aviso de Modo Simulado: solo si VITE_USE_MOCKS === 'true' */}
+      {isMockMode() && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
+              Modo Simulado (Mock)
+            </span>
+            <span>
+              Este módulo opera temporalmente con fondos en custodia simulados (VITE_USE_MOCKS=true).
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Cabecera */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -181,15 +211,22 @@ export const GuaranteesPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tarjetas KPI */}
+      {/* Tarjetas KPI con estricta separación por moneda */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Saldo en custodia</span>
             <ShieldCheck size={15} className="text-[#183b32]" />
           </div>
-          <div className="text-xl font-bold font-mono text-[#183b32] mt-1.5">
-            {formatMoney(fromCents(totalCustodiaCents), 'PEN')}
+          <div className="mt-1.5 flex flex-col gap-0.5">
+            <div className="text-xl font-bold font-mono text-[#183b32]">
+              {formatMoney(fromCents(totalCustodiaPenCents), 'PEN')}
+            </div>
+            {totalCustodiaUsdCents > 0 && (
+              <div className="text-xs sm:text-sm font-semibold font-mono text-[#183b32]">
+                + {formatMoney(fromCents(totalCustodiaUsdCents), 'USD')}
+              </div>
+            )}
           </div>
           <span className="text-[11px] text-stone-500">{countActivas} depósitos activos</span>
         </div>
@@ -199,8 +236,15 @@ export const GuaranteesPage: React.FC = () => {
             <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Retenido por daños</span>
             <ShieldAlert size={15} className="text-amber-700" />
           </div>
-          <div className="text-xl font-bold font-mono text-amber-900 mt-1.5">
-            {formatMoney(fromCents(totalRetenidoCents), 'PEN')}
+          <div className="mt-1.5 flex flex-col gap-0.5">
+            <div className="text-xl font-bold font-mono text-amber-900">
+              {formatMoney(fromCents(totalRetenidoPenCents), 'PEN')}
+            </div>
+            {totalRetenidoUsdCents > 0 && (
+              <div className="text-xs sm:text-sm font-semibold font-mono text-amber-800">
+                + {formatMoney(fromCents(totalRetenidoUsdCents), 'USD')}
+              </div>
+            )}
           </div>
           <span className="text-[11px] text-amber-700">Deducciones documentadas</span>
         </div>
@@ -210,8 +254,15 @@ export const GuaranteesPage: React.FC = () => {
             <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total devuelto</span>
             <RotateCcw size={15} className="text-stone-600" />
           </div>
-          <div className="text-xl font-bold font-mono text-stone-800 mt-1.5">
-            {formatMoney(fromCents(totalDevueltoCents), 'PEN')}
+          <div className="mt-1.5 flex flex-col gap-0.5">
+            <div className="text-xl font-bold font-mono text-stone-800">
+              {formatMoney(fromCents(totalDevueltoPenCents), 'PEN')}
+            </div>
+            {totalDevueltoUsdCents > 0 && (
+              <div className="text-xs sm:text-sm font-semibold font-mono text-stone-700">
+                + {formatMoney(fromCents(totalDevueltoUsdCents), 'USD')}
+              </div>
+            )}
           </div>
           <span className="text-[11px] text-stone-500">Reembolsos ejecutados</span>
         </div>

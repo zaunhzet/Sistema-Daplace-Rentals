@@ -13,6 +13,8 @@ import {
   toCents,
   validateMoneyInput,
 } from '../../../shared/money';
+import { apiClient, ApiError } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 export function validateGuaranteePayload(dto: Partial<CreateGuaranteeDto>): GuaranteeValidationResult {
   const errors: Record<string, string> = {};
@@ -239,7 +241,7 @@ class MockGuaranteeService implements IGuaranteeService {
       } else if (totalDevueltoCents > 0 && totalRetenidoCents === 0) {
         nuevoEstado = 'DEVUELTA_TOTAL';
       } else {
-        nuevoEstado = 'RETENIDA_TOTAL'; // Caso mixto cerrado
+        nuevoEstado = 'LIQUIDADA_MIXTA'; // Caso mixto cerrado: parte retenida y parte devuelta
       }
     } else {
       if (totalRetenidoCents > 0) {
@@ -264,4 +266,87 @@ class MockGuaranteeService implements IGuaranteeService {
   }
 }
 
-export const guaranteeService: IGuaranteeService = new MockGuaranteeService();
+export class ApiGuaranteeService implements IGuaranteeService {
+  public async getGuarantees(filters?: GuaranteeFilterParams): Promise<Guarantee[]> {
+    const params = new URLSearchParams();
+    if (filters?.propiedadId && filters.propiedadId !== 'TODAS') {
+      params.set('propiedadId', filters.propiedadId);
+    }
+    if (filters?.reservaId && filters.reservaId !== 'TODAS') {
+      params.set('reservaId', filters.reservaId);
+    }
+    if (filters?.estado && filters.estado !== 'TODOS') {
+      params.set('estado', filters.estado);
+    }
+    if (filters?.search && filters.search.trim()) {
+      params.set('search', filters.search.trim());
+    }
+
+    const qs = params.toString();
+    const res = await apiClient<{ data: Guarantee[] }>(`/api/garantias${qs ? `?${qs}` : ''}`);
+    return res.data;
+  }
+
+  public async getGuaranteeById(id: string): Promise<Guarantee | null> {
+    try {
+      const res = await apiClient<{ data: Guarantee }>(`/api/garantias/${encodeURIComponent(id)}`);
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async getGuaranteeByReservationId(reservaId: string): Promise<Guarantee | null> {
+    try {
+      const res = await apiClient<{ data: Guarantee }>(
+        `/api/reservas/${encodeURIComponent(reservaId)}/garantia`
+      );
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async createGuarantee(dto: CreateGuaranteeDto): Promise<Guarantee> {
+    const validation = validateGuaranteePayload(dto);
+    if (!validation.isValid) {
+      const errorMsg = Object.values(validation.errors).join(' ');
+      throw new Error(`Error de validación: ${errorMsg}`);
+    }
+
+    const res = await apiClient<{ data: Guarantee }>('/api/garantias', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+    return res.data;
+  }
+
+  public async registerMovement(
+    garantiaId: string,
+    dto: RegisterGuaranteeMovementDto
+  ): Promise<Guarantee> {
+    const res = await apiClient<{ data: Guarantee }>(
+      `/api/garantias/${encodeURIComponent(garantiaId)}/movimientos`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }
+    );
+    return res.data;
+  }
+
+  public reset(): void {
+    // No-op en modo API
+  }
+}
+
+export const guaranteeService: IGuaranteeService = isMockMode()
+  ? new MockGuaranteeService()
+  : new ApiGuaranteeService();
+

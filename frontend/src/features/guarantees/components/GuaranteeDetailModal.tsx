@@ -72,6 +72,11 @@ export const GuaranteeDetailModal: React.FC<GuaranteeDetailModalProps> = ({
                   Retenida Total
                 </span>
               )}
+              {guarantee.estado === 'LIQUIDADA_MIXTA' && (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-100 px-3 py-1 text-xs font-semibold text-purple-800">
+                  Liquidada Mixta
+                </span>
+              )}
             </div>
           </div>
         </div>

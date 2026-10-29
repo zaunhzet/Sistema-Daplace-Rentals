@@ -7,7 +7,8 @@ export type EstadoGarantia =
   | 'EN_CUSTODIA'
   | 'PARCIALMENTE_RETENIDA'
   | 'DEVUELTA_TOTAL'
-  | 'RETENIDA_TOTAL';
+  | 'RETENIDA_TOTAL'
+  | 'LIQUIDADA_MIXTA';
 
 export type TipoMovimientoGarantia =
   | 'RECEPCION'

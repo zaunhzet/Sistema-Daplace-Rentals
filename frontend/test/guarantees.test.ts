@@ -137,7 +137,8 @@ describe('Guarantees Module — Unit & Integration Tests (UI-ANDRE-003)', () => 
       assert.equal(finalGar?.movimientos[0]?.tipo, 'RECEPCION');
       assert.equal(finalGar?.movimientos[1]?.tipo, 'RETENCION');
       assert.equal(finalGar?.movimientos[2]?.tipo, 'DEVOLUCION_TOTAL');
-      assert.equal(finalGar?.estado, 'RETENIDA_TOTAL');
+      // En BACKEND-002: una garantía con retención parcial y devolución que cierra en 0.00 es LIQUIDADA_MIXTA (no RETENIDA_TOTAL)
+      assert.equal(finalGar?.estado, 'LIQUIDADA_MIXTA');
     });
 
     it('8. Transición a DEVUELTA_TOTAL cuando se reembolsa el saldo completo sin retenciones', async () => {

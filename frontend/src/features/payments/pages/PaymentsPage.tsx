@@ -13,6 +13,7 @@ import { PaymentDetailModal } from '../components/PaymentDetailModal';
 import { PaymentReconcileModal } from '../components/PaymentReconcileModal';
 import { PaymentRejectModal } from '../components/PaymentRejectModal';
 import { fromCents, formatMoney, toCents } from '../../../shared/money';
+import { isMockMode } from '../../../shared/api/config';
 
 export const PaymentsPage: React.FC = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -73,43 +74,67 @@ export const PaymentsPage: React.FC = () => {
 
   // Acciones
   const handleCreatePayment = async (dto: CreatePaymentDto) => {
-    await paymentService.createPayment(dto);
-    setFeedback({
-      type: 'success',
-      message: 'Abono registrado exitosamente en estado PENDIENTE_CONCILIACION.',
-    });
-    await loadData();
+    try {
+      await paymentService.createPayment(dto);
+      setFeedback({
+        type: 'success',
+        message: 'Abono registrado exitosamente en estado PENDIENTE_CONCILIACION.',
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al registrar el abono.';
+      setFeedback({ type: 'error', message: msg });
+      throw err;
+    }
   };
 
   const handleReconcilePayment = async (id: string, dto?: ReconcilePaymentDto) => {
-    await paymentService.reconcilePayment(id, dto);
-    setFeedback({
-      type: 'success',
-      message: `Pago "${id}" conciliado formalmente. El saldo de la reserva ha sido actualizado.`,
-    });
-    await loadData();
+    try {
+      await paymentService.reconcilePayment(id, dto);
+      setFeedback({
+        type: 'success',
+        message: `Pago "${id}" conciliado formalmente. El saldo de la reserva ha sido actualizado.`,
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al conciliar el pago.';
+      setFeedback({ type: 'error', message: msg });
+      throw err;
+    }
   };
 
   const handleRejectPayment = async (id: string, dto: RejectPaymentDto) => {
-    await paymentService.rejectPayment(id, dto);
-    setFeedback({
-      type: 'success',
-      message: `Pago "${id}" rechazado correctamente. No se computará como ingreso validado.`,
-    });
-    await loadData();
+    try {
+      await paymentService.rejectPayment(id, dto);
+      setFeedback({
+        type: 'success',
+        message: `Pago "${id}" rechazado correctamente. No se computará como ingreso validado.`,
+      });
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al rechazar el pago.';
+      setFeedback({ type: 'error', message: msg });
+      throw err;
+    }
   };
 
-  // KPIs calculados con precisión
-  let totalConciliadoCents = 0;
-  let totalPendienteCents = 0;
+  // KPIs calculados con precisión por moneda (estricta separación contable PEN y USD)
+  let totalConciliadoPenCents = 0;
+  let totalConciliadoUsdCents = 0;
+  let totalPendientePenCents = 0;
+  let totalPendienteUsdCents = 0;
   let countPendientes = 0;
   let countRechazados = 0;
 
   for (const p of payments) {
+    const isUsd = (p.moneda || 'PEN').toUpperCase() === 'USD';
+    const cents = toCents(p.importe);
     if (p.estado === 'CONCILIADO') {
-      totalConciliadoCents += toCents(p.importe);
+      if (isUsd) totalConciliadoUsdCents += cents;
+      else totalConciliadoPenCents += cents;
     } else if (p.estado === 'PENDIENTE_CONCILIACION') {
-      totalPendienteCents += toCents(p.importe);
+      if (isUsd) totalPendienteUsdCents += cents;
+      else totalPendientePenCents += cents;
       countPendientes++;
     } else if (p.estado === 'RECHAZADO') {
       countRechazados++;
@@ -118,17 +143,19 @@ export const PaymentsPage: React.FC = () => {
 
   return (
     <div className="w-full space-y-4">
-      {/* Aviso de Modo Simulado / Mock */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
-            Modo Simulado (Mock)
-          </span>
-          <span>
-            Este módulo opera temporalmente con datos en memoria para salvaguarda de trazabilidad contable. Se conectará a PostgreSQL en un incremento posterior.
-          </span>
+      {/* Aviso de Modo Simulado: solo si VITE_USE_MOCKS === 'true' */}
+      {isMockMode() && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-xs text-amber-900 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold px-2 py-0.5 rounded-full bg-amber-200 text-amber-800 text-[11px] uppercase tracking-wide">
+              Modo Simulado (Mock)
+            </span>
+            <span>
+              Este módulo opera temporalmente con datos en memoria (VITE_USE_MOCKS=true).
+            </span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Cabecera de Página */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -184,15 +211,22 @@ export const PaymentsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Tarjetas KPI */}
+      {/* Tarjetas KPI con estricta separación de divisas */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">TOTAL CONCILIADO</span>
             <CheckCircle2 size={15} className="text-emerald-700" />
           </div>
-          <div className="text-lg sm:text-xl font-bold font-mono text-emerald-900 mt-1">
-            {formatMoney(fromCents(totalConciliadoCents), 'PEN')}
+          <div className="mt-1 flex flex-col gap-0.5">
+            <div className="text-lg sm:text-xl font-bold font-mono text-emerald-900">
+              {formatMoney(fromCents(totalConciliadoPenCents), 'PEN')}
+            </div>
+            {totalConciliadoUsdCents > 0 && (
+              <div className="text-xs sm:text-sm font-semibold font-mono text-emerald-800">
+                + {formatMoney(fromCents(totalConciliadoUsdCents), 'USD')}
+              </div>
+            )}
           </div>
           <span className="text-[10px] text-stone-500">Ingreso de alquiler validado</span>
         </div>
@@ -202,8 +236,15 @@ export const PaymentsPage: React.FC = () => {
             <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">POR CONCILIAR</span>
             <Clock size={15} className="text-amber-700" />
           </div>
-          <div className="text-lg sm:text-xl font-bold font-mono text-amber-900 mt-1">
-            {formatMoney(fromCents(totalPendienteCents), 'PEN')}
+          <div className="mt-1 flex flex-col gap-0.5">
+            <div className="text-lg sm:text-xl font-bold font-mono text-amber-900">
+              {formatMoney(fromCents(totalPendientePenCents), 'PEN')}
+            </div>
+            {totalPendienteUsdCents > 0 && (
+              <div className="text-xs sm:text-sm font-semibold font-mono text-amber-800">
+                + {formatMoney(fromCents(totalPendienteUsdCents), 'USD')}
+              </div>
+            )}
           </div>
           <span className="text-[10px] text-amber-800 font-medium">
             {countPendientes} {countPendientes === 1 ? 'abono pendiente' : 'abonos pendientes'}

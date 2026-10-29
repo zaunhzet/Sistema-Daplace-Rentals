@@ -109,6 +109,11 @@ export const GuaranteeList: React.FC<GuaranteeListProps> = ({
                         Retenida Total
                       </span>
                     )}
+                    {g.estado === 'LIQUIDADA_MIXTA' && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-purple-800">
+                        Liquidada Mixta
+                      </span>
+                    )}
                   </td>
 
                   {/* Acciones */}

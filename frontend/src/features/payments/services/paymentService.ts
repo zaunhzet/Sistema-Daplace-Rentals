@@ -15,6 +15,8 @@ import {
   toCents,
   validateMoneyInput,
 } from '../../../shared/money';
+import { apiClient, ApiError } from '../../../shared/api/client';
+import { isMockMode } from '../../../shared/api/config';
 
 export function validatePaymentPayload(dto: Partial<CreatePaymentDto>): PaymentValidationResult {
   const errors: Record<string, string> = {};
@@ -318,4 +320,101 @@ class MockPaymentService implements IPaymentService {
   }
 }
 
-export const paymentService: IPaymentService = new MockPaymentService();
+export class ApiPaymentService implements IPaymentService {
+  public async getPayments(filters?: PaymentFilterParams): Promise<Payment[]> {
+    const params = new URLSearchParams();
+    if (filters?.propiedadId && filters.propiedadId !== 'TODAS') {
+      params.set('propiedadId', filters.propiedadId);
+    }
+    if (filters?.reservaId && filters.reservaId !== 'TODAS') {
+      params.set('reservaId', filters.reservaId);
+    }
+    if (filters?.estado && filters.estado !== 'TODOS') {
+      params.set('estado', filters.estado);
+    }
+    if (filters?.desde) {
+      params.set('desde', filters.desde);
+    }
+    if (filters?.hasta) {
+      params.set('hasta', filters.hasta);
+    }
+    if (filters?.search && filters.search.trim()) {
+      params.set('search', filters.search.trim());
+    }
+
+    const qs = params.toString();
+    const res = await apiClient<{ data: Payment[] }>(`/api/pagos${qs ? `?${qs}` : ''}`);
+    return res.data;
+  }
+
+  public async getPaymentById(id: string): Promise<Payment | null> {
+    try {
+      const res = await apiClient<{ data: Payment }>(`/api/pagos/${encodeURIComponent(id)}`);
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  public async getPaymentsByReservationId(reservaId: string): Promise<Payment[]> {
+    const res = await apiClient<{ data: Payment[] }>(
+      `/api/reservas/${encodeURIComponent(reservaId)}/pagos`
+    );
+    return res.data;
+  }
+
+  public async getReservationFinancialSummary(reservaId: string): Promise<ReservationFinancialSummary> {
+    const res = await apiClient<{ data: ReservationFinancialSummary }>(
+      `/api/reservas/${encodeURIComponent(reservaId)}/resumen-financiero`
+    );
+    return res.data;
+  }
+
+  public async createPayment(dto: CreatePaymentDto): Promise<Payment> {
+    const validation = validatePaymentPayload(dto);
+    if (!validation.isValid) {
+      const errorMsg = Object.values(validation.errors).join(' ');
+      throw new Error(`Error de validación: ${errorMsg}`);
+    }
+
+    const res = await apiClient<{ data: Payment }>('/api/pagos', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
+    return res.data;
+  }
+
+  public async reconcilePayment(id: string, dto?: ReconcilePaymentDto): Promise<Payment> {
+    const res = await apiClient<{ data: Payment }>(
+      `/api/pagos/${encodeURIComponent(id)}/conciliar`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto || {}),
+      }
+    );
+    return res.data;
+  }
+
+  public async rejectPayment(id: string, dto: RejectPaymentDto): Promise<Payment> {
+    const res = await apiClient<{ data: Payment }>(
+      `/api/pagos/${encodeURIComponent(id)}/rechazar`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }
+    );
+    return res.data;
+  }
+
+  public reset(): void {
+    // No-op en modo API
+  }
+}
+
+export const paymentService: IPaymentService = isMockMode()
+  ? new MockPaymentService()
+  : new ApiPaymentService();
+

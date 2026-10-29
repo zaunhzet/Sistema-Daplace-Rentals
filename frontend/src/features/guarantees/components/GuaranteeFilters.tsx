@@ -93,6 +93,7 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
               <option value="PARCIALMENTE_RETENIDA">Parcialmente Retenida</option>
               <option value="DEVUELTA_TOTAL">Devuelta Total</option>
               <option value="RETENIDA_TOTAL">Retenida Total</option>
+              <option value="LIQUIDADA_MIXTA">Liquidada Mixta</option>
             </select>
 
             <button
