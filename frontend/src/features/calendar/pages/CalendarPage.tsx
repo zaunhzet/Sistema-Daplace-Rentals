@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import type { CalendarDay, MonthOccupancySummary } from '../types';
 import type { Property } from '../../properties/types';
 import type { Reservation } from '../../reservations/types';
@@ -156,7 +157,10 @@ export const CalendarPage: React.FC = () => {
 
       {notification && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 flex items-center justify-between">
-          <span>✓ {notification}</span>
+          <div className="flex items-center gap-2">
+            <CheckCircle size={18} className="shrink-0 text-emerald-700" aria-hidden="true" />
+            <span>{notification}</span>
+          </div>
           <button
             type="button"
             onClick={() => setNotification(null)}
@@ -170,7 +174,7 @@ export const CalendarPage: React.FC = () => {
       {/* Property Condition Notice */}
       {selectedProperty && (!selectedProperty.activa || selectedProperty.estadoOperativo !== 'OPERATIVA') && (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 flex items-center gap-3">
-          <span className="text-xl">⚠️</span>
+          <AlertCircle size={20} className="shrink-0 text-amber-700" aria-hidden="true" />
           <div>
             <p className="font-bold">Aviso de condición operativa</p>
             <p className="mt-0.5 text-amber-900">

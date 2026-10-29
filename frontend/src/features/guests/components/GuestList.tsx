@@ -1,4 +1,5 @@
 import React from 'react';
+import { Users } from 'lucide-react';
 import type { Guest } from '../types';
 
 interface GuestListProps {
@@ -17,8 +18,8 @@ export const GuestList: React.FC<GuestListProps> = ({
   if (guests.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center">
-        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-500 mb-4 text-xl">
-          👥
+        <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-stone-100 text-stone-500 mb-4">
+          <Users size={22} aria-hidden="true" />
         </div>
         <h3 className="text-base font-semibold text-stone-900">No se encontraron huéspedes</h3>
         <p className="mt-1 text-sm text-stone-500 max-w-md mx-auto">

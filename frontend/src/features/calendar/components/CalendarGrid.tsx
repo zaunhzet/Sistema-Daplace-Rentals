@@ -37,8 +37,10 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
 
   return (
     <div className="overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-xs">
-      {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50/80 text-center text-xs font-bold uppercase tracking-wider text-stone-600">
+      <div className="overflow-x-auto w-full">
+        <div className="min-w-[620px]">
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 border-b border-stone-200 bg-stone-50/80 text-center text-xs font-bold uppercase tracking-wider text-stone-600">
         {weekDays.map((wd) => (
           <div key={wd} className="py-3 border-r border-stone-200 last:border-r-0">
             {wd}
@@ -140,6 +142,8 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
             </div>
           );
         })}
+      </div>
+        </div>
       </div>
     </div>
   );

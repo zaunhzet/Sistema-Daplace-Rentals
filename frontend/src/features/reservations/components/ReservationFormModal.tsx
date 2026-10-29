@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import type { CreateReservationDto, OrigenReserva } from '../types';
 import type { Property } from '../../properties/types';
 import type { Guest } from '../../guests/types';
@@ -129,13 +130,14 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
             className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
             aria-label="Cerrar modal"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         {generalError && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 leading-relaxed">
-            ⚠️ {generalError}
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 leading-relaxed flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0 text-red-700" aria-hidden="true" />
+            <span>{generalError}</span>
           </div>
         )}
 
@@ -241,7 +243,10 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
           </div>
 
           {errors.fechas && (
-            <p className="text-xs text-red-600 font-medium -mt-2">⚠️ {errors.fechas}</p>
+            <p className="text-xs text-red-600 font-medium -mt-2 flex items-center gap-1.5">
+              <AlertCircle size={14} className="shrink-0 text-red-600" aria-hidden="true" />
+              <span>{errors.fechas}</span>
+            </p>
           )}
 
           {nights > 0 && (

@@ -28,5 +28,7 @@ export interface SidebarProps {
   items?: NavigationItem[];
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  mobileOpen?: boolean;
+  onToggleMobile?: (open: boolean) => void;
   className?: string;
 }

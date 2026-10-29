@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AlertCircle, X } from 'lucide-react';
 import type { Reservation, UpdateReservationDatesDto } from '../types';
 import { calculateNights, validateReservationDates } from '../services/reservationService';
 
@@ -89,13 +90,14 @@ export const ReservationDateEditModal: React.FC<ReservationDateEditModalProps> =
             className="rounded-lg p-2 text-stone-400 hover:bg-stone-100 hover:text-stone-700 cursor-pointer"
             aria-label="Cerrar modal"
           >
-            ✕
+            <X size={18} aria-hidden="true" />
           </button>
         </div>
 
         {error && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 leading-relaxed">
-            ⚠️ {error}
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 leading-relaxed flex items-center gap-2">
+            <AlertCircle size={16} className="shrink-0 text-red-700" aria-hidden="true" />
+            <span>{error}</span>
           </div>
         )}
 

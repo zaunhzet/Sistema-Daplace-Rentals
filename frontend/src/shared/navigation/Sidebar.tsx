@@ -21,9 +21,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   items = NAVIGATION_ITEMS,
   collapsed = false,
   onToggleCollapse,
+  mobileOpen: controlledMobileOpen,
+  onToggleMobile,
   className = '',
 }) => {
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [internalMobileOpen, setInternalMobileOpen] = useState(false);
+  const isControlled = controlledMobileOpen !== undefined;
+  const mobileOpen = isControlled ? controlledMobileOpen : internalMobileOpen;
+
+  const setMobileOpen = (value: boolean | ((prev: boolean) => boolean)) => {
+    const nextVal = typeof value === 'function' ? value(mobileOpen) : value;
+    if (!isControlled) {
+      setInternalMobileOpen(nextVal);
+    }
+    onToggleMobile?.(nextVal);
+  };
 
   const handleItemClick = (item: NavigationItem) => {
     onNavigate?.(item.path, item);

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { AlertCircle, CheckCircle } from 'lucide-react';
 import type {
   CreatePropertyDto,
   Property,
@@ -146,7 +147,7 @@ export const PropertiesPage: React.FC = () => {
       {successMessage && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span>✓</span>
+            <CheckCircle size={18} className="shrink-0 text-emerald-700" aria-hidden="true" />
             <span>{successMessage}</span>
           </div>
           <button
@@ -162,7 +163,7 @@ export const PropertiesPage: React.FC = () => {
       {errorMessage && (
         <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span>⚠️</span>
+            <AlertCircle size={18} className="shrink-0 text-red-700" aria-hidden="true" />
             <span>{errorMessage}</span>
           </div>
           <button

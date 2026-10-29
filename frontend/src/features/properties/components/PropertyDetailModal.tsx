@@ -1,4 +1,5 @@
 import React from 'react';
+import { ShieldCheck } from 'lucide-react';
 import type { Property, Propietario } from '../types';
 
 interface PropertyDetailModalProps {
@@ -144,7 +145,8 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           {/* Governance Invariant Note */}
           <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/50 p-4 text-xs text-emerald-950">
             <p className="font-semibold text-emerald-900 flex items-center gap-1.5 mb-1">
-              <span>🛡️</span> Regla de Inmunidad y Trazabilidad (Gobernanza)
+              <ShieldCheck size={16} aria-hidden="true" />
+              <span>Regla de Inmunidad y Trazabilidad (Gobernanza)</span>
             </p>
             <p className="leading-5 text-emerald-900/90">
               Las propiedades no se eliminan físicamente para proteger el histórico transaccional de reservas, pagos y
