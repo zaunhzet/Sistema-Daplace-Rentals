@@ -6,6 +6,7 @@ import { ReservationsPage } from '../features/reservations';
 import { CalendarPage } from '../features/calendar';
 import { PaymentsPage } from '../features/payments';
 import { GuaranteesPage } from '../features/guarantees';
+import { ExpensesPage } from '../features/expenses';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
@@ -40,6 +41,7 @@ export default function App() {
         <Route path="/calendario" element={<CalendarPage />} />
         <Route path="/pagos" element={<PaymentsPage />} />
         <Route path="/garantias" element={<GuaranteesPage />} />
+        <Route path="/gastos" element={<ExpensesPage />} />
 
         {/* Módulos Reservados / Pendientes (Diego y Compartidos) */}
         <Route path="/dashboard" element={<PendingModuleView path="/dashboard" />} />
