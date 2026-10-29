@@ -44,22 +44,42 @@ export const ReservationList: React.FC<ReservationListProps> = ({
   const getStatusBadge = (estado: string) => {
     switch (estado) {
       case 'CONFIRMADA':
-        return <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Confirmada</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-800">
+            <span className="size-1.5 rounded-full bg-emerald-600 shrink-0" aria-hidden="true" />
+            Confirmada
+          </span>
+        );
       case 'SOLICITADA':
-        return <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Solicitada</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800">
+            <span className="size-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
+            Solicitada
+          </span>
+        );
       case 'COMPLETADA':
-        return <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Completada</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-sky-800">
+            <span className="size-1.5 rounded-full bg-sky-500 shrink-0" aria-hidden="true" />
+            Completada
+          </span>
+        );
       case 'CANCELADA':
-        return <span className="rounded-full bg-stone-200 px-2.5 py-0.5 text-xs font-semibold text-stone-700">Cancelada</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-500">
+            <span className="size-1.5 rounded-full bg-stone-400 shrink-0" aria-hidden="true" />
+            Cancelada
+          </span>
+        );
       default:
-        return <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-xs text-stone-600">{estado}</span>;
+        return <span className="text-xs text-stone-600">{estado}</span>;
     }
   };
 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-2xs">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs sm:text-sm text-stone-600">
+      <div className="overflow-x-auto min-w-0">
+        <table className="w-full text-left text-xs text-stone-600 min-w-[700px] lg:min-w-0">
           <thead className="border-b border-stone-200 bg-stone-50/75 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
             <tr>
               <th scope="col" className="px-4 py-2.5">Código / Origen</th>

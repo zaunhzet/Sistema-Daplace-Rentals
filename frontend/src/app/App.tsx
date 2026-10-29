@@ -10,21 +10,30 @@ import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
 
+// Feature flag: el portal público de reservas (HU-01 / HU-02) queda pospuesto por decisión
+// de alcance y enfocado exclusivamente en gestión administrativa. Se activa con VITE_ENABLE_PUBLIC_BOOKING=true.
+const ENABLE_PUBLIC_BOOKING = import.meta.env.VITE_ENABLE_PUBLIC_BOOKING === 'true';
+
 export default function App() {
   return (
     <Routes>
-      {/* Public Guest-Facing Journey (HU-01 / HU-02) */}
-      <Route element={<PublicLayout />}>
-        <Route path="/catalogo" element={<PublicCatalogPage />} />
-        <Route path="/solicitar-reserva" element={<PublicBookingRequestPage />} />
-      </Route>
+      {/* 1. Ruta de Login reservada fuera del shell administrativo para Diego */}
+      <Route path="/login" element={<PendingModuleView path="/login" />} />
 
-      {/* Administrative Panel (Protected layout shell) */}
+      {/* 2. Portal Público de Reservas (Pospuesto en esta etapa - activo solo con feature flag) */}
+      {ENABLE_PUBLIC_BOOKING && (
+        <Route element={<PublicLayout />}>
+          <Route path="/catalogo" element={<PublicCatalogPage />} />
+          <Route path="/solicitar-reserva" element={<PublicBookingRequestPage />} />
+        </Route>
+      )}
+
+      {/* 3. Panel Administrativo Transaccional (Shell Operativo Principal) */}
       <Route element={<AdminLayout />}>
-        {/* Default route redirects to /propiedades while Dashboard is pending */}
+        {/* Ruta raíz redirige a /propiedades */}
         <Route index element={<Navigate to="/propiedades" replace />} />
 
-        {/* Operational Modules (André) */}
+        {/* Módulos Operativos (André) */}
         <Route path="/propiedades" element={<PropertiesPage />} />
         <Route path="/huespedes" element={<GuestsPage />} />
         <Route path="/reservas" element={<ReservationsPage />} />
@@ -32,14 +41,13 @@ export default function App() {
         <Route path="/pagos" element={<PaymentsPage />} />
         <Route path="/garantias" element={<GuaranteesPage />} />
 
-        {/* Reserved / Pending Modules (Diego & Shared) */}
+        {/* Módulos Reservados / Pendientes (Diego y Compartidos) */}
         <Route path="/dashboard" element={<PendingModuleView path="/dashboard" />} />
         <Route path="/reportes" element={<PendingModuleView path="/reportes" />} />
-        <Route path="/login" element={<PendingModuleView path="/login" />} />
         <Route path="/personal" element={<PendingModuleView path="/personal" />} />
         <Route path="/mantenimiento" element={<PendingModuleView path="/mantenimiento" />} />
 
-        {/* 404 Fallback for unknown routes */}
+        {/* Fallback 404 para rutas desconocidas */}
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

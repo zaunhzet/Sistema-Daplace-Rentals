@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router';
-import { Menu, ChevronRight, Globe } from 'lucide-react';
+import { Menu, ChevronRight } from 'lucide-react';
 import { Sidebar, NAVIGATION_ITEMS } from '../shared/navigation';
 
 export const AdminLayout: React.FC = () => {
@@ -65,28 +65,14 @@ export const AdminLayout: React.FC = () => {
             </nav>
           </div>
 
-          {/* Right Header: Link to Public Portal & Discrete Demo Indicator */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* Link to Public Portal */}
-            <NavLink
-              to="/catalogo"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-colors shadow-2xs"
-              title="Abrir el catálogo público de cara al huésped"
+          {/* Right Header: Discrete Neutral Environment Indicator */}
+          <div className="flex items-center gap-2 shrink-0">
+            <span
+              className="text-[11px] text-stone-400 font-normal tracking-tight select-none"
+              title="Entorno de demostración con datos mock en memoria. Autenticación de operadores en desarrollo."
             >
-              <Globe size={13} className="text-[#5E6C5B]" aria-hidden="true" />
-              <span className="hidden sm:inline">Web Pública</span>
-              <span className="sm:hidden">Web</span>
-            </NavLink>
-
-            {/* Discrete Demo Environment Badge */}
-            <div
-              className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-600/20 px-2.5 py-1 text-[11px] font-medium text-amber-900"
-              title="Entorno MVP: datos en memoria para demostración funcional, sin autenticación operativa."
-            >
-              <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden="true" />
-              <span className="hidden md:inline">Demo funcional · Sin auth</span>
-              <span className="md:hidden">Demo</span>
-            </div>
+              Entorno de prueba <span className="hidden sm:inline">· Sin autenticación</span>
+            </span>
           </div>
         </header>
 

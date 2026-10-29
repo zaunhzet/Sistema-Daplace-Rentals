@@ -29,75 +29,75 @@ export const PaymentList: React.FC<PaymentListProps> = ({
 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200 bg-white shadow-2xs">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse text-xs">
+      <div className="overflow-x-auto min-w-0">
+        <table className="w-full text-left border-collapse text-xs min-w-[760px] lg:min-w-0">
           <thead>
             <tr className="border-b border-stone-200 bg-stone-50/80 text-[11px] font-bold text-stone-600 uppercase tracking-wider">
-              <th className="py-2.5 px-4">CÓDIGO / FECHA</th>
-              <th className="py-2.5 px-4">RESERVA / PROPIEDAD</th>
-              <th className="py-2.5 px-4">HUÉSPED</th>
-              <th className="py-2.5 px-4">CONCEPTO / MEDIO</th>
-              <th className="py-2.5 px-4">REFERENCIA</th>
-              <th className="py-2.5 px-4 text-right">IMPORTE</th>
-              <th className="py-2.5 px-4 text-center">ESTADO</th>
-              <th className="py-2.5 px-4 text-center">ACCIONES</th>
+              <th className="py-2.5 px-3">CÓDIGO / FECHA</th>
+              <th className="py-2.5 px-3">RESERVA / PROPIEDAD</th>
+              <th className="py-2.5 px-3">HUÉSPED</th>
+              <th className="py-2.5 px-3">CONCEPTO / MEDIO</th>
+              <th className="py-2.5 px-3">REFERENCIA</th>
+              <th className="py-2.5 px-3 text-right">IMPORTE</th>
+              <th className="py-2.5 px-3 text-center">ESTADO</th>
+              <th className="py-2.5 px-3 text-center">ACCIONES</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-100">
             {payments.map((p) => (
               <tr key={p.id} className="hover:bg-stone-50/60 transition-colors">
                 {/* Código y Fecha */}
-                <td className="py-2.5 px-4">
+                <td className="py-2.5 px-3">
                   <div className="font-mono font-bold text-stone-800">{p.id}</div>
                   <div className="text-[11px] text-stone-500">{p.fechaPago}</div>
                 </td>
 
                 {/* Reserva y Propiedad */}
-                <td className="py-2.5 px-4">
-                  <div className="font-semibold text-stone-900">{p.propiedadNombre}</div>
+                <td className="py-2.5 px-3">
+                  <div className="font-semibold text-stone-900 truncate max-w-[140px]">{p.propiedadNombre}</div>
                   <div className="font-mono text-[11px] text-stone-500">Reserva: {p.reservaId}</div>
                 </td>
 
                 {/* Huésped */}
-                <td className="py-2.5 px-4">
-                  <div className="font-medium text-stone-800">{p.huespedNombre}</div>
+                <td className="py-2.5 px-3">
+                  <div className="font-medium text-stone-800 truncate max-w-[130px]">{p.huespedNombre}</div>
                 </td>
 
                 {/* Concepto y Medio */}
-                <td className="py-2.5 px-4">
-                  <span className="inline-block rounded-md bg-stone-100 px-2 py-0.5 font-semibold text-stone-700 text-[11px]">
+                <td className="py-2.5 px-3">
+                  <span className="inline-block rounded-md bg-stone-100 px-1.5 py-0.5 font-semibold text-stone-700 text-[11px]">
                     {p.concepto}
                   </span>
                   <div className="text-[11px] text-stone-500 mt-0.5">{p.metodoPago}</div>
                 </td>
 
                 {/* Referencia */}
-                <td className="py-2.5 px-4">
-                  <div className="font-mono text-stone-700">{p.referencia}</div>
+                <td className="py-2.5 px-3">
+                  <div className="font-mono text-stone-700 truncate max-w-[100px]">{p.referencia}</div>
                 </td>
 
                 {/* Importe */}
-                <td className="py-2.5 px-4 text-right font-mono font-bold text-stone-900">
+                <td className="py-2.5 px-3 text-right font-mono font-bold text-stone-900 whitespace-nowrap">
                   {formatMoney(p.importe, p.moneda)}
                 </td>
 
                 {/* Estado */}
-                <td className="py-2.5 px-4 text-center">
+                <td className="py-2.5 px-3 text-center whitespace-nowrap">
                   {p.estado === 'CONCILIADO' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 border border-emerald-200">
-                      <CheckCircle2 size={12} />
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800">
+                      <CheckCircle2 size={13} className="text-emerald-600" />
                       Conciliado
                     </span>
                   )}
                   {p.estado === 'PENDIENTE_CONCILIACION' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 border border-amber-200">
-                      <AlertCircle size={12} />
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800">
+                      <AlertCircle size={13} className="text-amber-600" />
                       Pendiente
                     </span>
                   )}
                   {p.estado === 'RECHAZADO' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-[11px] font-semibold text-rose-800 border border-rose-200">
-                      <Ban size={12} />
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-800">
+                      <Ban size={13} className="text-rose-600" />
                       Rechazado
                     </span>
                   )}

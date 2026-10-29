@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import type { NavigationGroup, NavigationItem, SidebarProps } from './types';
 import { NAVIGATION_ITEMS } from './navItems';
+import { BrandLogo } from '../components/BrandLogo';
 
 const GROUPS: NavigationGroup[] = [
   'Principal',
@@ -64,22 +65,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const renderNavigation = (isCollapsed: boolean, isMobile = false) => (
     <div className="flex h-full min-h-0 flex-col bg-[#162A2C] text-[#FEFCF6]">
       {/* Sidebar Header */}
-      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#5E6C5B] text-sm font-bold tracking-wide text-[#FEFCF6] shadow-2xs">
-            D
-          </span>
-          {!isCollapsed && (
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold tracking-[-0.02em] text-[#FEFCF6]">
-                daplace <span className="font-normal text-[#D6E0E2]/75">rentals</span>
-              </p>
-              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#D6E0E2]/60">
-                Panel Operativo
-              </p>
-            </div>
-          )}
-        </div>
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3.5">
+        <BrandLogo
+          showText={!isCollapsed}
+          subtitle="Panel Operativo"
+          theme="dark"
+          size="md"
+        />
 
         {isMobile ? (
           <button
@@ -156,15 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             }`}
                           />
                           {!isCollapsed && (
-                            <>
-                              <span className="min-w-0 flex-1 truncate">{item.name}</span>
-                              <span
-                                aria-hidden="true"
-                                className={`size-1.5 shrink-0 rounded-full ${
-                                  isAvailable ? 'bg-[#B9CDB4]' : 'bg-[#D6E0E2]/30'
-                                }`}
-                              />
-                            </>
+                            <span className="min-w-0 flex-1 truncate">{item.name}</span>
                           )}
                         </button>
                       </li>

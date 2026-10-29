@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet, NavLink, Link } from 'react-router';
-import { Building, CalendarCheck, ShieldCheck, ArrowRight } from 'lucide-react';
+import { Building, CalendarCheck, ShieldCheck } from 'lucide-react';
+import { BrandLogo } from '../../../shared/components/BrandLogo';
 
 export const PublicLayout: React.FC = () => {
   return (
@@ -11,24 +12,19 @@ export const PublicLayout: React.FC = () => {
           {/* Brand Logo */}
           <Link
             to="/catalogo"
-            className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
+            className="transition-opacity hover:opacity-90"
             aria-label="DAPLACE Rentals — Catálogo Público"
           >
-            <span className="grid size-9 place-items-center rounded-xl bg-[#183b32] text-sm font-bold text-[#FEFCF6] shadow-xs">
-              D
-            </span>
-            <div className="leading-tight">
-              <span className="text-base font-bold tracking-tight text-[#162A2C]">
-                daplace <span className="font-medium text-[#5E6C5B]">rentals</span>
-              </span>
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                Alquileres Temporales
-              </span>
-            </div>
+            <BrandLogo
+              showText={true}
+              subtitle="Alquileres Temporales"
+              theme="light"
+              size="md"
+            />
           </Link>
 
           {/* Navigation Links */}
-          <nav aria-label="Navegación pública" className="hidden sm:flex items-center gap-1">
+          <nav aria-label="Navegación pública" className="flex items-center gap-1">
             <NavLink
               to="/catalogo"
               className={({ isActive }) =>
@@ -57,18 +53,6 @@ export const PublicLayout: React.FC = () => {
               <span>Solicitar Reserva</span>
             </NavLink>
           </nav>
-
-          {/* Quick link to Admin Panel */}
-          <div className="flex items-center gap-2">
-            <Link
-              to="/propiedades"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#183b32] shadow-2xs hover:border-[#183b32] hover:bg-stone-50 transition-colors"
-              title="Acceso al panel administrativo operativo"
-            >
-              <span>Panel Operativo</span>
-              <ArrowRight size={13} aria-hidden="true" />
-            </Link>
-          </div>
         </div>
       </header>
 

@@ -119,10 +119,11 @@ export const PendingModuleView: React.FC<PendingModuleViewProps> = ({ path: prop
   };
 
   const content = getCustomContent();
+  const isStandalone = currentPath === '/login';
 
   return (
-    <div className="w-full max-w-4xl mx-auto py-2 sm:py-4">
-      <div className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-8 shadow-2xs">
+    <div className={isStandalone ? 'min-h-screen bg-[#f7f7f5] flex items-center justify-center p-4 sm:p-6' : 'w-full max-w-4xl mx-auto py-2 sm:py-4'}>
+      <div className="w-full max-w-3xl rounded-2xl border border-stone-200 bg-white p-5 sm:p-8 shadow-2xs">
         {/* Header Badges */}
         <div className="flex flex-wrap items-center gap-2 mb-4">
           <div className="grid size-9 place-items-center rounded-xl bg-[#5E6C5B]/15 text-[#183b32]">

@@ -41,8 +41,8 @@ export const GuestList: React.FC<GuestListProps> = ({
 
   return (
     <div className="overflow-hidden rounded-xl border border-stone-200/90 bg-white shadow-2xs">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs sm:text-sm text-stone-600">
+      <div className="overflow-x-auto min-w-0">
+        <table className="w-full text-left text-xs text-stone-600 min-w-[640px] lg:min-w-0">
           <thead className="border-b border-stone-200 bg-stone-50/75 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
             <tr>
               <th scope="col" className="px-4 py-2.5">Huésped</th>
