@@ -10,6 +10,8 @@
 
 | Ruta | Nombre del Módulo | Responsable | Estado Actual | HU / RF Relacionada | Descripción |
 |---|---|---|---|---|---|
+| `/catalogo` | Catálogo Público de Propiedades | **André** | **DISPONIBLE (Mock)** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Exclusivamente propiedades activas, operativas y publicadas. Protección de privacidad (sin datos de propietario ni finanzas privadas). |
+| `/solicitar-reserva` | Solicitud Pública de Reserva | **André** | **DISPONIBLE (Mock)** | RF01, RF02 / HU-01, HU-02 | Formulario público con verificación en tiempo real de disponibilidad por intervalo [ingreso, salida), validación de contacto y registro de reserva en estado SOLICITADA. |
 | `/login` | Acceso al Sistema | **Diego** | *En desarrollo por Diego* | RF09 / HU-08 | Pantalla de inicio de sesión y gestión de credenciales. **No forma parte del menú lateral.** |
 | `/dashboard` | Dashboard Principal | **Diego** | *Pendiente* | RF09 / HU-08 | Resumen general, KPIs iniciales y accesos directos. |
 | `/propiedades` | Gestión de Propiedades | **André** | **DISPONIBLE (Mock)** | RF01 / HU-18 | Catálogo, alta, edición, filtros, vinculación de propietario e inmunidad financiera (desactivación lógica). |
@@ -139,6 +141,30 @@
   * Aritmética exacta en unidades enteras menores (céntimos). Evita errores de redondeo de punto flotante binario IEEE 754.
   * Adaptador explícito y provisional `adaptReservationAmount` para interoperar con `Reservation.montoAcordado` sin alterar contratos legados de reservas.
   * Validación estricta de importes (mayor que cero, máximo 2 decimales, no negativos ni NaN).
+
+### Módulo Público de Catálogo y Solicitud de Reserva (UI-ANDRE-004)
+* **Ubicación:** `frontend/src/features/public-booking/`
+* **Importación:**
+  ```tsx
+  import {
+    PublicLayout,
+    PublicCatalogPage,
+    PublicBookingRequestPage,
+    publicBookingService,
+  } from '../features/public-booking';
+  import type {
+    PublicProperty,
+    PublicBookingRequestDto,
+    PublicAvailabilityCheck,
+    PublicBookingResult,
+  } from '../features/public-booking';
+  ```
+* **Componentes y Vistas:**
+  * `PublicLayout`: Shell público independiente de `AdminLayout`, con navbar pública, enlaces al catálogo, solicitud y acceso al panel de operadores.
+  * `PublicCatalogPage`: Vista `/catalogo` con hero informativo, buscador en tiempo real por nombre y distrito, selector de huéspedes y tarjetas de inmuebles.
+  * `PropertyCard`: Ficha pública con nombre, dirección resumida, capacidad de huéspedes, precio referencial base y botón de llamada a la acción "Consultar Disponibilidad".
+  * `PublicBookingRequestPage`: Formulario `/solicitar-reserva` con preselección por query param (`?propiedadId=...`), selector de fechas con consulta en tiempo real de disponibilidad por intervalo semiabierto `[ingreso, salida)`, campos obligatorios de contacto y pantalla de confirmación con identificador de solicitud y estado `SOLICITADA`.
+  * `publicBookingService`: Capa de orquestación que consulta `propertyService`, `guestService` y `reservationService`. Filtra estrictamente propiedades activas, operativas y publicadas, protegiendo datos internos de propietarios y finanzas privadas.
 
 ---
 

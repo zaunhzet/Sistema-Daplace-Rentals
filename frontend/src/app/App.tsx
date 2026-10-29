@@ -8,10 +8,18 @@ import { PaymentsPage } from '../features/payments';
 import { GuaranteesPage } from '../features/guarantees';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
+import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
 
 export default function App() {
   return (
     <Routes>
+      {/* Public Guest-Facing Journey (HU-01 / HU-02) */}
+      <Route element={<PublicLayout />}>
+        <Route path="/catalogo" element={<PublicCatalogPage />} />
+        <Route path="/solicitar-reserva" element={<PublicBookingRequestPage />} />
+      </Route>
+
+      {/* Administrative Panel (Protected layout shell) */}
       <Route element={<AdminLayout />}>
         {/* Default route redirects to /propiedades while Dashboard is pending */}
         <Route index element={<Navigate to="/propiedades" replace />} />

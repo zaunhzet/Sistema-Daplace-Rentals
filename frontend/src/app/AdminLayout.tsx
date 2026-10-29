@@ -67,6 +67,15 @@ export const AdminLayout: React.FC = () => {
 
           {/* Right Header: Demo Status & Quick Info */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* Link to Public Portal */}
+            <NavLink
+              to="/catalogo"
+              className="hidden sm:inline-flex items-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-700 hover:border-stone-400 hover:bg-stone-50 transition-colors shadow-2xs"
+              title="Abrir el catálogo público de cara al huésped"
+            >
+              <span>Web Pública</span>
+            </NavLink>
+
             {/* Demo Badge */}
             <div
               className="flex items-center gap-1.5 rounded-full bg-[#162A2C]/5 px-2.5 py-1 text-[11px] font-semibold text-[#162A2C] border border-[#162A2C]/10"
