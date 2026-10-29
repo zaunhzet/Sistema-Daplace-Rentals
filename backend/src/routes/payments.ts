@@ -1,12 +1,14 @@
 import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
-import { Prisma, type PrismaClient, type EstadoPago, type ConceptoPago, type MetodoPago } from '../generated/prisma/client.js';
+import { Prisma, type PrismaClient, type EstadoPago, type ConceptoPago, type MetodoPago, type BeneficiarioPago } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
 import { requireAuth } from '../shared/auth.js';
+import { formatEvidenciaResponse, validateUrl } from './payment-evidences.js';
 
 const ALLOWED_ESTADOS_PAGO: EstadoPago[] = ['PENDIENTE_CONCILIACION', 'CONCILIADO', 'RECHAZADO'];
 const ALLOWED_CONCEPTOS_PAGO: ConceptoPago[] = ['ADELANTO', 'SALDO', 'PAGO_TOTAL', 'PENALIDAD', 'OTRO'];
 const ALLOWED_METODOS_PAGO: MetodoPago[] = ['TRANSFERENCIA', 'TARJETA', 'EFECTIVO', 'BILLETERA_DIGITAL', 'DEPOSITO', 'OTRO'];
+const ALLOWED_BENEFICIARIOS_PAGO: BeneficiarioPago[] = ['DAPLACE', 'PROPIETARIO', 'OTRO'];
 const DECIMAL_REGEX = /^\d+(\.\d{1,2})?$/;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -21,10 +23,118 @@ function validateDateString(dateStr: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
+export interface ProcessedAccountReference {
+  mask: string | null;
+  fingerprint: string | null;
+}
+
 /**
- * Genera hash canónico para verificación estricta de idempotencia.
+ * Resuelve y valida la clave secreta para la derivación de huella HMAC en referencias bancarias.
+ * Precedencia:
+ * 1. Si BANK_ACCOUNT_HMAC_SECRET está definida (incluso vacía o con espacios), se evalúa como principal.
+ *    No se recurre al alias si la variable principal fue configurada de forma inválida.
+ * 2. Si BANK_ACCOUNT_HMAC_SECRET es estrictamente undefined, se evalúa PAYMENT_HMAC_SECRET.
  */
-function computePaymentPayloadHash(payload: {
+export function resolveHmacSecret(): string {
+  const primary = process.env.BANK_ACCOUNT_HMAC_SECRET;
+  const alias = process.env.PAYMENT_HMAC_SECRET;
+
+  const candidate = primary !== undefined ? primary : alias;
+
+  if (candidate === undefined) {
+    const err: any = new Error(
+      'Falta la clave secreta requerida (BANK_ACCOUNT_HMAC_SECRET) para procesar y calcular la huella segura de referencias bancarias completas.'
+    );
+    err.code = 'MISSING_CONFIGURATION';
+    throw err;
+  }
+
+  // Rechazar secreto compuesto exclusivamente de espacios (sin corregir silenciosamente mediante trim)
+  if (/^\s*$/.test(candidate)) {
+    const err: any = new Error(
+      'La clave secreta para referencias bancarias es inválida: no puede estar vacía ni compuesta exclusivamente de espacios.'
+    );
+    err.code = 'INVALID_CONFIGURATION';
+    throw err;
+  }
+
+  // Rechazar secretos con menos de 32 bytes efectivos
+  const byteLength = Buffer.byteLength(candidate, 'utf8');
+  if (byteLength < 32) {
+    const err: any = new Error(
+      `La clave secreta para referencias bancarias es insegura: debe contar con al menos 32 bytes efectivos (proporcionados: ${byteLength} bytes).`
+    );
+    err.code = 'INVALID_CONFIGURATION';
+    throw err;
+  }
+
+  return candidate;
+}
+
+/**
+ * Valida, normaliza y procesa una referencia de cuenta bancaria.
+ * - Formato enmascarado estricto documentado: ****DDDD (exactamente 4 asteriscos seguidos de 4 dígitos).
+ * - Rechaza cadenas ambiguas o parcialmente enmascaradas (p. ej. cadenas con * que no cumplan el formato estricto).
+ * - Si es referencia completa: normaliza y calcula huella HMAC-SHA256 con clave secreta estable sin almacenar la cuenta completa.
+ */
+export function processAccountReference(rawRef?: string | null): ProcessedAccountReference {
+  if (!rawRef || typeof rawRef !== 'string') {
+    return { mask: null, fingerprint: null };
+  }
+  const trimmed = rawRef.trim();
+  if (!trimmed) {
+    return { mask: null, fingerprint: null };
+  }
+
+  // 1. Detección y validación de formato previamente enmascarado
+  if (trimmed.includes('*')) {
+    const STRICT_MASK_REGEX = /^\*{4}\d{4}$/;
+    if (!STRICT_MASK_REGEX.test(trimmed)) {
+      const err: any = new Error(
+        'La referencia de cuenta enmascarada debe tener el formato estricto "****DDDD" (4 asteriscos seguidos de 4 dígitos). Cadenas mixtas, ambiguas o parcialmente enmascaradas no están permitidas.'
+      );
+      err.code = 'INVALID_ACCOUNT_REFERENCE';
+      throw err;
+    }
+    return {
+      mask: trimmed,
+      fingerprint: `MASK:${trimmed}`,
+    };
+  }
+
+  // 2. Referencia completa: normalización removiendo separadores habituales
+  const clean = trimmed.replace(/[\s\-_.]/g, '');
+  if (clean.length < 4 || !/^[A-Za-z0-9]{4,34}$/.test(clean)) {
+    const err: any = new Error(
+      'La referencia de cuenta completa debe contener entre 4 y 34 caracteres alfanuméricos válidos.'
+    );
+    err.code = 'INVALID_ACCOUNT_REFERENCE';
+    throw err;
+  }
+
+  const secretKey = resolveHmacSecret();
+  const hmac = crypto.createHmac('sha256', secretKey).update(clean.toUpperCase()).digest('hex');
+  const mask = `****${clean.slice(-4)}`;
+
+  return {
+    mask,
+    fingerprint: `FINGERPRINT:${hmac}`,
+  };
+}
+
+/**
+ * Sanitiza y enmascara la referencia bancaria para no almacenar ni exponer referencias completas.
+ */
+export function maskRestrictedAccountReference(rawRef?: string | null): string | null {
+  try {
+    const result = processAccountReference(rawRef);
+    return result.mask;
+  } catch {
+    return null;
+  }
+}
+
+export interface PaymentPayloadForHash {
   reservaId: string;
   monto: string;
   moneda: string;
@@ -32,8 +142,72 @@ function computePaymentPayloadHash(payload: {
   metodoPago: string;
   referencia: string;
   fechaPago: string;
-}): string {
-  const canonical = JSON.stringify({
+  notas?: string | null;
+  beneficiarioTipo?: string | null;
+  beneficiarioNombre?: string | null;
+  bancoReceptor?: string | null;
+  cuentaReferencia?: string | null;
+  cuentaReferenciaMask?: string | null;
+  cuentaReferenciaFingerprint?: string | null;
+  evidencias?: Array<{
+    tipo?: string | null;
+    nombreArchivo: string;
+    referenciaDocumental?: string | null;
+    url?: string | null;
+    notas?: string | null;
+  }> | null;
+}
+
+/**
+ * Genera hash canónico para verificación estricta de idempotencia.
+ * Versiona el hash canónico (v2) cuando existen campos de DR-01 sin invalidar solicitudes históricas (v1).
+ */
+export function computePaymentPayloadHash(payload: PaymentPayloadForHash): string {
+  const hasDr01 = Boolean(
+    payload.beneficiarioTipo ||
+    payload.beneficiarioNombre ||
+    payload.bancoReceptor ||
+    payload.cuentaReferenciaMask ||
+    payload.cuentaReferenciaFingerprint ||
+    payload.cuentaReferencia ||
+    (payload.evidencias && payload.evidencias.length > 0)
+  );
+
+  if (!hasDr01) {
+    // Hash canónico compatible v1 para pagos históricos
+    const legacyCanonical = JSON.stringify({
+      reservaId: payload.reservaId,
+      monto: new Prisma.Decimal(payload.monto).toFixed(2),
+      moneda: payload.moneda.toUpperCase().trim(),
+      concepto: payload.concepto,
+      metodoPago: payload.metodoPago,
+      referencia: payload.referencia.trim(),
+      fechaPago: payload.fechaPago,
+    });
+    return crypto.createHash('sha256').update(legacyCanonical).digest('hex');
+  }
+
+  // Hash canónico versionado v2 con normalización determinista exhaustiva (H4)
+  const normalizedEvidencias = (payload.evidencias || [])
+    .map((e) => ({
+      tipo: e.tipo && e.tipo.trim() ? e.tipo.trim() : 'VOUCHER',
+      nombreArchivo: e.nombreArchivo.trim(),
+      referenciaDocumental: e.referenciaDocumental ? e.referenciaDocumental.trim() : null,
+      url: e.url ? e.url.trim() : null,
+      notas: e.notas ? e.notas.trim() : null,
+    }))
+    .sort((a, b) =>
+      a.nombreArchivo.localeCompare(b.nombreArchivo) ||
+      (a.referenciaDocumental || '').localeCompare(b.referenciaDocumental || '') ||
+      (a.tipo || '').localeCompare(b.tipo || '') ||
+      (a.url || '').localeCompare(b.url || '') ||
+      (a.notas || '').localeCompare(b.notas || '')
+    );
+
+  const effectiveCuentaMask = payload.cuentaReferenciaMask || (payload.cuentaReferencia ? payload.cuentaReferencia.trim() : null);
+
+  const v2Canonical = JSON.stringify({
+    version: 'v2',
     reservaId: payload.reservaId,
     monto: new Prisma.Decimal(payload.monto).toFixed(2),
     moneda: payload.moneda.toUpperCase().trim(),
@@ -41,8 +215,15 @@ function computePaymentPayloadHash(payload: {
     metodoPago: payload.metodoPago,
     referencia: payload.referencia.trim(),
     fechaPago: payload.fechaPago,
+    beneficiarioTipo: payload.beneficiarioTipo ? payload.beneficiarioTipo.trim() : null,
+    beneficiarioNombre: payload.beneficiarioNombre ? payload.beneficiarioNombre.trim() : null,
+    bancoReceptor: payload.bancoReceptor ? payload.bancoReceptor.trim() : null,
+    cuentaReferencia: effectiveCuentaMask,
+    cuentaReferenciaFingerprint: payload.cuentaReferenciaFingerprint || null,
+    notas: payload.notas ? payload.notas.trim() : null,
+    evidencias: normalizedEvidencias,
   });
-  return crypto.createHash('sha256').update(canonical).digest('hex');
+  return crypto.createHash('sha256').update(v2Canonical).digest('hex');
 }
 
 /**
@@ -71,8 +252,35 @@ export function formatPaymentResponse(pago: any) {
     motivoRechazo: pago.motivoRechazo || undefined,
     rechazadoEn: pago.rechazadoEn ? (pago.rechazadoEn instanceof Date ? pago.rechazadoEn.toISOString() : String(pago.rechazadoEn)) : undefined,
     notas: pago.notas || undefined,
+    beneficiarioTipo: pago.beneficiarioTipo || undefined,
+    beneficiario: pago.beneficiarioTipo || undefined,
+    beneficiarioNombre: pago.beneficiarioNombre || undefined,
+    bancoReceptor: pago.bancoReceptor || undefined,
+    cuentaReferencia: pago.cuentaReferencia || undefined,
+    evidencias: Array.isArray(pago.evidencias)
+      ? pago.evidencias.map(formatEvidenciaResponse)
+      : undefined,
   };
 }
+
+export const PAYMENT_INCLUDES = {
+  reserva: {
+    include: {
+      propiedad: true,
+      huesped: true,
+    },
+  },
+  registradoPor: true,
+  conciliadoPor: true,
+  evidencias: {
+    include: {
+      registradoPor: true,
+    },
+    orderBy: {
+      creadoEn: 'desc' as const,
+    },
+  },
+};
 
 export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync {
   return async (app) => {
@@ -156,16 +364,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
 
       const pagos = await prisma.pago.findMany({
         where,
-        include: {
-          reserva: {
-            include: {
-              propiedad: true,
-              huesped: true,
-            },
-          },
-          registradoPor: true,
-          conciliadoPor: true,
-        },
+        include: PAYMENT_INCLUDES,
         orderBy: { creadoEn: 'desc' },
       });
 
@@ -182,16 +381,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
 
       const pago = await prisma.pago.findUnique({
         where: { id },
-        include: {
-          reserva: {
-            include: {
-              propiedad: true,
-              huesped: true,
-            },
-          },
-          registradoPor: true,
-          conciliadoPor: true,
-        },
+        include: PAYMENT_INCLUDES,
       });
 
       if (!pago) {
@@ -222,16 +412,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
 
       const pagos = await prisma.pago.findMany({
         where: { reservaId },
-        include: {
-          reserva: {
-            include: {
-              propiedad: true,
-              huesped: true,
-            },
-          },
-          registradoPor: true,
-          conciliadoPor: true,
-        },
+        include: PAYMENT_INCLUDES,
         orderBy: { creadoEn: 'desc' },
       });
 
@@ -304,6 +485,19 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         fechaPago: string;
         idempotencyKey?: string;
         notas?: string;
+        beneficiarioTipo?: string;
+        beneficiario?: string;
+        beneficiarioNombre?: string;
+        bancoReceptor?: string;
+        cuentaReferencia?: string;
+        evidencias?: Array<{
+          nombreArchivo: string;
+          referenciaDocumental?: string;
+          url?: string;
+          tipo?: string;
+          estado?: string;
+          notas?: string;
+        }>;
       };
     }>('/api/pagos', { preHandler: authGuard }, async (request, reply) => {
       const {
@@ -316,6 +510,12 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         fechaPago,
         idempotencyKey,
         notas,
+        beneficiarioTipo,
+        beneficiario,
+        beneficiarioNombre,
+        bancoReceptor,
+        cuentaReferencia,
+        evidencias,
       } = request.body || {};
 
       // A. Validaciones sintácticas
@@ -388,6 +588,97 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         });
       }
 
+      // Validaciones específicas DR-01
+      const rawBeneficiario = (beneficiarioTipo || beneficiario)?.trim();
+      let resolvedBeneficiario: BeneficiarioPago | null = null;
+      if (rawBeneficiario) {
+        const upper = rawBeneficiario.toUpperCase() as BeneficiarioPago;
+        if (!ALLOWED_BENEFICIARIOS_PAGO.includes(upper)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: `Beneficiario de pago inválido. Permitidos: ${ALLOWED_BENEFICIARIOS_PAGO.join(', ')}.`,
+              requestId: request.id,
+            },
+          });
+        }
+        resolvedBeneficiario = upper;
+      }
+
+      const safeBeneficiarioNombre =
+        beneficiarioNombre && typeof beneficiarioNombre === 'string' && beneficiarioNombre.trim() !== ''
+          ? beneficiarioNombre.trim()
+          : null;
+
+      const safeBanco =
+        bancoReceptor && typeof bancoReceptor === 'string' && bancoReceptor.trim() !== ''
+          ? bancoReceptor.trim()
+          : null;
+
+      // Procesar y proteger referencia bancaria (H2/H3)
+      let processedAccount: ProcessedAccountReference = { mask: null, fingerprint: null };
+      if (cuentaReferencia && typeof cuentaReferencia === 'string' && cuentaReferencia.trim() !== '') {
+        try {
+          processedAccount = processAccountReference(cuentaReferencia);
+        } catch (err: any) {
+          if (err.code === 'INVALID_ACCOUNT_REFERENCE') {
+            return reply.status(400).send({
+              error: {
+                code: 'INVALID_ACCOUNT_REFERENCE',
+                message: err.message,
+                requestId: request.id,
+              },
+            });
+          }
+          if (err.code === 'MISSING_CONFIGURATION' || err.code === 'INVALID_CONFIGURATION') {
+            return reply.status(500).send({
+              error: {
+                code: err.code,
+                message: err.message,
+                requestId: request.id,
+              },
+            });
+          }
+          throw err;
+        }
+      }
+
+      const safeCuentaRef = processedAccount.mask;
+
+      // Validar evidencias adjuntas en la solicitud de creación
+      if (Array.isArray(evidencias) && evidencias.length > 0) {
+        for (const ev of evidencias) {
+          if (ev.estado && ev.estado.toUpperCase() === 'VALIDADA') {
+            return reply.status(400).send({
+              error: {
+                code: 'FORBIDDEN_STATE',
+                message:
+                  'No se permite establecer el estado VALIDADA directamente desde el cliente. Las evidencias documentales se registran exclusivamente en estado REFERENCIADA.',
+                requestId: request.id,
+              },
+            });
+          }
+          if (!ev.nombreArchivo || typeof ev.nombreArchivo !== 'string' || ev.nombreArchivo.trim().length < 2) {
+            return reply.status(400).send({
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'Cada evidencia documental debe contar con un nombre de archivo válido (mínimo 2 caracteres).',
+                requestId: request.id,
+              },
+            });
+          }
+          if (ev.url && typeof ev.url === 'string' && ev.url.trim() !== '' && !validateUrl(ev.url.trim())) {
+            return reply.status(400).send({
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: `La URL proporcionada para la evidencia "${ev.nombreArchivo}" no tiene un esquema HTTP/HTTPS válido.`,
+                requestId: request.id,
+              },
+            });
+          }
+        }
+      }
+
       // B. Validar reserva y moneda coincidente
       const reserva = await prisma.reserva.findUnique({
         where: { id: reservaId },
@@ -424,15 +715,26 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
           metodoPago,
           referencia,
           fechaPago: fechaPago.trim(),
+          notas: notas ? notas.trim() : null,
+          beneficiarioTipo: resolvedBeneficiario,
+          beneficiarioNombre: safeBeneficiarioNombre,
+          bancoReceptor: safeBanco,
+          cuentaReferenciaMask: processedAccount.mask,
+          cuentaReferenciaFingerprint: processedAccount.fingerprint,
+          evidencias: Array.isArray(evidencias)
+            ? evidencias.map((e) => ({
+                tipo: e.tipo,
+                nombreArchivo: e.nombreArchivo,
+                referenciaDocumental: e.referenciaDocumental,
+                url: e.url,
+                notas: e.notas,
+              }))
+            : null,
         });
 
         const pagoExistente = await prisma.pago.findUnique({
           where: { idempotencyKey: safeIdempotencyKey },
-          include: {
-            reserva: { include: { propiedad: true, huesped: true } },
-            registradoPor: true,
-            conciliadoPor: true,
-          },
+          include: PAYMENT_INCLUDES,
         });
 
         if (pagoExistente) {
@@ -455,9 +757,6 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       // D. Detección segura de duplicación de referencia operativa (P2)
-      // Criterio seguro: Misma reserva + mismo método de pago + misma moneda + mismo importe + misma referencia
-      // Excluye pagos en estado 'RECHAZADO' para permitir corregir operaciones legítimas tras un rechazo.
-      // No impone índice único global para no colisionar referencias homónimas legítimas entre distintos bancos o reservas.
       const pagoReferenciaDuplicada = await prisma.pago.findFirst({
         where: {
           reservaId,
@@ -499,12 +798,36 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
               payloadHash,
               registradoPorId: actorId,
               notas: notas ? notas.trim() : null,
+              beneficiarioTipo: resolvedBeneficiario,
+              beneficiarioNombre: safeBeneficiarioNombre,
+              bancoReceptor: safeBanco,
+              cuentaReferencia: safeCuentaRef,
             },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+          });
+
+          if (Array.isArray(evidencias) && evidencias.length > 0) {
+            for (const ev of evidencias) {
+              await tx.evidenciaPago.create({
+                data: {
+                  pagoId: pago.id,
+                  tipo: ev.tipo && ev.tipo.trim() ? ev.tipo.trim() : 'VOUCHER',
+                  nombreArchivo: ev.nombreArchivo.trim(),
+                  referenciaDocumental:
+                    ev.referenciaDocumental && ev.referenciaDocumental.trim()
+                      ? ev.referenciaDocumental.trim()
+                      : null,
+                  url: ev.url && ev.url.trim() ? ev.url.trim() : null,
+                  estado: 'REFERENCIADA',
+                  notas: ev.notas && ev.notas.trim() ? ev.notas.trim() : null,
+                  registradoPorId: actorId,
+                },
+              });
+            }
+          }
+
+          const pagoCompleto = await tx.pago.findUniqueOrThrow({
+            where: { id: pago.id },
+            include: PAYMENT_INCLUDES,
           });
 
           await recordAuditEvent(tx, {
@@ -521,11 +844,16 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
               metodoPago,
               concepto,
               idempotencyKey: safeIdempotencyKey,
+              beneficiarioTipo: resolvedBeneficiario,
+              beneficiarioNombre: safeBeneficiarioNombre,
+              bancoReceptor: safeBanco,
+              cuentaReferencia: safeCuentaRef,
+              evidenciasCount: Array.isArray(evidencias) ? evidencias.length : 0,
             },
             requestId: request.id,
           });
 
-          return pago;
+          return pagoCompleto;
         });
 
         return reply.status(201).send({
@@ -536,11 +864,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         if (err.code === 'P2002' && safeIdempotencyKey) {
           const pagoConcurrente = await prisma.pago.findUnique({
             where: { idempotencyKey: safeIdempotencyKey },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+            include: PAYMENT_INCLUDES,
           });
           if (pagoConcurrente && pagoConcurrente.payloadHash === payloadHash) {
             return reply.status(200).send({
@@ -588,11 +912,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
 
           const pagoActual = await tx.pago.findUniqueOrThrow({
             where: { id },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+            include: PAYMENT_INCLUDES,
           });
 
           // Si ya está conciliado: respuesta idempotente sin alterar montos ni fechas históricas ni duplicar auditoría
@@ -618,11 +938,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
                   : notas.trim()
                 : undefined,
             },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+            include: PAYMENT_INCLUDES,
           });
 
           // Registrar auditoría ÚNICAMENTE para la transición efectivamente realizada
@@ -704,11 +1020,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
 
           const pagoActual = await tx.pago.findUniqueOrThrow({
             where: { id },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+            include: PAYMENT_INCLUDES,
           });
 
           // No permitir rechazo de pagos ya conciliados sin proceso contable formal
@@ -728,11 +1040,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
               motivoRechazo: motivo.trim(),
               rechazadoEn: now,
             },
-            include: {
-              reserva: { include: { propiedad: true, huesped: true } },
-              registradoPor: true,
-              conciliadoPor: true,
-            },
+            include: PAYMENT_INCLUDES,
           });
 
           // Registrar auditoría ÚNICAMENTE para la transición efectivamente realizada
