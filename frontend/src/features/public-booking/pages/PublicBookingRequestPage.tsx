@@ -234,12 +234,12 @@ export const PublicBookingRequestPage: React.FC = () => {
           </div>
 
           {/* Governance Notice */}
-          <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-xs text-amber-950 text-left leading-relaxed">
+          <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-950 text-left leading-relaxed">
             <p className="font-semibold text-amber-900 flex items-center gap-1.5 mb-1">
-              <ShieldCheck size={16} className="text-amber-800" aria-hidden="true" />
-              <span>Aviso Importante sobre tu Solicitud (HU-02)</span>
+              <ShieldCheck size={15} className="text-amber-800" aria-hidden="true" />
+              <span>Aviso Importante sobre tu Solicitud</span>
             </p>
-            <p className="text-amber-900/90">{bookingResult.avisoConfirmacion}</p>
+            <p className="text-amber-900/90 text-[11px]">{bookingResult.avisoConfirmacion}</p>
           </div>
 
           {/* Action Buttons */}
@@ -267,7 +267,7 @@ export const PublicBookingRequestPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <div className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8 space-y-6">
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
@@ -275,7 +275,7 @@ export const PublicBookingRequestPage: React.FC = () => {
             Catálogo
           </Link>
           <span aria-hidden="true">/</span>
-          <span className="text-[#183b32]">Solicitud de Reserva (HU-02)</span>
+          <span className="text-[#183b32]">Solicitud de Reserva</span>
         </div>
         <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
           Solicitar Reserva de Alojamiento
@@ -286,9 +286,9 @@ export const PublicBookingRequestPage: React.FC = () => {
       </div>
 
       {/* Main Form & Preview Card */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Form Container (2 cols) */}
-        <div className="lg:col-span-2 rounded-3xl border border-stone-200 bg-white p-6 sm:p-8 shadow-xs">
+        <div className="lg:col-span-2 rounded-2xl border border-stone-200 bg-white p-5 sm:p-7 shadow-2xs">
           {submissionError && (
             <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-900 flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0 text-red-700" aria-hidden="true" />

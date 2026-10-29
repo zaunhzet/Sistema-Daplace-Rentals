@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, ShieldCheck, ShieldAlert, RotateCcw } from 'lucide-react';
+import { Plus, ShieldCheck, ShieldAlert, RotateCcw, X } from 'lucide-react';
 import type { CreateGuaranteeDto, Guarantee, GuaranteeFilterParams, RegisterGuaranteeMovementDto } from '../types';
 import { guaranteeService } from '../services/guaranteeService';
 import { propertyService } from '../../properties';
@@ -116,17 +116,14 @@ export const GuaranteesPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-4">
       {/* Cabecera */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5E6C5B]">
-            FINANZAS / MÓDULO HU-06 & RF06
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
             Control de Garantías
           </h1>
-          <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
+          <p className="text-xs text-stone-500 mt-0.5">
             Custodia separada de depósitos, libro inmutable de retenciones por daños y reembolsos a huéspedes.
           </p>
         </div>
@@ -134,9 +131,9 @@ export const GuaranteesPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#162A2C] px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-[#183b32] transition-colors cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#183b32] px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#122e27] transition-colors cursor-pointer self-start sm:self-auto"
         >
-          <Plus size={16} />
+          <Plus size={15} />
           <span>Recibir Garantía</span>
         </button>
       </div>
@@ -144,7 +141,7 @@ export const GuaranteesPage: React.FC = () => {
       {/* Alerta de feedback */}
       {feedback && (
         <div
-          className={`flex items-center justify-between rounded-2xl border p-4 text-xs font-medium ${
+          className={`flex items-center justify-between rounded-xl border p-3 text-xs font-medium ${
             feedback.type === 'success'
               ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
               : 'border-rose-200 bg-rose-50 text-rose-900'
@@ -154,65 +151,65 @@ export const GuaranteesPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            className="text-stone-500 hover:text-stone-800 ml-4 font-bold"
+            className="text-stone-500 hover:text-stone-800 ml-4 p-1 rounded-md"
+            aria-label="Cerrar notificación"
           >
-            ✕
+            <X size={14} />
           </button>
         </div>
       )}
 
       {/* Banner de regla contable */}
-      <div className="rounded-2xl border border-stone-200 bg-stone-100/70 p-4 text-xs text-stone-700 flex items-start gap-3">
-        <ShieldCheck size={18} className="text-[#5E6C5B] shrink-0 mt-0.5" />
-        <div className="leading-5">
-          <strong className="text-stone-900 font-semibold">Fondos en Custodia Independiente:</strong> Las garantías
-          recibidas <strong>nunca</strong> constituyen ingresos por alquiler. Cada retención o devolución se registra
-          como un movimiento positivo inmutable cuyo saldo disponible no puede ser sobregirado. Las devoluciones por
-          cancelación de reserva se gestionan bajo política explícita pendiente de definición institucional.
+      <div className="rounded-xl border border-stone-200 bg-stone-50/80 p-3 text-xs text-stone-600 flex items-start gap-2.5">
+        <ShieldCheck size={16} className="text-[#183b32] shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
+          <strong className="text-stone-800 font-semibold">Fondos en Custodia Independiente:</strong> Las garantías
+          recibidas no constituyen ingresos por alquiler. Cada retención o devolución se registra
+          como un movimiento inmutable cuyo saldo disponible no puede ser sobregirado.
         </div>
       </div>
 
       {/* Tarjetas KPI */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">SALDO EN CUSTODIA</span>
-            <ShieldCheck size={16} className="text-[#183b32]" />
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Saldo en custodia</span>
+            <ShieldCheck size={15} className="text-[#183b32]" />
           </div>
-          <div className="text-2xl font-bold font-mono text-[#183b32] mt-2">
+          <div className="text-xl font-bold font-mono text-[#183b32] mt-1.5">
             {formatMoney(fromCents(totalCustodiaCents), 'PEN')}
           </div>
-          <span className="text-[11px] text-stone-500">{countActivas} depósitos con saldo activo</span>
+          <span className="text-[11px] text-stone-500">{countActivas} depósitos activos</span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">RETENIDO POR DAÑOS</span>
-            <ShieldAlert size={16} className="text-amber-700" />
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Retenido por daños</span>
+            <ShieldAlert size={15} className="text-amber-700" />
           </div>
-          <div className="text-2xl font-bold font-mono text-amber-900 mt-2">
+          <div className="text-xl font-bold font-mono text-amber-900 mt-1.5">
             {formatMoney(fromCents(totalRetenidoCents), 'PEN')}
           </div>
-          <span className="text-[11px] text-amber-800">Deducciones documentadas</span>
+          <span className="text-[11px] text-amber-700">Deducciones documentadas</span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">TOTAL DEVUELTO</span>
-            <RotateCcw size={16} className="text-stone-600" />
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total devuelto</span>
+            <RotateCcw size={15} className="text-stone-600" />
           </div>
-          <div className="text-2xl font-bold font-mono text-stone-800 mt-2">
+          <div className="text-xl font-bold font-mono text-stone-800 mt-1.5">
             {formatMoney(fromCents(totalDevueltoCents), 'PEN')}
           </div>
           <span className="text-[11px] text-stone-500">Reembolsos ejecutados</span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">TOTAL EXPEDIENTES</span>
+            <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">Total expedientes</span>
             <span className="text-xs font-mono font-semibold text-stone-400">Total</span>
           </div>
-          <div className="text-2xl font-bold font-mono text-stone-900 mt-2">{guarantees.length}</div>
+          <div className="text-xl font-bold font-mono text-stone-900 mt-1.5">{guarantees.length}</div>
           <span className="text-[11px] text-stone-500">Garantías bajo control</span>
         </div>
       </div>

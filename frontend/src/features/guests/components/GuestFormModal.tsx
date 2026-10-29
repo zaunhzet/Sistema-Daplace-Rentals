@@ -104,7 +104,7 @@ export const GuestFormModal: React.FC<GuestFormModalProps> = ({
             <p className="text-xs text-stone-500 mt-1">
               {isEditing
                 ? `Actualizando ficha para código: ${guestToEdit.id}`
-                : 'Módulo RF04 / HU-04: Nombre y al menos un medio de contacto obligatorio.'}
+                : 'Nombre y al menos un medio de contacto obligatorio para la reserva.'}
             </p>
           </div>
           <button

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Plus } from 'lucide-react';
 import type {
   CreateReservationDto,
   Reservation,
@@ -123,19 +123,14 @@ export const ReservationsPage: React.FC = () => {
   const canceladasCount = reservations.filter((r) => r.estado === 'CANCELADA').length;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
-            <span>Gestión Inmobiliaria</span>
-            <span aria-hidden="true">/</span>
-            <span className="text-[#183b32]">Módulo HU-02 & HU-03</span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
             Gestión de Reservas
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
             Solicitudes, confirmación y reprogramación de estancias con intervalos [ingreso, salida) y prevención de solape.
           </p>
         </div>
@@ -144,18 +139,19 @@ export const ReservationsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsFormOpen(true)}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#183b32] px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-[#122e27] cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#122e27] transition-colors cursor-pointer"
           >
-            <span>+</span> Registrar Solicitud
+            <Plus size={16} aria-hidden="true" />
+            <span>Registrar Solicitud</span>
           </button>
         </div>
       </div>
 
       {/* Notifications */}
       {successMessage && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="shrink-0 text-emerald-700" aria-hidden="true" />
+            <CheckCircle size={16} className="shrink-0 text-emerald-700" aria-hidden="true" />
             <span>{successMessage}</span>
           </div>
           <button
@@ -169,9 +165,9 @@ export const ReservationsPage: React.FC = () => {
       )}
 
       {errorMessage && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-900 flex items-center justify-between">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-red-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertCircle size={18} className="shrink-0 text-red-700" aria-hidden="true" />
+            <AlertCircle size={16} className="shrink-0 text-red-700" aria-hidden="true" />
             <span>{errorMessage}</span>
           </div>
           <button
@@ -185,26 +181,26 @@ export const ReservationsPage: React.FC = () => {
       )}
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Total Reservas</p>
-          <p className="mt-1 text-2xl font-bold text-stone-900">{totalCount}</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Total Reservas</p>
+          <p className="mt-0.5 text-xl font-bold text-stone-900">{totalCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Solicitadas</p>
-          <p className="mt-1 text-2xl font-bold text-amber-800">{solicitadasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">Solicitadas</p>
+          <p className="mt-0.5 text-xl font-bold text-amber-800">{solicitadasCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Confirmadas</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-800">{confirmadasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Confirmadas</p>
+          <p className="mt-0.5 text-xl font-bold text-emerald-800">{confirmadasCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Completadas</p>
-          <p className="mt-1 text-2xl font-bold text-blue-800">{completadasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">Completadas</p>
+          <p className="mt-0.5 text-xl font-bold text-blue-800">{completadasCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Canceladas</p>
-          <p className="mt-1 text-2xl font-bold text-stone-600">{canceladasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Canceladas</p>
+          <p className="mt-0.5 text-xl font-bold text-stone-700">{canceladasCount}</p>
         </div>
       </div>
 

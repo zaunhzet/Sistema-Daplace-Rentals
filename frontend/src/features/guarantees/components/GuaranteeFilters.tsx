@@ -19,12 +19,12 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
   onReset,
 }) => {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-xs">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="rounded-xl border border-stone-200 bg-white p-3 sm:p-4 shadow-2xs">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Búsqueda */}
         <div>
-          <label htmlFor="search-guarantee" className="block text-xs font-semibold text-stone-600 mb-1">
-            BÚSQUEDA GENERAL
+          <label htmlFor="search-guarantee" className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+            Búsqueda general
           </label>
           <input
             id="search-guarantee"
@@ -32,20 +32,20 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
             value={filters.search || ''}
             onChange={(e) => onFilterChange({ search: e.target.value })}
             placeholder="Código, inmueble, huésped..."
-            className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 placeholder-stone-400 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs text-stone-800 placeholder-stone-400 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
           />
         </div>
 
         {/* Propiedad */}
         <div>
-          <label htmlFor="filter-propiedad-gar" className="block text-xs font-semibold text-stone-600 mb-1">
-            PROPIEDAD
+          <label htmlFor="filter-propiedad-gar" className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+            Propiedad
           </label>
           <select
             id="filter-propiedad-gar"
             value={filters.propiedadId || 'TODAS'}
             onChange={(e) => onFilterChange({ propiedadId: e.target.value })}
-            className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
           >
             <option value="TODAS">Todas las propiedades</option>
             {properties.map((p) => (
@@ -58,14 +58,14 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
 
         {/* Reserva */}
         <div>
-          <label htmlFor="filter-reserva-gar" className="block text-xs font-semibold text-stone-600 mb-1">
-            RESERVA
+          <label htmlFor="filter-reserva-gar" className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+            Reserva
           </label>
           <select
             id="filter-reserva-gar"
             value={filters.reservaId || 'TODAS'}
             onChange={(e) => onFilterChange({ reservaId: e.target.value })}
-            className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
           >
             <option value="TODAS">Todas las reservas</option>
             {reservations.map((r) => (
@@ -78,15 +78,15 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
 
         {/* Estado */}
         <div>
-          <label htmlFor="filter-estado-gar" className="block text-xs font-semibold text-stone-600 mb-1">
-            ESTADO DE CUSTODIA
+          <label htmlFor="filter-estado-gar" className="block text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1">
+            Estado de custodia
           </label>
           <div className="flex gap-2">
             <select
               id="filter-estado-gar"
               value={filters.estado || 'TODOS'}
               onChange={(e) => onFilterChange({ estado: e.target.value as EstadoGarantia | 'TODOS' })}
-              className="flex-1 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+              className="flex-1 rounded-lg border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
             >
               <option value="TODOS">Todos los estados</option>
               <option value="EN_CUSTODIA">En Custodia Total</option>
@@ -98,7 +98,7 @@ export const GuaranteeFilters: React.FC<GuaranteeFiltersProps> = ({
             <button
               type="button"
               onClick={onReset}
-              className="rounded-xl border border-stone-200 bg-stone-100 px-3 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
+              className="rounded-lg border border-stone-200 bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-200 transition-colors cursor-pointer"
             >
               Limpiar
             </button>

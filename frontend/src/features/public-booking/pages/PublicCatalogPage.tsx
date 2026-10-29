@@ -35,17 +35,17 @@ export const PublicCatalogPage: React.FC = () => {
   }, [loadCatalog]);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 space-y-6">
       {/* Hero Section */}
-      <section className="rounded-3xl bg-[#162A2C] px-6 py-10 sm:px-12 sm:py-14 text-white shadow-sm relative overflow-hidden">
-        <div className="relative z-10 max-w-2xl space-y-3">
+      <section className="rounded-2xl bg-[#183b32] px-6 py-8 sm:px-10 sm:py-10 text-white shadow-2xs relative overflow-hidden">
+        <div className="relative z-10 max-w-2xl space-y-2.5">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-[#B9CDB4]">
-            Catálogo Oficial (HU-01)
+            Propiedades Verificadas
           </span>
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-[#FEFCF6]">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl text-[#FEFCF6]">
             Alojamientos temporales en Lima
           </h1>
-          <p className="text-sm leading-relaxed text-[#D6E0E2]/85">
+          <p className="text-xs sm:text-sm leading-relaxed text-[#D6E0E2]/85">
             Explora nuestros departamentos y suites completamente equipados en Miraflores, Barranco y San Isidro. Consulta disponibilidad en tiempo real y registra tu solicitud preliminar de reserva.
           </p>
         </div>

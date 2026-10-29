@@ -13,11 +13,11 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
   onReset,
 }) => {
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-xs">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-4 shadow-2xs">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Search */}
         <div>
-          <label htmlFor="search-input" className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
+          <label htmlFor="search-input" className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
             Buscar por texto
           </label>
           <input
@@ -26,13 +26,13 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
             value={filters.search || ''}
             onChange={(e) => onFilterChange({ ...filters, search: e.target.value })}
             placeholder="Nombre, dirección, propietario..."
-            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3.5 py-2 text-sm text-stone-800 placeholder-stone-400 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3 py-1.5 text-xs sm:text-sm text-stone-800 placeholder-stone-400 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
           />
         </div>
 
         {/* Estado Operativo */}
         <div>
-          <label htmlFor="estado-operativo-select" className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
+          <label htmlFor="estado-operativo-select" className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
             Estado Operativo
           </label>
           <select
@@ -44,7 +44,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
                 estadoOperativo: e.target.value as EstadoOperativo | 'TODOS',
               })
             }
-            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3.5 py-2 text-sm text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3 py-1.5 text-xs sm:text-sm text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden cursor-pointer"
           >
             <option value="TODOS">Todos los estados</option>
             <option value="OPERATIVA">Operativa</option>
@@ -55,8 +55,8 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
 
         {/* Estado Publicación */}
         <div>
-          <label htmlFor="estado-publicacion-select" className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1.5">
-            Publicación (Propuesta)
+          <label htmlFor="estado-publicacion-select" className="block text-[11px] font-semibold uppercase tracking-wider text-stone-600 mb-1">
+            Publicación
           </label>
           <select
             id="estado-publicacion-select"
@@ -67,7 +67,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
                 estadoPublicacion: e.target.value as EstadoPublicacion | 'TODOS',
               })
             }
-            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3.5 py-2 text-sm text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+            className="w-full rounded-xl border border-stone-300 bg-stone-50/50 px-3 py-1.5 text-xs sm:text-sm text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden cursor-pointer"
           >
             <option value="TODOS">Todas las publicaciones</option>
             <option value="PUBLICADA">Publicada</option>
@@ -77,15 +77,15 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
         </div>
 
         {/* Checkbox & Reset */}
-        <div className="flex flex-col justify-end gap-2 sm:col-span-2 lg:col-span-1">
-          <label className="flex items-center gap-2 text-sm font-medium text-stone-700 cursor-pointer">
+        <div className="flex flex-col justify-end gap-1.5 sm:col-span-2 lg:col-span-1">
+          <label className="flex items-center gap-2 text-xs font-medium text-stone-700 cursor-pointer">
             <input
               type="checkbox"
               checked={!!filters.soloActivas}
               onChange={(e) =>
                 onFilterChange({ ...filters, soloActivas: e.target.checked })
               }
-              className="size-4 rounded border-stone-300 text-[#183b32] focus:ring-[#183b32]"
+              className="size-4 rounded border-stone-300 text-[#183b32] focus:ring-[#183b32] cursor-pointer"
             />
             <span>Solo propiedades activas</span>
           </label>
@@ -93,7 +93,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({
           <button
             type="button"
             onClick={onReset}
-            className="text-xs font-semibold text-stone-500 hover:text-stone-800 underline text-left cursor-pointer"
+            className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 underline text-left cursor-pointer"
           >
             Limpiar filtros
           </button>

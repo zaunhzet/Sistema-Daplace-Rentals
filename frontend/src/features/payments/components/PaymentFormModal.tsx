@@ -126,10 +126,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
         </button>
 
         <div className="mb-6">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5E6C5B]">
-            MÓDULO HU-05 / RF05
-          </span>
-          <h3 className="text-xl font-bold text-stone-900 mt-1">Registrar Abono o Adelanto</h3>
+          <h3 className="text-xl font-bold text-stone-900">Registrar Abono o Adelanto</h3>
           <p className="text-xs text-stone-600 mt-0.5">
             El pago se registrará en estado inicial <strong className="text-amber-800">PENDIENTE_CONCILIACION</strong>{' '}
             hasta su conciliación formal con el extracto bancario.

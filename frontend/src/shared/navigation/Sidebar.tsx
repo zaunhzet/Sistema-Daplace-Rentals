@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   X,
@@ -42,11 +41,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setMobileOpen(false);
   };
 
+  // Keyboard accessibility: Close mobile drawer on Escape & lock body scroll
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [mobileOpen]);
+
   const renderNavigation = (isCollapsed: boolean, isMobile = false) => (
     <div className="flex h-full min-h-0 flex-col bg-[#162A2C] text-[#FEFCF6]">
-      <div className="flex items-center justify-between border-b border-white/10 px-4 py-5">
+      {/* Sidebar Header */}
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#5E6C5B] text-sm font-semibold tracking-wide text-[#FEFCF6]">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#5E6C5B] text-sm font-bold tracking-wide text-[#FEFCF6] shadow-2xs">
             D
           </span>
           {!isCollapsed && (
@@ -54,8 +74,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="truncate text-sm font-semibold tracking-[-0.02em] text-[#FEFCF6]">
                 daplace <span className="font-normal text-[#D6E0E2]/75">rentals</span>
               </p>
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.14em] text-[#D6E0E2]/65">
-                Panel operativo
+              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-[#D6E0E2]/60">
+                Panel Operativo
               </p>
             </div>
           )}
@@ -65,8 +85,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => setMobileOpen(false)}
-            aria-label="Cerrar menú móvil"
-            className="grid size-9 place-items-center rounded-lg text-[#D6E0E2]/80 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2]"
+            aria-label="Cerrar menú de navegación"
+            className="grid size-8 place-items-center rounded-lg text-[#D6E0E2]/80 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] cursor-pointer"
           >
             <X size={18} aria-hidden="true" />
           </button>
@@ -76,22 +96,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={onToggleCollapse}
             aria-label={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
             title={isCollapsed ? 'Expandir barra lateral' : 'Colapsar barra lateral'}
-            className="hidden size-8 shrink-0 place-items-center rounded-lg text-[#D6E0E2]/75 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] lg:grid"
+            className="hidden size-8 shrink-0 place-items-center rounded-lg text-[#D6E0E2]/75 transition-colors hover:bg-white/10 hover:text-[#FEFCF6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] lg:grid cursor-pointer"
           >
             {isCollapsed ? (
-              <PanelLeftOpen size={17} aria-hidden="true" />
+              <PanelLeftOpen size={16} aria-hidden="true" />
             ) : (
-              <PanelLeftClose size={17} aria-hidden="true" />
+              <PanelLeftClose size={16} aria-hidden="true" />
             )}
           </button>
         ) : null}
       </div>
 
+      {/* Scrollable Navigation List (only items scroll if menu overflows) */}
       <nav
         aria-label="Menú del sistema"
-        className={`min-h-0 flex-1 overflow-y-auto py-5 ${isCollapsed ? 'px-2.5' : 'px-3'}`}
+        className={`min-h-0 flex-1 overflow-y-auto py-4 ${isCollapsed ? 'px-2' : 'px-3'}`}
       >
-        <div className="space-y-6">
+        <div className="space-y-5">
           {GROUPS.map((groupName) => {
             const groupItems = items.filter((item) => item.group === groupName);
             if (groupItems.length === 0) return null;
@@ -99,11 +120,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
             return (
               <section key={groupName} aria-label={isCollapsed ? undefined : groupName}>
                 {!isCollapsed && (
-                  <h2 className="mb-2 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D6E0E2]/55">
+                  <h2 className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#D6E0E2]/50">
                     {groupName}
                   </h2>
                 )}
-                <ul className="space-y-1">
+                <ul className="space-y-0.5">
                   {groupItems.map((item) => {
                     const isActive = currentPath === item.path;
                     const isAvailable = item.status === 'DISPONIBLE';
@@ -118,19 +139,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           aria-current={isActive ? 'page' : undefined}
                           aria-label={`${item.name}, ${statusText}`}
                           title={`${item.name} · ${statusText}`}
-                          className={`group flex min-h-10 w-full items-center rounded-xl text-left text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] focus-visible:ring-offset-2 focus-visible:ring-offset-[#162A2C] ${
-                            isCollapsed ? 'justify-center px-2' : 'gap-3 px-3'
+                          className={`group flex min-h-9 w-full items-center rounded-xl text-left text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D6E0E2] cursor-pointer ${
+                            isCollapsed ? 'justify-center px-2 py-2' : 'gap-2.5 px-3 py-2'
                           } ${
                             isActive
-                              ? 'bg-[#5E6C5B] text-[#FEFCF6]'
-                              : 'text-[#D6E0E2]/80 hover:bg-white/[0.07] hover:text-[#FEFCF6]'
+                              ? 'bg-[#5E6C5B] text-[#FEFCF6] font-semibold shadow-2xs'
+                              : 'text-[#D6E0E2]/80 hover:bg-white/[0.08] hover:text-[#FEFCF6]'
                           }`}
                         >
                           <ItemIcon
-                            size={18}
-                            strokeWidth={1.8}
+                            size={16}
+                            strokeWidth={isActive ? 2.2 : 1.8}
                             aria-hidden="true"
-                            className={`shrink-0 ${isActive ? 'text-[#FEFCF6]' : 'text-[#D6E0E2]/75 group-hover:text-[#FEFCF6]'}`}
+                            className={`shrink-0 ${
+                              isActive ? 'text-[#FEFCF6]' : 'text-[#D6E0E2]/70 group-hover:text-[#FEFCF6]'
+                            }`}
                           />
                           {!isCollapsed && (
                             <>
@@ -138,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               <span
                                 aria-hidden="true"
                                 className={`size-1.5 shrink-0 rounded-full ${
-                                  isAvailable ? 'bg-[#B9CDB4]' : 'bg-[#D6E0E2]/35'
+                                  isAvailable ? 'bg-[#B9CDB4]' : 'bg-[#D6E0E2]/30'
                                 }`}
                               />
                             </>
@@ -154,12 +177,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </nav>
 
+      {/* Pinned Sidebar Footer */}
       {!isCollapsed && (
-        <footer className="border-t border-white/10 px-5 py-4">
+        <footer className="shrink-0 border-t border-white/10 px-4 py-3 bg-[#132426]">
           <p className="text-[11px] font-semibold tracking-wide text-[#D6E0E2]/80">
             DAPLACE RENTALS
           </p>
-          <p className="mt-1 text-[10px] text-[#D6E0E2]/50">Panel de gestión de propiedades</p>
+          <p className="text-[10px] text-[#D6E0E2]/50 truncate">Gestión de alquileres temporales</p>
         </footer>
       )}
     </div>
@@ -167,29 +191,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-40 lg:hidden">
-        <button
-          type="button"
-          onClick={() => setMobileOpen((open) => !open)}
-          aria-label={mobileOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'}
-          aria-expanded={mobileOpen}
-          aria-controls="daplace-mobile-navigation"
-          className="flex min-h-11 items-center gap-2 rounded-xl border border-white/10 bg-[#162A2C] px-4 text-sm font-semibold text-[#FEFCF6] shadow-lg transition-colors hover:bg-[#243f42] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5E6C5B]"
-        >
-          <Menu size={17} aria-hidden="true" />
-          <span>Menú</span>
-        </button>
-      </div>
-
+      {/* Mobile Drawer Backdrop & Container */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/45 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Navegación principal móvil"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs lg:hidden flex"
           onClick={() => setMobileOpen(false)}
         >
           <aside
             id="daplace-mobile-navigation"
-            aria-label="Navegación principal móvil"
-            className="h-full w-[min(19rem,calc(100vw-2.5rem))] shadow-2xl"
+            className="h-full w-[min(18rem,calc(100vw-2.5rem))] shadow-2xl flex flex-col"
             onClick={(event) => event.stopPropagation()}
           >
             {renderNavigation(false, true)}
@@ -197,10 +210,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       )}
 
+      {/* Desktop Anchored Sidebar */}
       <aside
         aria-label="Navegación principal"
-        className={`sticky top-0 hidden h-screen shrink-0 border-r border-white/10 transition-[width] duration-200 lg:flex ${
-          collapsed ? 'w-20' : 'w-64'
+        className={`hidden lg:flex flex-col h-full shrink-0 border-r border-white/10 transition-[width] duration-200 z-30 ${
+          collapsed ? 'w-18' : 'w-60'
         } ${className}`}
       >
         {renderNavigation(collapsed)}
@@ -208,3 +222,4 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
+

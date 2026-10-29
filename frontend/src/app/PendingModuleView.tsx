@@ -121,27 +121,27 @@ export const PendingModuleView: React.FC<PendingModuleViewProps> = ({ path: prop
   const content = getCustomContent();
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="rounded-3xl border border-stone-200 bg-white p-6 sm:p-10 lg:p-12 shadow-xs">
+    <div className="w-full max-w-4xl mx-auto py-2 sm:py-4">
+      <div className="rounded-2xl border border-stone-200 bg-white p-5 sm:p-8 shadow-2xs">
         {/* Header Badges */}
-        <div className="flex flex-wrap items-center gap-2 mb-6">
-          <div className="grid size-10 place-items-center rounded-xl bg-[#5E6C5B]/15 text-[#162A2C]">
-            <ModuleIcon size={22} strokeWidth={1.8} aria-hidden="true" />
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <div className="grid size-9 place-items-center rounded-xl bg-[#5E6C5B]/15 text-[#183b32]">
+            <ModuleIcon size={20} strokeWidth={1.8} aria-hidden="true" />
           </div>
-          <span className="rounded-md bg-stone-100 px-2.5 py-1 font-mono text-xs font-semibold text-stone-700">
+          <span className="rounded-lg bg-stone-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-stone-700">
             Ruta: {currentPath}
           </span>
-          <span className="rounded-md bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 flex items-center gap-1.5">
+          <span className="rounded-lg bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-900 flex items-center gap-1.5">
             <AlertTriangle size={13} aria-hidden="true" />
             {content.badge}
           </span>
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
           {content.title}
         </h1>
-        <p className="mt-1 text-base font-medium text-stone-700">
+        <p className="mt-1 text-sm font-medium text-stone-700">
           {content.headline}
         </p>
         <p className="mt-3 text-sm leading-relaxed text-stone-600 max-w-2xl">

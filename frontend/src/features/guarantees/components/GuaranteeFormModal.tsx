@@ -105,10 +105,7 @@ export const GuaranteeFormModal: React.FC<GuaranteeFormModalProps> = ({
         </button>
 
         <div className="mb-6">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#5E6C5B]">
-            MÓDULO HU-06 / RF06
-          </span>
-          <h3 className="text-xl font-bold text-stone-900 mt-1">Registrar Garantía en Custodia</h3>
+          <h3 className="text-xl font-bold text-stone-900">Registrar Garantía en Custodia</h3>
           <p className="text-xs text-stone-600 mt-0.5">
             Los fondos de garantía se registran bajo un balance independiente y no se computan como ingresos de alquiler.
           </p>

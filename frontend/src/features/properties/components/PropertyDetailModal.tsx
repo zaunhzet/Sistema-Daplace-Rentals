@@ -100,7 +100,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           {/* Propietario Info */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 mb-3">
-              Propietario Asociado (Vínculo RF01 / HU-18)
+              Propietario Asociado
             </h3>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>

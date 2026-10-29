@@ -121,7 +121,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
               Registrar Solicitud de Reserva
             </h2>
             <p className="text-xs text-stone-500 mt-1">
-              HU-02 / RF02: Inicia en estado SOLICITADA. Comprueba disponibilidad e intervalos [ingreso, salida).
+              Inicia en estado preliminar SOLICITADA. Comprueba disponibilidad e intervalos [ingreso, salida).
             </p>
           </div>
           <button

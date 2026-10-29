@@ -7,18 +7,18 @@ export const PublicLayout: React.FC = () => {
     <div className="min-h-screen bg-[#f7f7f5] flex flex-col text-stone-900 antialiased selection:bg-[#5E6C5B] selection:text-white">
       {/* 1. Public Sticky Navigation Header */}
       <header className="sticky top-0 z-40 border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
-        <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           {/* Brand Logo */}
           <Link
             to="/catalogo"
-            className="flex items-center gap-3 transition-opacity hover:opacity-90"
+            className="flex items-center gap-2.5 transition-opacity hover:opacity-90"
             aria-label="DAPLACE Rentals — Catálogo Público"
           >
-            <span className="grid size-10 place-items-center rounded-xl bg-[#162A2C] text-sm font-bold text-[#FEFCF6] shadow-xs">
+            <span className="grid size-9 place-items-center rounded-xl bg-[#183b32] text-sm font-bold text-[#FEFCF6] shadow-xs">
               D
             </span>
             <div className="leading-tight">
-              <span className="text-lg font-bold tracking-tight text-[#162A2C]">
+              <span className="text-base font-bold tracking-tight text-[#162A2C]">
                 daplace <span className="font-medium text-[#5E6C5B]">rentals</span>
               </span>
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-stone-500">
@@ -32,28 +32,28 @@ export const PublicLayout: React.FC = () => {
             <NavLink
               to="/catalogo"
               className={({ isActive }) =>
-                `flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
+                `flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   isActive
-                    ? 'bg-[#162A2C] text-[#FEFCF6]'
+                    ? 'bg-[#183b32] text-[#FEFCF6]'
                     : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
                 }`
               }
             >
-              <Building size={15} aria-hidden="true" />
+              <Building size={14} aria-hidden="true" />
               <span>Catálogo de Inmuebles</span>
             </NavLink>
 
             <NavLink
               to="/solicitar-reserva"
               className={({ isActive }) =>
-                `flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition-colors ${
+                `flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   isActive
-                    ? 'bg-[#162A2C] text-[#FEFCF6]'
+                    ? 'bg-[#183b32] text-[#FEFCF6]'
                     : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
                 }`
               }
             >
-              <CalendarCheck size={15} aria-hidden="true" />
+              <CalendarCheck size={14} aria-hidden="true" />
               <span>Solicitar Reserva</span>
             </NavLink>
           </nav>
@@ -62,8 +62,8 @@ export const PublicLayout: React.FC = () => {
           <div className="flex items-center gap-2">
             <Link
               to="/propiedades"
-              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-xs font-semibold text-[#162A2C] shadow-xs hover:border-[#162A2C] hover:bg-stone-50 transition-colors"
-              title="Acceso al panel administrativo operativo de André"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-[#183b32] shadow-2xs hover:border-[#183b32] hover:bg-stone-50 transition-colors"
+              title="Acceso al panel administrativo operativo"
             >
               <span>Panel Operativo</span>
               <ArrowRight size={13} aria-hidden="true" />
@@ -74,10 +74,10 @@ export const PublicLayout: React.FC = () => {
 
       {/* 2. Top Banner: MVP Demo Notice */}
       <div className="border-b border-stone-200 bg-[#FEFCF6] px-4 py-2 text-center text-xs text-stone-600 sm:px-6">
-        <p className="flex items-center justify-center gap-1.5 font-medium">
-          <ShieldCheck size={14} className="shrink-0 text-[#5E6C5B]" aria-hidden="true" />
+        <p className="flex items-center justify-center gap-1.5 font-medium text-[11px] sm:text-xs">
+          <ShieldCheck size={14} className="shrink-0 text-[#183b32]" aria-hidden="true" />
           <span>
-            Portal público de reservas (HU-01 / HU-02). Las solicitudes quedan registradas en estado preliminar pendiente de confirmación.
+            Portal público de reservas de DAPLACE. Las solicitudes quedan registradas en estado preliminar pendiente de confirmación.
           </span>
         </p>
       </div>

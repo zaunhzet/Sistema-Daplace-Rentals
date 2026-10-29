@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Plus } from 'lucide-react';
 import type {
   CreatePropertyDto,
   Property,
@@ -112,19 +112,14 @@ export const PropertiesPage: React.FC = () => {
   const inactivasCount = properties.filter((p) => !p.activa || p.estadoOperativo === 'INACTIVA').length;
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-4">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
-            <span>Operaciones</span>
-            <span aria-hidden="true">/</span>
-            <span className="text-[#183b32]">Módulo HU-18 & RF01</span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
             Gestión de Propiedades
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
             Catálogo y control operativo de inmuebles con vinculación de propietarios y gobernanza de datos.
           </p>
         </div>
@@ -136,18 +131,19 @@ export const PropertiesPage: React.FC = () => {
               setPropertyToEdit(null);
               setIsFormOpen(true);
             }}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#183b32] px-4 py-2.5 text-sm font-semibold text-white shadow-xs hover:bg-[#122e27] cursor-pointer"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#122e27] transition-colors cursor-pointer"
           >
-            <span>+</span> Registrar Propiedad
+            <Plus size={16} aria-hidden="true" />
+            <span>Registrar Propiedad</span>
           </button>
         </div>
       </div>
 
       {/* Notifications */}
       {successMessage && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="shrink-0 text-emerald-700" aria-hidden="true" />
+            <CheckCircle size={16} className="shrink-0 text-emerald-700" aria-hidden="true" />
             <span>{successMessage}</span>
           </div>
           <button
@@ -161,9 +157,9 @@ export const PropertiesPage: React.FC = () => {
       )}
 
       {errorMessage && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-900 flex items-center justify-between">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-red-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertCircle size={18} className="shrink-0 text-red-700" aria-hidden="true" />
+            <AlertCircle size={16} className="shrink-0 text-red-700" aria-hidden="true" />
             <span>{errorMessage}</span>
           </div>
           <button
@@ -177,22 +173,22 @@ export const PropertiesPage: React.FC = () => {
       )}
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Total en Vista</p>
-          <p className="mt-1 text-2xl font-bold text-stone-900">{totalCount}</p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Total en Vista</p>
+          <p className="mt-0.5 text-xl font-bold text-stone-900">{totalCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Operativas</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-800">{operativasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Operativas</p>
+          <p className="mt-0.5 text-xl font-bold text-emerald-800">{operativasCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-sky-700">Publicadas</p>
-          <p className="mt-1 text-2xl font-bold text-sky-800">{publicadasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-700">Publicadas</p>
+          <p className="mt-0.5 text-xl font-bold text-sky-800">{publicadasCount}</p>
         </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-400">Inactivas / Pausadas</p>
-          <p className="mt-1 text-2xl font-bold text-stone-600">{inactivasCount}</p>
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Inactivas / Pausadas</p>
+          <p className="mt-0.5 text-xl font-bold text-stone-700">{inactivasCount}</p>
         </div>
       </div>
 

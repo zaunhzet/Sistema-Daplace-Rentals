@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, CheckCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import type { CalendarDay, MonthOccupancySummary } from '../types';
 import type { Property } from '../../properties/types';
 import type { Reservation } from '../../reservations/types';
@@ -118,33 +118,28 @@ export const CalendarPage: React.FC = () => {
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="w-full space-y-4">
+      {/* Header & Property Selector */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-stone-500">
-            <span>Gestión Inmobiliaria</span>
-            <span aria-hidden="true">/</span>
-            <span className="text-[#183b32]">Módulo HU-01 & RF01</span>
-          </div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
             Calendario de Disponibilidad
           </h1>
-          <p className="mt-1 text-sm text-stone-500">
-            Ocupación en tiempo real por inmueble con intervalos [ingreso, salida) y trazabilidad directa de reservas.
+          <p className="text-xs sm:text-sm text-stone-500 mt-0.5">
+            Ocupación en tiempo real por inmueble con intervalos [ingreso, salida) y trazabilidad de reservas.
           </p>
         </div>
 
         {/* Property Selector */}
-        <div className="w-full sm:w-72">
-          <label htmlFor="calendar-property-select" className="block text-xs font-semibold uppercase tracking-wider text-stone-600 mb-1">
+        <div className="w-full sm:w-64">
+          <label htmlFor="calendar-property-select" className="sr-only">
             Seleccionar Propiedad
           </label>
           <select
             id="calendar-property-select"
             value={selectedPropertyId}
             onChange={(e) => setSelectedPropertyId(e.target.value)}
-            className="w-full rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm text-stone-900 focus:border-[#183b32] focus:outline-hidden shadow-xs"
+            className="w-full rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-medium text-stone-900 focus:border-[#183b32] focus:outline-hidden shadow-2xs cursor-pointer"
           >
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
@@ -156,9 +151,9 @@ export const CalendarPage: React.FC = () => {
       </div>
 
       {notification && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-900 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs sm:text-sm font-medium text-emerald-900 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle size={18} className="shrink-0 text-emerald-700" aria-hidden="true" />
+            <CheckCircle size={16} className="shrink-0 text-emerald-700" aria-hidden="true" />
             <span>{notification}</span>
           </div>
           <button
@@ -173,69 +168,76 @@ export const CalendarPage: React.FC = () => {
 
       {/* Property Condition Notice */}
       {selectedProperty && (!selectedProperty.activa || selectedProperty.estadoOperativo !== 'OPERATIVA') && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 flex items-center gap-3">
-          <AlertCircle size={20} className="shrink-0 text-amber-700" aria-hidden="true" />
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 flex items-center gap-2.5">
+          <AlertCircle size={18} className="shrink-0 text-amber-700" aria-hidden="true" />
           <div>
-            <p className="font-bold">Aviso de condición operativa</p>
-            <p className="mt-0.5 text-amber-900">
-              La propiedad está catalogada como <strong>{selectedProperty.estadoOperativo}</strong>{' '}
-              {!selectedProperty.activa ? '(Desactivada)' : ''}. Todos los días del calendario reflejan su no disponibilidad operativa.
-            </p>
+            <span className="font-bold">Aviso de condición operativa: </span>
+            <span className="text-amber-900">
+              Inmueble <strong>{selectedProperty.estadoOperativo}</strong>{' '}
+              {!selectedProperty.activa ? '(Desactivado)' : ''}. Los días reflejan su no disponibilidad.
+            </span>
           </div>
         </div>
       )}
 
-      {/* Month Navigator & Summary Stats */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-stone-200 bg-white p-4 shadow-xs">
-        {/* Navigation Buttons */}
+      {/* Month Navigator Toolbar & Summary Metrics */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
+        {/* Navigation Controls with Lucide Icons */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handlePrevMonth}
-            className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
-          >
-            ← Mes Anterior
-          </button>
-          <button
-            type="button"
-            onClick={handleGoToday}
-            className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
-          >
-            Mes Actual
-          </button>
-          <button
-            type="button"
-            onClick={handleNextMonth}
-            className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
-          >
-            Mes Siguiente →
-          </button>
+          <div className="inline-flex items-center rounded-lg border border-stone-200 bg-stone-50/50 p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              aria-label="Mes anterior"
+              title="Mes anterior"
+              className="grid size-8 place-items-center rounded-md text-stone-600 hover:bg-white hover:text-stone-900 transition-colors cursor-pointer"
+            >
+              <ChevronLeft size={16} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={handleGoToday}
+              className="px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-white rounded-md transition-colors cursor-pointer"
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              aria-label="Mes siguiente"
+              title="Mes siguiente"
+              className="grid size-8 place-items-center rounded-md text-stone-600 hover:bg-white hover:text-stone-900 transition-colors cursor-pointer"
+            >
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 pl-2">
+            <CalendarIcon size={16} className="text-[#5E6C5B]" aria-hidden="true" />
+            <span className="text-base sm:text-lg font-bold tracking-tight text-stone-900">
+              {getMonthName(currentMonth)} {currentYear}
+            </span>
+          </div>
         </div>
 
-        <div className="text-center sm:text-right">
-          <span className="text-xl font-bold tracking-tight text-stone-900">
-            {getMonthName(currentMonth)} {currentYear}
-          </span>
-        </div>
-      </div>
-
-      {/* Month Metrics */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Días del Mes</p>
-          <p className="mt-1 text-2xl font-bold text-stone-900">{summary.totalDays}</p>
-        </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Días Ocupados</p>
-          <p className="mt-1 text-2xl font-bold text-blue-800">{summary.occupiedDays}</p>
-        </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Días Disponibles</p>
-          <p className="mt-1 text-2xl font-bold text-emerald-800">{summary.availableDays}</p>
-        </div>
-        <div className="rounded-2xl border border-stone-200 bg-white p-4">
-          <p className="text-xs font-semibold uppercase tracking-wider text-stone-600">Tasa de Ocupación</p>
-          <p className="mt-1 text-2xl font-bold text-stone-900">{summary.occupancyRate}%</p>
+        {/* Compact Metrics Bar */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-3 text-xs">
+          <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Días Mes</span>
+            <span className="font-bold text-sm sm:text-base text-stone-900">{summary.totalDays}</span>
+          </div>
+          <div className="rounded-lg bg-blue-50/60 border border-blue-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">Ocupados</span>
+            <span className="font-bold text-sm sm:text-base text-blue-900">{summary.occupiedDays}</span>
+          </div>
+          <div className="rounded-lg bg-emerald-50/60 border border-emerald-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Disponibles</span>
+            <span className="font-bold text-sm sm:text-base text-emerald-900">{summary.availableDays}</span>
+          </div>
+          <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">Ocupación</span>
+            <span className="font-bold text-sm sm:text-base text-stone-900">{summary.occupancyRate}%</span>
+          </div>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Plus, ShieldAlert, CheckCircle2, Clock, Ban } from 'lucide-react';
+import { Plus, ShieldAlert, CheckCircle2, Clock, Ban, X } from 'lucide-react';
 import type { CreatePaymentDto, Payment, PaymentFilterParams, ReconcilePaymentDto, RejectPaymentDto } from '../types';
 import { paymentService } from '../services/paymentService';
 import { propertyService } from '../../properties';
@@ -117,14 +117,11 @@ export const PaymentsPage: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
+    <div className="w-full space-y-4">
       {/* Cabecera de Página */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <span className="text-xs font-bold uppercase tracking-wider text-[#5E6C5B]">
-            FINANZAS / MÓDULO HU-05 & RF05
-          </span>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-stone-900">
             Pagos y Conciliación
           </h1>
           <p className="text-xs sm:text-sm text-stone-600 mt-0.5">
@@ -135,9 +132,9 @@ export const PaymentsPage: React.FC = () => {
         <button
           type="button"
           onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#162A2C] px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs hover:bg-[#183b32] transition-colors cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#162A2C] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#183b32] transition-colors cursor-pointer self-start sm:self-auto"
         >
-          <Plus size={16} />
+          <Plus size={16} aria-hidden="true" />
           <span>Registrar Abono</span>
         </button>
       </div>
@@ -145,7 +142,7 @@ export const PaymentsPage: React.FC = () => {
       {/* Alerta de feedback */}
       {feedback && (
         <div
-          className={`flex items-center justify-between rounded-2xl border p-4 text-xs font-medium ${
+          className={`flex items-center justify-between rounded-xl border px-3.5 py-2.5 text-xs sm:text-sm font-medium ${
             feedback.type === 'success'
               ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
               : 'border-rose-200 bg-rose-50 text-rose-900'
@@ -155,67 +152,68 @@ export const PaymentsPage: React.FC = () => {
           <button
             type="button"
             onClick={() => setFeedback(null)}
-            className="text-stone-500 hover:text-stone-800 ml-4 font-bold"
+            className="text-stone-500 hover:text-stone-800 ml-4 cursor-pointer"
+            aria-label="Cerrar notificación"
           >
-            ✕
+            <X size={15} aria-hidden="true" />
           </button>
         </div>
       )}
 
       {/* Banner de regla financiera */}
-      <div className="rounded-2xl border border-stone-200 bg-stone-100/70 p-4 text-xs text-stone-700 flex items-start gap-3">
-        <ShieldAlert size={18} className="text-[#5E6C5B] shrink-0 mt-0.5" />
-        <div className="leading-5">
+      <div className="rounded-xl border border-stone-200/90 bg-stone-100/70 p-3 text-xs text-stone-700 flex items-start gap-2.5 shadow-2xs">
+        <ShieldAlert size={16} className="text-[#5E6C5B] shrink-0 mt-0.5" />
+        <div className="leading-relaxed">
           <strong className="text-stone-900 font-semibold">Regla de Inmunidad Financiera:</strong> Únicamente los
-          abonos con estado <span className="font-semibold text-emerald-800">CONCILIADO</span> reducen el saldo deudor
-          de una reserva. Los pagos en estado <span className="font-semibold text-amber-800">PENDIENTE</span> o{' '}
+          abonos con estado <span className="font-semibold text-emerald-800">CONCILIADO</span> reducen el saldo deudor.
+          Los pagos <span className="font-semibold text-amber-800">PENDIENTE</span> o{' '}
           <span className="font-semibold text-rose-800">RECHAZADO</span> no generan ingreso computable ni alteran los
-          libros. Los fondos de garantía se administran en una cuenta en custodia separada.
+          libros. Los fondos de garantía se administran en custodia contable separada.
         </div>
       </div>
 
       {/* Tarjetas KPI */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">TOTAL CONCILIADO</span>
-            <CheckCircle2 size={16} className="text-emerald-700" />
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">TOTAL CONCILIADO</span>
+            <CheckCircle2 size={15} className="text-emerald-700" />
           </div>
-          <div className="text-2xl font-bold font-mono text-emerald-900 mt-2">
+          <div className="text-lg sm:text-xl font-bold font-mono text-emerald-900 mt-1">
             {formatMoney(fromCents(totalConciliadoCents), 'PEN')}
           </div>
-          <span className="text-[11px] text-stone-500">Ingreso de alquiler validado</span>
+          <span className="text-[10px] text-stone-500">Ingreso de alquiler validado</span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">POR CONCILIAR</span>
-            <Clock size={16} className="text-amber-700" />
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">POR CONCILIAR</span>
+            <Clock size={15} className="text-amber-700" />
           </div>
-          <div className="text-2xl font-bold font-mono text-amber-900 mt-2">
+          <div className="text-lg sm:text-xl font-bold font-mono text-amber-900 mt-1">
             {formatMoney(fromCents(totalPendienteCents), 'PEN')}
           </div>
-          <span className="text-[11px] text-amber-800 font-medium">
+          <span className="text-[10px] text-amber-800 font-medium">
             {countPendientes} {countPendientes === 1 ? 'abono pendiente' : 'abonos pendientes'}
           </span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">ABONOS RECHAZADOS</span>
-            <Ban size={16} className="text-rose-700" />
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">ABONOS RECHAZADOS</span>
+            <Ban size={15} className="text-rose-700" />
           </div>
-          <div className="text-2xl font-bold font-mono text-rose-900 mt-2">{countRechazados}</div>
-          <span className="text-[11px] text-stone-500">Sin impacto en ingresos</span>
+          <div className="text-lg sm:text-xl font-bold font-mono text-rose-900 mt-1">{countRechazados}</div>
+          <span className="text-[10px] text-stone-500">Sin impacto en ingresos</span>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-xs">
+        <div className="rounded-xl border border-stone-200/90 bg-white p-3 sm:p-3.5 shadow-2xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">TOTAL REGISTROS</span>
-            <span className="text-xs font-mono font-semibold text-stone-400">Total</span>
+            <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider">TOTAL REGISTROS</span>
+            <span className="text-[10px] font-mono font-semibold text-stone-400">Total</span>
           </div>
-          <div className="text-2xl font-bold font-mono text-stone-900 mt-2">{payments.length}</div>
-          <span className="text-[11px] text-stone-500">Transacciones en vista</span>
+          <div className="text-lg sm:text-xl font-bold font-mono text-stone-900 mt-1">{payments.length}</div>
+          <span className="text-[10px] text-stone-500">Transacciones en vista</span>
         </div>
       </div>
 

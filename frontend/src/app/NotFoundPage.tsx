@@ -7,17 +7,17 @@ export const NotFoundPage: React.FC = () => {
   const location = useLocation();
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8 text-center">
-      <div className="rounded-3xl border border-stone-200 bg-white p-8 sm:p-12 shadow-xs">
-        <div className="mx-auto grid size-14 place-items-center rounded-2xl bg-stone-100 text-[#162A2C] mb-6">
-          <AlertCircle size={28} strokeWidth={1.8} aria-hidden="true" />
+    <div className="w-full max-w-xl mx-auto py-8 sm:py-12 text-center">
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 sm:p-10 shadow-2xs">
+        <div className="mx-auto grid size-12 place-items-center rounded-xl bg-stone-100 text-[#183b32] mb-4">
+          <AlertCircle size={24} strokeWidth={1.8} aria-hidden="true" />
         </div>
 
-        <span className="rounded-full bg-stone-100 px-3 py-1 font-mono text-xs font-semibold text-stone-600">
+        <span className="rounded-full bg-stone-100 px-2.5 py-1 font-mono text-[11px] font-semibold text-stone-600">
           Error 404
         </span>
 
-        <h1 className="mt-4 text-2xl font-bold tracking-tight text-stone-900 sm:text-3xl">
+        <h1 className="mt-3 text-xl font-bold tracking-tight text-stone-900 sm:text-2xl">
           Página no encontrada
         </h1>
 

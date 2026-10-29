@@ -118,7 +118,7 @@ export const GuestDetailModal: React.FC<GuestDetailModalProps> = ({
               <h3 className="text-sm font-bold uppercase tracking-wider text-stone-900">
                 Historial de Reservas Relacionadas ({guest.reservasRelacionadas.length})
               </h3>
-              <span className="text-xs text-stone-400 font-medium">Vinculación HU-04</span>
+              <span className="text-xs text-stone-400 font-medium">Historial de estancias</span>
             </div>
 
             {guest.reservasRelacionadas.length === 0 ? (
