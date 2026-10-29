@@ -51,6 +51,18 @@ enum EstadoPago {
   RECHAZADO
 }
 
+enum BeneficiarioPago {
+  DAPLACE
+  PROPIETARIO
+  OTRO
+}
+
+enum EstadoEvidenciaPago {
+  REFERENCIADA
+  VALIDADA
+  RECHAZADA
+}
+
 enum ConceptoPago {
   ADELANTO
   SALDO
@@ -107,6 +119,7 @@ model Usuario {
   gastosAprobados     Gasto[]              @relation("GastosAprobados")
   gastosAnulados      Gasto[]              @relation("GastosAnulados")
   sustentosRegistrados SustentoGasto[]     @relation("SustentosRegistrados")
+  evidenciasPagoRegistradas EvidenciaPago[] @relation("EvidenciasPagoRegistradas")
 
   @@map("usuarios")
 }
@@ -201,10 +214,15 @@ model Pago {
   motivoRechazo       String?
   rechazadoEn         DateTime?
   notas               String?
+  beneficiarioTipo    BeneficiarioPago?
+  beneficiarioNombre  String?
+  bancoReceptor       String?
+  cuentaReferencia    String?
 
-  reserva             Reserva      @relation(fields: [reservaId], references: [id], onDelete: Restrict)
-  registradoPor       Usuario?     @relation("PagosRegistrados", fields: [registradoPorId], references: [id], onDelete: SetNull)
-  conciliadoPor       Usuario?     @relation("PagosConciliados", fields: [conciliadoPorId], references: [id], onDelete: SetNull)
+  reserva             Reserva         @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+  registradoPor       Usuario?        @relation("PagosRegistrados", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  conciliadoPor       Usuario?        @relation("PagosConciliados", fields: [conciliadoPorId], references: [id], onDelete: SetNull)
+  evidencias          EvidenciaPago[]
 
   @@index([reservaId])
   @@index([estado])
@@ -322,5 +340,28 @@ model SustentoGasto {
 
   @@index([gastoId])
   @@map("sustentos_gasto")
+}
+
+model EvidenciaPago {
+  id                   String              @id @default(uuid())
+  pagoId               String
+  tipo                 String              @default("VOUCHER")
+  nombreArchivo        String
+  referenciaDocumental String?
+  url                  String?
+  estado               EstadoEvidenciaPago @default(REFERENCIADA)
+  notas                String?
+  idempotencyKey       String?
+  payloadHash          String?
+  registradoPorId      String?
+  creadoEn             DateTime            @default(now())
+
+  pago                 Pago                @relation(fields: [pagoId], references: [id], onDelete: Restrict)
+  registradoPor        Usuario?            @relation("EvidenciasPagoRegistradas", fields: [registradoPorId], references: [id], onDelete: SetNull)
+
+  @@unique([pagoId, idempotencyKey])
+  @@index([pagoId])
+  @@index([estado])
+  @@map("evidencias_pago")
 }
 

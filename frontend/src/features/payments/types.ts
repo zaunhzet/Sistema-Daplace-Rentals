@@ -15,6 +15,33 @@ export type MetodoPago =
   | 'DEPOSITO'
   | 'OTRO';
 
+export type BeneficiarioPago = 'DAPLACE' | 'PROPIETARIO' | 'OTRO';
+export type EstadoEvidenciaPago = 'REFERENCIADA' | 'VALIDADA' | 'RECHAZADA';
+
+export interface PaymentEvidence {
+  id: string;
+  pagoId: string;
+  tipo: string;
+  nombreArchivo: string;
+  referenciaDocumental?: string;
+  url?: string;
+  estado: EstadoEvidenciaPago;
+  notas?: string;
+  idempotencyKey?: string;
+  registradoPor?: string;
+  creadoEn: string; // ISO 8601
+}
+
+export interface CreatePaymentEvidenceDto {
+  nombreArchivo: string;
+  referenciaDocumental?: string;
+  url?: string;
+  tipo?: string;
+  notas?: string;
+  estado?: string;
+  idempotencyKey?: string;
+}
+
 export interface Payment {
   id: string;
   reservaId: string;
@@ -36,6 +63,12 @@ export interface Payment {
   motivoRechazo?: string;
   rechazadoEn?: string; // ISO 8601
   notas?: string;
+  beneficiarioTipo?: BeneficiarioPago;
+  beneficiario?: BeneficiarioPago;
+  beneficiarioNombre?: string;
+  bancoReceptor?: string;
+  cuentaReferencia?: string;
+  evidencias?: PaymentEvidence[];
 }
 
 export interface CreatePaymentDto {
@@ -48,6 +81,19 @@ export interface CreatePaymentDto {
   fechaPago: string;
   idempotencyKey?: string;
   notas?: string;
+  beneficiarioTipo?: BeneficiarioPago;
+  beneficiario?: BeneficiarioPago;
+  beneficiarioNombre?: string;
+  bancoReceptor?: string;
+  cuentaReferencia?: string;
+  evidencias?: Array<{
+    nombreArchivo: string;
+    referenciaDocumental?: string;
+    url?: string;
+    tipo?: string;
+    estado?: string;
+    notas?: string;
+  }>;
 }
 
 export interface ReconcilePaymentDto {

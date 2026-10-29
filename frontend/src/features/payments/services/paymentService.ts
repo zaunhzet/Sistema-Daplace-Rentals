@@ -1,6 +1,8 @@
 import type {
   CreatePaymentDto,
+  CreatePaymentEvidenceDto,
   Payment,
+  PaymentEvidence,
   PaymentFilterParams,
   PaymentValidationResult,
   ReconcilePaymentDto,
@@ -17,6 +19,50 @@ import {
 } from '../../../shared/money';
 import { apiClient, ApiError } from '../../../shared/api/client';
 import { isMockMode } from '../../../shared/api/config';
+
+export function computeTestAccountIdentity(rawRef?: string | null): { mask: string | null; identity: string | null } {
+  if (!rawRef || typeof rawRef !== 'string') return { mask: null, identity: null };
+  const trimmed = rawRef.trim();
+  if (!trimmed) return { mask: null, identity: null };
+
+  // 1. Si contiene asteriscos, validar formato estricto documentado: ****DDDD
+  if (trimmed.includes('*')) {
+    const STRICT_MASK_REGEX = /^\*{4}\d{4}$/;
+    if (!STRICT_MASK_REGEX.test(trimmed)) {
+      throw new Error('La referencia de cuenta enmascarada debe tener el formato estricto "****DDDD" (4 asteriscos seguidos de 4 dígitos).');
+    }
+    return {
+      mask: trimmed,
+      identity: `MASK:${trimmed}`,
+    };
+  }
+
+  // 2. Referencia completa: normalización removiendo separadores habituales [\s\-_.]
+  const clean = trimmed.replace(/[\s\-_.]/g, '').toUpperCase();
+  if (clean.length < 4 || !/^[A-Za-z0-9]{4,34}$/.test(clean)) {
+    throw new Error('La referencia de cuenta debe contener entre 4 y 34 caracteres alfanuméricos.');
+  }
+
+  // Identidad determinista en frontend basada en la referencia normalizada (sin exponer la cuenta completa ni requerir HMAC backend)
+  let h1 = 0x811c9dc5;
+  let h2 = 0x9e3779b9;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 0x01000193);
+    h2 = Math.imul(h2 ^ (ch << 1), 0x85ebca6b);
+  }
+  const fp = (h1 >>> 0).toString(16).padStart(8, '0') + (h2 >>> 0).toString(16).padStart(8, '0');
+
+  return {
+    mask: `****${clean.slice(-4)}`,
+    identity: `FULL_FP:${fp}`,
+  };
+}
+
+export function maskRestrictedAccountReference(rawRef?: string | null): string | null {
+  const result = computeTestAccountIdentity(rawRef);
+  return result.mask;
+}
 
 export function validatePaymentPayload(dto: Partial<CreatePaymentDto>): PaymentValidationResult {
   const errors: Record<string, string> = {};
@@ -64,11 +110,15 @@ export interface IPaymentService {
   createPayment(dto: CreatePaymentDto): Promise<Payment>;
   reconcilePayment(id: string, dto?: ReconcilePaymentDto): Promise<Payment>;
   rejectPayment(id: string, dto: RejectPaymentDto): Promise<Payment>;
+  addEvidence(pagoId: string, dto: CreatePaymentEvidenceDto, idempotencyKey?: string): Promise<PaymentEvidence>;
+  getEvidences(pagoId: string): Promise<PaymentEvidence[]>;
   reset(): void;
 }
 
-class MockPaymentService implements IPaymentService {
+export class MockPaymentService implements IPaymentService {
   private payments: Payment[] = [];
+  private paymentSnapshots = new Map<string, { canonical: string; paymentId: string }>();
+  private evidenceSnapshots = new Map<string, { canonical: string; evidence: PaymentEvidence }>();
 
   constructor() {
     this.reset();
@@ -76,6 +126,8 @@ class MockPaymentService implements IPaymentService {
 
   public reset(): void {
     this.payments = JSON.parse(JSON.stringify(INITIAL_PAYMENTS_MOCK));
+    this.paymentSnapshots.clear();
+    this.evidenceSnapshots.clear();
   }
 
   public async getPayments(filters?: PaymentFilterParams): Promise<Payment[]> {
@@ -202,31 +254,90 @@ class MockPaymentService implements IPaymentService {
       );
     }
 
-    // 3. Manejo de idempotencia mock
+    // 3. Manejo de idempotencia mock mediante snapshot canónico inmutable (H6)
+    const accountInfo = computeTestAccountIdentity(dto.cuentaReferencia);
+
+    const buildCanonical = () =>
+      JSON.stringify({
+        reservaId: dto.reservaId,
+        monto: fromCents(toCents(dto.importe)),
+        moneda: dto.moneda,
+        concepto: dto.concepto,
+        metodoPago: dto.metodoPago,
+        referencia: dto.referencia.trim(),
+        fechaPago: dto.fechaPago.trim(),
+        beneficiarioTipo: dto.beneficiarioTipo || dto.beneficiario || null,
+        beneficiarioNombre: dto.beneficiarioNombre?.trim() || null,
+        bancoReceptor: dto.bancoReceptor?.trim() || null,
+        cuentaReferenciaMask: accountInfo.mask,
+        cuentaReferenciaIdentity: accountInfo.identity,
+        notas: dto.notas?.trim() || null,
+        evidencias: (dto.evidencias || [])
+          .map((e) => ({
+            tipo: e.tipo && e.tipo.trim() ? e.tipo.trim() : 'VOUCHER',
+            nombreArchivo: e.nombreArchivo.trim(),
+            referenciaDocumental: e.referenciaDocumental?.trim() || null,
+            url: e.url?.trim() || null,
+            notas: e.notas?.trim() || null,
+          }))
+          .sort((a, b) =>
+            a.nombreArchivo.localeCompare(b.nombreArchivo) ||
+            (a.referenciaDocumental || '').localeCompare(b.referenciaDocumental || '') ||
+            (a.tipo || '').localeCompare(b.tipo || '') ||
+            (a.url || '').localeCompare(b.url || '') ||
+            (a.notas || '').localeCompare(b.notas || '')
+          ),
+      });
+
     if (dto.idempotencyKey && dto.idempotencyKey.trim() !== '') {
-      const existingWithKey = this.payments.find((p) => p.idempotencyKey === dto.idempotencyKey);
-      if (existingWithKey) {
-        // Verificar si el payload coincide para devolver respuesta previa (idempotencia pura)
-        const samePayload =
-          existingWithKey.reservaId === dto.reservaId &&
-          existingWithKey.importe === fromCents(toCents(dto.importe)) &&
-          existingWithKey.moneda === dto.moneda &&
-          existingWithKey.concepto === dto.concepto;
+      const safeKey = dto.idempotencyKey.trim();
+      const canonical = buildCanonical();
 
-        if (samePayload) {
-          return JSON.parse(JSON.stringify(existingWithKey));
+      const existingSnapshot = this.paymentSnapshots.get(safeKey);
+      if (existingSnapshot) {
+        if (existingSnapshot.canonical === canonical) {
+          const found = this.payments.find((p) => p.id === existingSnapshot.paymentId);
+          if (found) {
+            return JSON.parse(JSON.stringify(found));
+          }
         }
-
-        // Si la clave ya fue usada con distinto contenido, generar conflicto 409
         throw new Error(
-          `Conflicto de idempotencia (409): La clave "${dto.idempotencyKey}" ya fue utilizada previamente con datos de pago diferentes.`
+          `Conflicto de idempotencia (409): La clave "${safeKey}" ya fue utilizada previamente con datos de pago diferentes.`
         );
       }
     }
 
+    const initialEvidencias: PaymentEvidence[] = [];
+    if (Array.isArray(dto.evidencias) && dto.evidencias.length > 0) {
+      for (const ev of dto.evidencias) {
+        if (ev.estado && ev.estado.toUpperCase() === 'VALIDADA') {
+          throw new Error('No se permite establecer el estado VALIDADA directamente desde el cliente. Las evidencias documentales se registran exclusivamente en estado REFERENCIADA.');
+        }
+        initialEvidencias.push({
+          id: `ev-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`,
+          pagoId: '', // asignado abajo
+          tipo: ev.tipo || 'VOUCHER',
+          nombreArchivo: ev.nombreArchivo.trim(),
+          referenciaDocumental: ev.referenciaDocumental?.trim() || undefined,
+          url: ev.url?.trim() || undefined,
+          estado: 'REFERENCIADA',
+          notas: ev.notas?.trim() || undefined,
+          registradoPor: 'Operador / Auditor Contable',
+          creadoEn: new Date().toISOString(),
+        });
+      }
+    }
+
+    const safeBeneficiario = dto.beneficiarioTipo || dto.beneficiario || undefined;
+    const safeCuentaRef = accountInfo.mask || undefined;
+    const pagoId = `pag-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`;
+    for (const ev of initialEvidencias) {
+      ev.pagoId = pagoId;
+    }
+
     // 4. Crear registro en estado inicial PENDIENTE_CONCILIACION
     const newPayment: Payment = {
-      id: `pag-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`,
+      id: pagoId,
       reservaId: reservation.id,
       propiedadId: reservation.propiedadId,
       propiedadNombre: reservation.propiedadNombre,
@@ -242,10 +353,108 @@ class MockPaymentService implements IPaymentService {
       fechaPago: dto.fechaPago.trim(),
       registradoEn: new Date().toISOString(),
       notas: dto.notas?.trim(),
+      beneficiarioTipo: safeBeneficiario,
+      beneficiario: safeBeneficiario,
+      beneficiarioNombre: dto.beneficiarioNombre?.trim() || undefined,
+      bancoReceptor: dto.bancoReceptor?.trim() || undefined,
+      cuentaReferencia: safeCuentaRef,
+      evidencias: initialEvidencias,
     };
 
     this.payments.unshift(newPayment);
+
+    // Guardar snapshot canónico inmutable de creación
+    if (dto.idempotencyKey && dto.idempotencyKey.trim() !== '') {
+      const safeKey = dto.idempotencyKey.trim();
+      const canonical = buildCanonical();
+      this.paymentSnapshots.set(safeKey, { canonical, paymentId: newPayment.id });
+    }
+
     return JSON.parse(JSON.stringify(newPayment));
+  }
+
+  public async addEvidence(
+    pagoId: string,
+    dto: CreatePaymentEvidenceDto,
+    idempotencyKey?: string
+  ): Promise<PaymentEvidence> {
+    const payment = this.payments.find((p) => p.id === pagoId);
+    if (!payment) {
+      throw new Error(`El pago con ID "${pagoId}" no fue encontrado.`);
+    }
+
+    if (payment.estado === 'RECHAZADO') {
+      throw new Error('No se pueden adjuntar evidencias documentales a un pago en estado RECHAZADO.');
+    }
+
+    if (dto.estado && dto.estado.toUpperCase() === 'VALIDADA') {
+      throw new Error(
+        'No se permite establecer el estado VALIDADA directamente desde el cliente. Las evidencias documentales se registran exclusivamente en estado REFERENCIADA.'
+      );
+    }
+
+    if (!dto.nombreArchivo || dto.nombreArchivo.trim().length < 2) {
+      throw new Error('El nombre de archivo de la evidencia documental es obligatorio (mínimo 2 caracteres).');
+    }
+
+    const key = (idempotencyKey || dto.idempotencyKey || '').trim();
+    const canonical = JSON.stringify({
+      pagoId,
+      tipo: dto.tipo || 'VOUCHER',
+      nombreArchivo: dto.nombreArchivo.trim(),
+      referenciaDocumental: dto.referenciaDocumental?.trim() || null,
+      url: dto.url?.trim() || null,
+      notas: dto.notas?.trim() || null,
+    });
+
+    if (key) {
+      const snapshotKey = `${pagoId}:${key}`;
+      const existingSnapshot = this.evidenceSnapshots.get(snapshotKey);
+      if (existingSnapshot) {
+        if (existingSnapshot.canonical === canonical) {
+          return JSON.parse(JSON.stringify(existingSnapshot.evidence));
+        }
+        throw new Error(
+          `Conflicto de idempotencia (409): La clave "${key}" ya fue utilizada previamente con datos de evidencia diferentes para este pago.`
+        );
+      }
+    }
+
+    const newEvidence: PaymentEvidence = {
+      id: `ev-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`,
+      pagoId,
+      tipo: dto.tipo || 'VOUCHER',
+      nombreArchivo: dto.nombreArchivo.trim(),
+      referenciaDocumental: dto.referenciaDocumental?.trim() || undefined,
+      url: dto.url?.trim() || undefined,
+      estado: 'REFERENCIADA',
+      notas: dto.notas?.trim() || undefined,
+      idempotencyKey: key || undefined,
+      registradoPor: 'Operador / Auditor Contable',
+      creadoEn: new Date().toISOString(),
+    };
+
+    if (!payment.evidencias) {
+      payment.evidencias = [];
+    }
+    payment.evidencias.unshift(newEvidence);
+
+    if (key) {
+      this.evidenceSnapshots.set(`${pagoId}:${key}`, {
+        canonical,
+        evidence: JSON.parse(JSON.stringify(newEvidence)),
+      });
+    }
+
+    return JSON.parse(JSON.stringify(newEvidence));
+  }
+
+  public async getEvidences(pagoId: string): Promise<PaymentEvidence[]> {
+    const payment = this.payments.find((p) => p.id === pagoId);
+    if (!payment) {
+      throw new Error(`El pago con ID "${pagoId}" no fue encontrado.`);
+    }
+    return JSON.parse(JSON.stringify(payment.evidencias || []));
   }
 
   /**
@@ -405,6 +614,43 @@ export class ApiPaymentService implements IPaymentService {
         method: 'POST',
         body: JSON.stringify(dto),
       }
+    );
+    return res.data;
+  }
+
+  public async addEvidence(
+    pagoId: string,
+    dto: CreatePaymentEvidenceDto,
+    idempotencyKey?: string
+  ): Promise<PaymentEvidence> {
+    if (dto.estado && dto.estado.toUpperCase() === 'VALIDADA') {
+      throw new Error(
+        'No se permite establecer el estado VALIDADA directamente desde el cliente. Las evidencias documentales se registran exclusivamente en estado REFERENCIADA.'
+      );
+    }
+    const key =
+      idempotencyKey ||
+      dto.idempotencyKey ||
+      `idem-ev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const res = await apiClient<{ data: PaymentEvidence }>(
+      `/api/pagos/${encodeURIComponent(pagoId)}/evidencias`,
+      {
+        method: 'POST',
+        headers: {
+          'idempotency-key': key,
+        },
+        body: JSON.stringify({
+          ...dto,
+          idempotencyKey: key,
+        }),
+      }
+    );
+    return res.data;
+  }
+
+  public async getEvidences(pagoId: string): Promise<PaymentEvidence[]> {
+    const res = await apiClient<{ data: PaymentEvidence[] }>(
+      `/api/pagos/${encodeURIComponent(pagoId)}/evidencias`
     );
     return res.data;
   }

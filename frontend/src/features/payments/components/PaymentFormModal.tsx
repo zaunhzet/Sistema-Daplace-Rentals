@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle } from 'lucide-react';
-import type { ConceptoPago, CreatePaymentDto, MetodoPago } from '../types';
+import { X, AlertCircle, FileText, Building2 } from 'lucide-react';
+import type { BeneficiarioPago, ConceptoPago, CreatePaymentDto, MetodoPago } from '../types';
 import type { Reservation } from '../../reservations';
 import { formatMoney, validateMoneyInput } from '../../../shared/money';
 
@@ -29,6 +29,15 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   const [notas, setNotas] = useState<string>('');
   const [idempotencyKey, setIdempotencyKey] = useState<string>('');
 
+  // DR-01: Beneficiario, banco y evidencia documental
+  const [beneficiarioTipo, setBeneficiarioTipo] = useState<BeneficiarioPago>('DAPLACE');
+  const [beneficiarioNombre, setBeneficiarioNombre] = useState<string>('');
+  const [bancoReceptor, setBancoReceptor] = useState<string>('');
+  const [cuentaReferencia, setCuentaReferencia] = useState<string>('');
+  const [evidenciaNombre, setEvidenciaNombre] = useState<string>('');
+  const [evidenciaRef, setEvidenciaRef] = useState<string>('');
+  const [evidenciaUrl, setEvidenciaUrl] = useState<string>('');
+
   const [loading, setLoading] = useState<boolean>(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -43,6 +52,13 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       setFechaPago(new Date().toISOString().substring(0, 10));
       setNotas('');
       setIdempotencyKey(`idem-${Date.now().toString(36)}`);
+      setBeneficiarioTipo('DAPLACE');
+      setBeneficiarioNombre('');
+      setBancoReceptor('');
+      setCuentaReferencia('');
+      setEvidenciaNombre('');
+      setEvidenciaRef('');
+      setEvidenciaUrl('');
       setErrors({});
 
       const found = reservations.find((r) => r.id === initialReserva);
@@ -102,6 +118,25 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
         fechaPago,
         idempotencyKey: idempotencyKey.trim() || undefined,
         notas: notas.trim() || undefined,
+        beneficiarioTipo,
+        beneficiario: beneficiarioTipo,
+        beneficiarioNombre:
+          beneficiarioTipo === 'PROPIETARIO' || beneficiarioTipo === 'OTRO'
+            ? beneficiarioNombre.trim() || undefined
+            : undefined,
+        bancoReceptor: bancoReceptor.trim() || undefined,
+        cuentaReferencia: cuentaReferencia.trim() || undefined,
+        evidencias: evidenciaNombre.trim()
+          ? [
+              {
+                nombreArchivo: evidenciaNombre.trim(),
+                referenciaDocumental: evidenciaRef.trim() || undefined,
+                url: evidenciaUrl.trim() || undefined,
+                tipo: 'VOUCHER',
+                estado: 'REFERENCIADA',
+              },
+            ]
+          : undefined,
       });
       onClose();
     } catch (err: unknown) {
@@ -290,6 +325,137 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
                 className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
               />
               {errors.fechaPago && <p className="mt-1 text-[11px] text-rose-600">{errors.fechaPago}</p>}
+            </div>
+          </div>
+
+          {/* Sección DR-01: Beneficiario y Banco Receptor */}
+          <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-3">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
+              <Building2 size={14} className="text-[#183b32]" />
+              <span>DESTINO Y BENEFICIARIO (DR-01)</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="pago-beneficiario-tipo" className="block text-xs font-semibold text-stone-700 mb-1">
+                  BENEFICIARIO
+                </label>
+                <select
+                  id="pago-beneficiario-tipo"
+                  value={beneficiarioTipo}
+                  onChange={(e) => setBeneficiarioTipo(e.target.value as BeneficiarioPago)}
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:outline-hidden"
+                >
+                  <option value="DAPLACE">DAPLACE (Empresa)</option>
+                  <option value="PROPIETARIO">PROPIETARIO</option>
+                  <option value="OTRO">OTRO / TERCERO</option>
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="pago-banco-receptor" className="block text-xs font-semibold text-stone-700 mb-1">
+                  BANCO RECEPTOR
+                </label>
+                <input
+                  id="pago-banco-receptor"
+                  type="text"
+                  value={bancoReceptor}
+                  onChange={(e) => setBancoReceptor(e.target.value)}
+                  placeholder="Ej. BCP, BBVA, Interbank"
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:outline-hidden"
+                >
+                </input>
+              </div>
+            </div>
+
+            {(beneficiarioTipo === 'PROPIETARIO' || beneficiarioTipo === 'OTRO') && (
+              <div>
+                <label htmlFor="pago-beneficiario-nombre" className="block text-xs font-semibold text-stone-700 mb-1">
+                  NOMBRE DEL BENEFICIARIO
+                </label>
+                <input
+                  id="pago-beneficiario-nombre"
+                  type="text"
+                  value={beneficiarioNombre}
+                  onChange={(e) => setBeneficiarioNombre(e.target.value)}
+                  placeholder="Nombre o razón social del titular de la cuenta..."
+                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:outline-hidden"
+                />
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="pago-cuenta-referencia" className="block text-xs font-semibold text-stone-700 mb-1">
+                REFERENCIA RESTRINGIDA DE CUENTA (PRIVACIDAD)
+              </label>
+              <input
+                id="pago-cuenta-referencia"
+                type="text"
+                value={cuentaReferencia}
+                onChange={(e) => setCuentaReferencia(e.target.value)}
+                placeholder="Ej. ****4589 o CTA-***1234"
+                className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-mono text-stone-800 focus:border-[#183b32] focus:outline-hidden"
+              />
+              <p className="mt-1 text-[10px] text-stone-500">
+                Solo se conservan los últimos dígitos o referencia restringida para resguardar información bancaria sensible.
+              </p>
+            </div>
+          </div>
+
+          {/* Sección DR-01: Evidencia Documental Inicial (Opcional) */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-3.5 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
+                <FileText size={14} className="text-[#183b32]" />
+                <span>EVIDENCIA DOCUMENTAL / VOUCHER (OPCIONAL)</span>
+              </div>
+              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                ESTADO: REFERENCIADA
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="pago-evidencia-nombre" className="block text-xs font-semibold text-stone-700 mb-1">
+                  NOMBRE DEL DOCUMENTO / ARCHIVO
+                </label>
+                <input
+                  id="pago-evidencia-nombre"
+                  type="text"
+                  value={evidenciaNombre}
+                  onChange={(e) => setEvidenciaNombre(e.target.value)}
+                  placeholder="Ej. voucher_bcp_res01.pdf"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="pago-evidencia-ref" className="block text-xs font-semibold text-stone-700 mb-1">
+                  REFERENCIA FÍSICA O DIGITAL
+                </label>
+                <input
+                  id="pago-evidencia-ref"
+                  type="text"
+                  value={evidenciaRef}
+                  onChange={(e) => setEvidenciaRef(e.target.value)}
+                  placeholder="Ej. OP-77491 / VOUCHER-01"
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="pago-evidencia-url" className="block text-xs font-semibold text-stone-700 mb-1">
+                ENLACE SEGURO O URL (OPCIONAL)
+              </label>
+              <input
+                id="pago-evidencia-url"
+                type="text"
+                value={evidenciaUrl}
+                onChange={(e) => setEvidenciaUrl(e.target.value)}
+                placeholder="https://... (dejar vacío si es voucher físico o archivo local)"
+                className="w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:bg-white focus:outline-hidden"
+              />
             </div>
           </div>
 
