@@ -45,17 +45,58 @@ enum OrigenReserva {
   AIRBNB
 }
 
-model Usuario {
-  id            String       @id @default(uuid())
-  nombre        String
-  email         String       @unique
-  telefono      String?
-  rol           RolUsuario   @default(PROPIETARIO)
-  activo        Boolean      @default(true)
-  creadoEn      DateTime     @default(now())
-  actualizadoEn DateTime     @updatedAt
+enum EstadoPago {
+  PENDIENTE_CONCILIACION
+  CONCILIADO
+  RECHAZADO
+}
 
-  propiedades   Propiedad[]
+enum ConceptoPago {
+  ADELANTO
+  SALDO
+  PAGO_TOTAL
+  PENALIDAD
+  OTRO
+}
+
+enum MetodoPago {
+  TRANSFERENCIA
+  TARJETA
+  EFECTIVO
+  BILLETERA_DIGITAL
+  DEPOSITO
+  OTRO
+}
+
+enum EstadoGarantia {
+  EN_CUSTODIA
+  PARCIALMENTE_RETENIDA
+  DEVUELTA_TOTAL
+  RETENIDA_TOTAL
+  LIQUIDADA_MIXTA
+}
+
+enum TipoMovimientoGarantia {
+  RECEPCION
+  RETENCION
+  DEVOLUCION_PARCIAL
+  DEVOLUCION_TOTAL
+}
+
+model Usuario {
+  id                  String               @id @default(uuid())
+  nombre              String
+  email               String               @unique
+  telefono            String?
+  rol                 RolUsuario           @default(PROPIETARIO)
+  activo              Boolean              @default(true)
+  creadoEn            DateTime             @default(now())
+  actualizadoEn       DateTime             @updatedAt
+
+  propiedades         Propiedad[]
+  pagosRegistrados    Pago[]               @relation("PagosRegistrados")
+  pagosConciliados    Pago[]               @relation("PagosConciliados")
+  movimientosGarantia MovimientoGarantia[]
 
   @@map("usuarios")
 }
@@ -121,11 +162,80 @@ model Reserva {
 
   propiedad         Propiedad     @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
   huesped           Huesped       @relation(fields: [huespedId], references: [id], onDelete: Restrict)
+  pagos             Pago[]
+  garantia          Garantia?
 
   @@index([propiedadId, ingreso, salida])
   @@index([huespedId])
   @@index([estado])
   @@map("reservas")
+}
+
+model Pago {
+  id                  String       @id @default(uuid())
+  reservaId           String
+  monto               Decimal      @db.Decimal(12, 2)
+  moneda              String       @default("PEN")
+  concepto            ConceptoPago @default(ADELANTO)
+  metodoPago          MetodoPago   @default(TRANSFERENCIA)
+  referenciaOperacion String
+  fechaPago           DateTime     @db.Date
+  estado              EstadoPago   @default(PENDIENTE_CONCILIACION)
+  idempotencyKey      String?      @unique
+  payloadHash         String?
+  registradoPorId     String?
+  creadoEn            DateTime     @default(now())
+  conciliadoPorId     String?
+  conciliadoEn        DateTime?
+  motivoRechazo       String?
+  rechazadoEn         DateTime?
+  notas               String?
+
+  reserva             Reserva      @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+  registradoPor       Usuario?     @relation("PagosRegistrados", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  conciliadoPor       Usuario?     @relation("PagosConciliados", fields: [conciliadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([reservaId])
+  @@index([estado])
+  @@index([fechaPago])
+  @@index([referenciaOperacion])
+  @@map("pagos")
+}
+
+model Garantia {
+  id             String         @id @default(uuid())
+  reservaId      String         @unique
+  moneda         String         @default("PEN")
+  montoTotal     Decimal        @db.Decimal(12, 2)
+  estado         EstadoGarantia @default(EN_CUSTODIA)
+  creadaEn       DateTime       @default(now())
+  actualizadaEn  DateTime       @updatedAt
+
+  reserva        Reserva        @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+  movimientos    MovimientoGarantia[]
+
+  @@index([estado])
+  @@map("garantias")
+}
+
+model MovimientoGarantia {
+  id               String                 @id @default(uuid())
+  garantiaId       String
+  tipo             TipoMovimientoGarantia
+  monto            Decimal                @db.Decimal(12, 2)
+  motivo           String
+  documentoSoporte String?
+  actorId          String?
+  idempotencyKey   String?                @unique
+  creadoEn         DateTime               @default(now())
+
+  garantia         Garantia               @relation(fields: [garantiaId], references: [id], onDelete: Restrict)
+  actor            Usuario?               @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([garantiaId])
+  @@index([tipo])
+  @@index([creadoEn])
+  @@map("movimientos_garantia")
 }
 
 model AuditoriaEvento {

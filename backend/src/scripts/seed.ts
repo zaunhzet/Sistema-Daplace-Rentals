@@ -352,7 +352,103 @@ export async function seedDatabase(target?: PrismaClient | string) {
   }
   console.log(`✓ Seeded ${reservasData.length} reservas.`);
 
-  // 5. Auditoría inicial
+  // 5. Pagos iniciales (HU-05)
+  const pagosData = [
+    {
+      id: 'pag-01',
+      reservaId: 'res-01',
+      monto: 700.0,
+      moneda: 'PEN',
+      concepto: 'ADELANTO' as const,
+      metodoPago: 'TRANSFERENCIA' as const,
+      referenciaOperacion: 'TRX-98214',
+      fechaPago: new Date('2026-10-25T00:00:00Z'),
+      estado: 'CONCILIADO' as const,
+      idempotencyKey: 'idemp-seed-pag-01',
+      registradoPorId: 'usr-operador',
+      conciliadoPorId: 'usr-admin',
+      conciliadoEn: new Date('2026-10-26T10:00:00Z'),
+      notas: 'Adelanto 50% confirmado en cuenta BCP.',
+    },
+    {
+      id: 'pag-02',
+      reservaId: 'res-02',
+      monto: 450.0,
+      moneda: 'PEN',
+      concepto: 'ADELANTO' as const,
+      metodoPago: 'BILLETERA_DIGITAL' as const,
+      referenciaOperacion: 'YAPE-55412',
+      fechaPago: new Date('2026-10-27T00:00:00Z'),
+      estado: 'PENDIENTE_CONCILIACION' as const,
+      idempotencyKey: 'idemp-seed-pag-02',
+      registradoPorId: 'usr-operador',
+      notas: 'Adelanto recibido vía Yape, pendiente de validación bancaria.',
+    },
+  ];
+
+  for (const p of pagosData) {
+    await prisma.pago.upsert({
+      where: { id: p.id },
+      update: {
+        reservaId: p.reservaId,
+        monto: p.monto,
+        moneda: p.moneda,
+        concepto: p.concepto,
+        metodoPago: p.metodoPago,
+        referenciaOperacion: p.referenciaOperacion,
+        fechaPago: p.fechaPago,
+        estado: p.estado,
+        idempotencyKey: p.idempotencyKey,
+        registradoPorId: p.registradoPorId,
+        conciliadoPorId: p.conciliadoPorId,
+        conciliadoEn: p.conciliadoEn,
+        notas: p.notas,
+      },
+      create: p,
+    });
+  }
+  console.log(`✓ Seeded ${pagosData.length} pagos.`);
+
+  // 6. Garantías iniciales y movimientos en custodia (HU-06)
+  const garantiaRes01 = await prisma.garantia.upsert({
+    where: { reservaId: 'res-01' },
+    update: {
+      montoTotal: 500.0,
+      moneda: 'PEN',
+      estado: 'EN_CUSTODIA' as const,
+    },
+    create: {
+      id: 'gar-01',
+      reservaId: 'res-01',
+      moneda: 'PEN',
+      montoTotal: 500.0,
+      estado: 'EN_CUSTODIA' as const,
+    },
+  });
+
+  await prisma.movimientoGarantia.upsert({
+    where: { id: 'mov-01' },
+    update: {
+      garantiaId: garantiaRes01.id,
+      tipo: 'RECEPCION' as const,
+      monto: 500.0,
+      motivo: 'Depósito de garantía en custodia recibido al confirmar reserva res-01',
+      actorId: 'usr-operador',
+      idempotencyKey: 'idemp-seed-mov-01',
+    },
+    create: {
+      id: 'mov-01',
+      garantiaId: garantiaRes01.id,
+      tipo: 'RECEPCION' as const,
+      monto: 500.0,
+      motivo: 'Depósito de garantía en custodia recibido al confirmar reserva res-01',
+      actorId: 'usr-operador',
+      idempotencyKey: 'idemp-seed-mov-01',
+    },
+  });
+  console.log('✓ Seeded 1 garantía y movimiento inicial.');
+
+  // 7. Auditoría inicial
   await prisma.auditoriaEvento.create({
     data: {
       entidad: 'Sistema',
@@ -364,6 +460,8 @@ export async function seedDatabase(target?: PrismaClient | string) {
         propiedades: propiedadesData.length,
         huespedes: huespedesData.length,
         reservas: reservasData.length,
+        pagos: pagosData.length,
+        garantias: 1,
       },
     },
   });

@@ -87,6 +87,9 @@ export async function safeResetTestDatabase(databaseUrl: string) {
     await prisma.$executeRawUnsafe(`
       TRUNCATE TABLE
         "auditoria_eventos",
+        "movimientos_garantia",
+        "garantias",
+        "pagos",
         "reservas",
         "propiedades",
         "huespedes",
@@ -112,6 +115,9 @@ export async function safeResetDatabase(options: ResetOptions = {}) {
     await prisma.$executeRawUnsafe(`
       TRUNCATE TABLE
         "auditoria_eventos",
+        "movimientos_garantia",
+        "garantias",
+        "pagos",
         "reservas",
         "propiedades",
         "huespedes",
@@ -138,9 +144,10 @@ export async function safeResetDatabase(options: ResetOptions = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   safeResetDatabase()
-    .catch((err) => {
+    .catch((err: Error) => {
       console.error(err.message);
       process.exitCode = 1;
     });
 }
+
 

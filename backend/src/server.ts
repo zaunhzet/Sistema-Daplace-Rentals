@@ -16,6 +16,15 @@ if (!databaseUrl) {
   throw new Error('DATABASE_URL is required. Copy .env.example to .env and configure the local database.');
 }
 
+const ALLOWED_LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1'];
+if (process.env.ENABLE_DEMO_AUTH_BYPASS === 'true') {
+  if (!ALLOWED_LOOPBACK_HOSTS.includes(host.toLowerCase())) {
+    throw new Error(
+      `CONFIGURACIÓN INSEGURA CRÍTICA: ENABLE_DEMO_AUTH_BYPASS solo está permitido cuando el servidor escucha exclusivamente en loopback (${ALLOWED_LOOPBACK_HOSTS.join(', ')}). Se configuró host "${host}".`
+    );
+  }
+}
+
 const database = createDatabase(databaseUrl);
 const app = buildApp({ prisma: database.prisma, checkDatabase: database.check });
 

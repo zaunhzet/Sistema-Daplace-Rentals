@@ -32,6 +32,15 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
     throw new Error('CONFIGURACIÓN INSEGURA CRÍTICA: ENABLE_DEMO_AUTH_BYPASS no puede estar activo en entorno de producción.');
   }
 
+  // Validación de seguridad: el bypass solo se permite si el host configurado es exclusivamente loopback
+  const apiHost = (process.env.API_HOST || '127.0.0.1').toLowerCase();
+  const ALLOWED_LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1'];
+  if (demoBypassEnabled && !ALLOWED_LOOPBACK_HOSTS.includes(apiHost)) {
+    throw new Error(
+      `CONFIGURACIÓN INSEGURA CRÍTICA: ENABLE_DEMO_AUTH_BYPASS solo está permitido cuando el servidor escucha exclusivamente en loopback (${ALLOWED_LOOPBACK_HOSTS.join(', ')}). Se configuró API_HOST "${apiHost}".`
+    );
+  }
+
   const app = Fastify({
     logger: true,
     ajv: { customOptions: { removeAdditional: false } },
