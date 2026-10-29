@@ -35,10 +35,7 @@ function isValidHttpUrl(stringUrl: string): boolean {
   }
 }
 
-/**
- * Genera hash canónico para verificación estricta de idempotencia en gastos.
- */
-function computeExpensePayloadHash(payload: {
+export interface ExpensePayloadForHash {
   propiedadId: string;
   fechaGasto: string;
   periodoMes: number;
@@ -47,20 +44,83 @@ function computeExpensePayloadHash(payload: {
   categoria: string;
   monto: string;
   pagadoPor: string;
-  moneda?: string;
-}): string {
+  moneda?: string | null;
+  notas?: string | null;
+  repartido?: string | null;
+  usoRucDaplace?: boolean | null;
+  sustentos?: Array<{
+    tipo?: string | null;
+    nombreArchivo: string;
+    url: string;
+    origen?: string | null;
+  }> | null;
+}
+
+/**
+ * Genera hash canónico para verificación estricta de idempotencia en gastos.
+ * Incluye todos los campos de Anexo A.2 con normalización determinista.
+ */
+export function computeExpensePayloadHash(payload: ExpensePayloadForHash): string {
+  const normalizedSustentos = (payload.sustentos || [])
+    .map((s) => ({
+      tipo: s.tipo && s.tipo.trim() ? s.tipo.trim() : 'COMPROBANTE',
+      nombreArchivo: s.nombreArchivo.trim(),
+      url: s.url.trim(),
+      origen: s.origen && s.origen.trim() ? s.origen.trim() : 'MANUAL',
+    }))
+    .sort((a, b) => a.url.localeCompare(b.url) || a.nombreArchivo.localeCompare(b.nombreArchivo));
+
   const canonical = JSON.stringify({
-    propiedadId: payload.propiedadId,
+    propiedadId: payload.propiedadId.trim(),
     fechaGasto: payload.fechaGasto.trim(),
     periodoMes: Number(payload.periodoMes),
     periodoAnio: Number(payload.periodoAnio),
     titulo: payload.titulo.trim().toLowerCase(),
     categoria: payload.categoria.trim().toLowerCase(),
     monto: new Prisma.Decimal(payload.monto.trim()).toFixed(2),
-    pagadoPor: payload.pagadoPor.trim().toLowerCase(),
     moneda: (payload.moneda || 'PEN').toUpperCase().trim(),
+    pagadoPor: payload.pagadoPor.trim().toLowerCase(),
+    notas: payload.notas && payload.notas.trim() ? payload.notas.trim() : null,
+    repartido: payload.repartido && payload.repartido.trim() ? payload.repartido.trim() : null,
+    usoRucDaplace:
+      payload.usoRucDaplace === undefined || payload.usoRucDaplace === null
+        ? null
+        : Boolean(payload.usoRucDaplace),
+    sustentos: normalizedSustentos,
   });
   return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+/**
+ * Recupera el hash persistido del gasto original o lo deriva si no existía.
+ */
+function getOrComputeExpenseHash(gasto: any): string {
+  if (gasto.payloadHash) {
+    return gasto.payloadHash;
+  }
+  return computeExpensePayloadHash({
+    propiedadId: gasto.propiedadId,
+    fechaGasto:
+      gasto.fechaGasto instanceof Date
+        ? gasto.fechaGasto.toISOString().slice(0, 10)
+        : String(gasto.fechaGasto).slice(0, 10),
+    periodoMes: gasto.periodoMes,
+    periodoAnio: gasto.periodoAnio,
+    titulo: gasto.titulo,
+    categoria: gasto.categoria,
+    monto: new Prisma.Decimal(gasto.monto).toFixed(2),
+    pagadoPor: gasto.pagadoPor,
+    moneda: gasto.moneda,
+    notas: gasto.notas,
+    repartido: gasto.repartido,
+    usoRucDaplace: gasto.usoRucDaplace,
+    sustentos: (gasto.sustentos || []).map((s: any) => ({
+      tipo: s.tipo,
+      nombreArchivo: s.nombreArchivo,
+      url: s.url,
+      origen: s.origen,
+    })),
+  });
 }
 
 /**
@@ -100,6 +160,7 @@ export function formatExpenseResponse(gasto: any) {
     usoRucDaplace: gasto.usoRucDaplace === null ? null : Boolean(gasto.usoRucDaplace),
     estado: gasto.estado as EstadoGasto,
     idempotencyKey: gasto.idempotencyKey || undefined,
+    payloadHash: gasto.payloadHash || undefined,
     registradoPor: gasto.registradoPor?.nombre || gasto.registradoPor?.email || gasto.registradoPorId || undefined,
     aprobadoPor: gasto.aprobadoPor?.nombre || gasto.aprobadoPor?.email || gasto.aprobadoPorId || undefined,
     aprobadoEn: gasto.aprobadoEn instanceof Date ? gasto.aprobadoEn.toISOString() : (gasto.aprobadoEn || undefined),
@@ -468,7 +529,25 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       // C. Verificación de Idempotencia
       const safeIdempotencyKey = idempotencyKey && idempotencyKey.trim() ? idempotencyKey.trim() : null;
 
-      if (safeIdempotencyKey) {
+      const incomingHash = safeIdempotencyKey
+        ? computeExpensePayloadHash({
+            propiedadId: propiedadId.trim(),
+            fechaGasto: fechaGasto.trim(),
+            periodoMes: numMes,
+            periodoAnio: numAnio,
+            titulo: titulo.trim(),
+            categoria: categoria.trim(),
+            monto: monto.trim(),
+            moneda: monedaNormalizada,
+            pagadoPor: pagadoPor.trim(),
+            notas: notas && notas.trim() ? notas.trim() : null,
+            repartido: repartido && repartido.trim() ? repartido.trim() : null,
+            usoRucDaplace: usoRucDaplace === undefined || usoRucDaplace === null ? null : Boolean(usoRucDaplace),
+            sustentos,
+          })
+        : null;
+
+      if (safeIdempotencyKey && incomingHash) {
         const gastoExistente = await prisma.gasto.findUnique({
           where: { idempotencyKey: safeIdempotencyKey },
           include: {
@@ -481,31 +560,9 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
         });
 
         if (gastoExistente) {
-          const hashEsperado = computeExpensePayloadHash({
-            propiedadId: propiedadId.trim(),
-            fechaGasto: fechaGasto.trim(),
-            periodoMes: numMes,
-            periodoAnio: numAnio,
-            titulo: titulo.trim(),
-            categoria: categoria.trim(),
-            monto: monto.trim(),
-            pagadoPor: pagadoPor.trim(),
-            moneda: monedaNormalizada,
-          });
+          const hashExistente = getOrComputeExpenseHash(gastoExistente);
 
-          const hashExistente = computeExpensePayloadHash({
-            propiedadId: gastoExistente.propiedadId,
-            fechaGasto: gastoExistente.fechaGasto instanceof Date ? gastoExistente.fechaGasto.toISOString().slice(0, 10) : String(gastoExistente.fechaGasto).slice(0, 10),
-            periodoMes: gastoExistente.periodoMes,
-            periodoAnio: gastoExistente.periodoAnio,
-            titulo: gastoExistente.titulo,
-            categoria: gastoExistente.categoria,
-            monto: new Prisma.Decimal(gastoExistente.monto).toFixed(2),
-            pagadoPor: gastoExistente.pagadoPor,
-            moneda: gastoExistente.moneda,
-          });
-
-          if (hashEsperado === hashExistente) {
+          if (incomingHash === hashExistente) {
             return reply.status(200).send({
               data: formatExpenseResponse(gastoExistente),
               idempotentReplay: true,
@@ -543,6 +600,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
               usoRucDaplace: usoRucDaplace === undefined || usoRucDaplace === null ? null : Boolean(usoRucDaplace),
               estado: 'REGISTRADO',
               idempotencyKey: safeIdempotencyKey,
+              payloadHash: incomingHash,
               registradoPorId: actorId,
               sustentos: sustentos && sustentos.length > 0
                 ? {
@@ -585,6 +643,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
               pagadoPor: gasto.pagadoPor,
               usoRucDaplace: gasto.usoRucDaplace,
               idempotencyKey: safeIdempotencyKey,
+              payloadHash: incomingHash,
               cantidadSustentos: sustentos ? sustentos.length : 0,
             },
             requestId: request.id,
@@ -597,7 +656,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
           data: formatExpenseResponse(nuevoGasto),
         });
       } catch (err: any) {
-        if (err.code === 'P2002' && safeIdempotencyKey) {
+        if (err.code === 'P2002' && safeIdempotencyKey && incomingHash) {
           // Si ocurrió carrera concurrente con la misma clave de idempotencia
           const recheck = await prisma.gasto.findUnique({
             where: { idempotencyKey: safeIdempotencyKey },
@@ -610,9 +669,19 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
             },
           });
           if (recheck) {
-            return reply.status(200).send({
-              data: formatExpenseResponse(recheck),
-              idempotentReplay: true,
+            const hashExistente = getOrComputeExpenseHash(recheck);
+            if (incomingHash === hashExistente) {
+              return reply.status(200).send({
+                data: formatExpenseResponse(recheck),
+                idempotentReplay: true,
+              });
+            }
+            return reply.status(409).send({
+              error: {
+                code: 'IDEMPOTENCY_CONFLICT',
+                message: 'La clave de idempotencia ya fue utilizada con un contenido de gasto diferente.',
+                requestId: request.id,
+              },
             });
           }
           return reply.status(409).send({

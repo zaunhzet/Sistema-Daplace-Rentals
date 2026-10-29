@@ -3,11 +3,52 @@ import { Plus, Receipt, AlertCircle, CheckCircle2, DollarSign, FileText, Ban, Re
 import type { AddEvidenceDto, CreateExpenseDto, Expense, ExpenseFilterParams, UpdateExpenseDto } from '../types';
 import { expenseService } from '../services/expenseService';
 import { propertyService, type Property } from '../../properties';
+import { toCents, fromCents } from '../../../shared/money';
 import { ExpenseFilters } from '../components/ExpenseFilters';
 import { ExpenseList } from '../components/ExpenseList';
 import { ExpenseFormModal } from '../components/ExpenseFormModal';
 import { ExpenseDetailModal } from '../components/ExpenseDetailModal';
 import { ExpenseCancelModal } from '../components/ExpenseCancelModal';
+
+export interface ExpenseKpiMetrics {
+  totalActivo: string;
+  cantActivos: number;
+  totalAnulado: string;
+  cantAnulados: number;
+  promedio: string;
+}
+
+/**
+ * Calcula los indicadores financieros de gastos operativos utilizando aritmética exacta en céntimos enteros.
+ * Mantiene los gastos anulados estrictamente fuera del total activo y los expone en métricas independientes.
+ */
+export function calculateExpenseKpis(expenses: Expense[]): ExpenseKpiMetrics {
+  let totalActivoCents = 0;
+  let cantActivos = 0;
+  let totalAnuladoCents = 0;
+  let cantAnulados = 0;
+
+  for (const e of expenses) {
+    const cents = toCents(e.monto || '0.00');
+    if (e.estado === 'ANULADO') {
+      totalAnuladoCents += cents;
+      cantAnulados++;
+    } else {
+      totalActivoCents += cents;
+      cantActivos++;
+    }
+  }
+
+  const promedioCents = cantActivos > 0 ? Math.round(totalActivoCents / cantActivos) : 0;
+
+  return {
+    totalActivo: fromCents(totalActivoCents),
+    cantActivos,
+    totalAnulado: fromCents(totalAnuladoCents),
+    cantAnulados,
+    promedio: fromCents(promedioCents),
+  };
+}
 
 export const ExpensesPage: React.FC = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -69,34 +110,8 @@ export const ExpensesPage: React.FC = () => {
     return Array.from(new Set([...defaultCats, ...fromExpenses])).sort();
   }, [expenses]);
 
-  // Tarjetas de indicadores
-  const metrics = useMemo(() => {
-    let totalActivo = 0;
-    let cantActivos = 0;
-    let totalAnulado = 0;
-    let cantAnulados = 0;
-
-    for (const e of expenses) {
-      const montoNum = parseFloat(e.monto) || 0;
-      if (e.estado === 'ANULADO') {
-        totalAnulado += montoNum;
-        cantAnulados++;
-      } else {
-        totalActivo += montoNum;
-        cantActivos++;
-      }
-    }
-
-    const promedio = cantActivos > 0 ? (totalActivo / cantActivos).toFixed(2) : '0.00';
-
-    return {
-      totalActivo: totalActivo.toFixed(2),
-      cantActivos,
-      totalAnulado: totalAnulado.toFixed(2),
-      cantAnulados,
-      promedio,
-    };
-  }, [expenses]);
+  // Tarjetas de indicadores con cálculo monetario exacto
+  const metrics = useMemo(() => calculateExpenseKpis(expenses), [expenses]);
 
   const handleFilterChange = (newFilters: Partial<ExpenseFilterParams>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));

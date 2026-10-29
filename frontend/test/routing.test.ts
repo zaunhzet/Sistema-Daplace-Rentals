@@ -10,6 +10,7 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
     '/calendario',
     '/pagos',
     '/garantias',
+    '/gastos',
   ];
 
   const RESERVED_PENDING_ROUTES = [
@@ -20,7 +21,7 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
     '/mantenimiento',
   ];
 
-  it('all 6 operational routes are registered and marked DISPONIBLE in the catalog', () => {
+  it('all 7 operational routes are registered and marked DISPONIBLE in the catalog', () => {
     for (const route of OPERATIONAL_ROUTES) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === route);
       assert.ok(item, `Route ${route} must exist in NAVIGATION_ITEMS`);

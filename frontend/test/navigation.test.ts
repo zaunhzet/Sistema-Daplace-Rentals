@@ -13,12 +13,13 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
       '/calendario',
       '/pagos',
       '/garantias',
+      '/gastos',
       '/reportes',
       '/mantenimiento',
       '/personal',
     ];
 
-    assert.equal(NAVIGATION_ITEMS.length, 10);
+    assert.equal(NAVIGATION_ITEMS.length, expectedPaths.length);
     for (const expected of expectedPaths) {
       assert.ok(paths.includes(expected), `Missing path: ${expected}`);
     }
@@ -29,8 +30,16 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
     assert.equal(loginItem, undefined, 'Login should not be a navigation business item');
   });
 
-  it('marks Propiedades, Huéspedes, Reservas, Calendario, Pagos and Garantías as DISPONIBLE', () => {
-    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario', '/pagos', '/garantias'];
+  it('marks Propiedades, Huéspedes, Reservas, Calendario, Pagos, Garantías and Gastos as DISPONIBLE', () => {
+    const availablePaths = [
+      '/propiedades',
+      '/huespedes',
+      '/reservas',
+      '/calendario',
+      '/pagos',
+      '/garantias',
+      '/gastos',
+    ];
     for (const path of availablePaths) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === path);
       assert.ok(item, `Path ${path} should exist in navigation`);
@@ -40,7 +49,15 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
   });
 
   it('marks remaining routes as PENDIENTE without simulating non-existent features', () => {
-    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario', '/pagos', '/garantias'];
+    const availablePaths = [
+      '/propiedades',
+      '/huespedes',
+      '/reservas',
+      '/calendario',
+      '/pagos',
+      '/garantias',
+      '/gastos',
+    ];
     const pendingItems = NAVIGATION_ITEMS.filter((it) => !availablePaths.includes(it.path));
 
     assert.equal(pendingItems.length, 4);

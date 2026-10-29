@@ -281,6 +281,7 @@ model Gasto {
   usoRucDaplace   Boolean?
   estado          EstadoGasto     @default(REGISTRADO)
   idempotencyKey  String?         @unique
+  payloadHash     String?
 
   registradoPorId String?
   aprobadoPorId   String?
