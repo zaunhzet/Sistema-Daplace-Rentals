@@ -78,9 +78,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/pagos',
     icon: Wallet,
     description: 'Adelantos, saldos y conciliación de ingresos por alquiler (HU-05 / RF05)',
-    status: 'PENDIENTE',
+    status: 'DISPONIBLE',
     responsible: 'André',
     group: 'Finanzas',
+    badge: 'Listo',
   },
   {
     id: 'nav-garantias',
@@ -88,9 +89,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/garantias',
     icon: ShieldCheck,
     description: 'Custodia, devolución y retención separada de fondos (HU-06 / RF06)',
-    status: 'PENDIENTE',
+    status: 'DISPONIBLE',
     responsible: 'André',
     group: 'Finanzas',
+    badge: 'Listo',
   },
   {
     id: 'nav-reportes',

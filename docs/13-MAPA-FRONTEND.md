@@ -16,8 +16,8 @@
 | `/huespedes` | Directorio de Huéspedes | **André** | **DISPONIBLE (Mock)** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas relacionadas. Validación de al menos un contacto. |
 | `/reservas` | Gestión de Reservas | **André** | **DISPONIBLE (Mock)** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes con intervalos [ingreso, salida), liberación por cancelación y reprogramación. |
 | `/calendario` | Calendario Operativo | **André** | **DISPONIBLE (Mock)** | RF01 / HU-01 | Vista mensual de disponibilidad, días ocupados, días de transición (check-out/check-in), detección de bloqueos y trazabilidad directa a reservas. |
-| `/pagos` | Pagos y Conciliación | **André** | *Próximo (P0)* | RF05 / HU-05 | Registro de adelantos, saldos pendientes y conciliación explícita e idempotente. |
-| `/garantias` | Control de Garantías | **André** | *Próximo (P0)* | RF06 / HU-06 | Custodia separada de fondos, devoluciones y retenciones limitadas al saldo disponible. |
+| `/pagos` | Pagos y Conciliación | **André** | **DISPONIBLE (Mock)** | RF05 / HU-05 | Registro de adelantos, saldos pendientes, alertas de sobrepago e idempotencia mock con conciliación explícita. |
+| `/garantias` | Control de Garantías | **André** | **DISPONIBLE (Mock)** | RF06 / HU-06 | Custodia separada de fondos (no ingresos), libro mayor inmutable de movimientos, devoluciones y retenciones limitadas al saldo disponible. |
 | `/reportes` | Reportes de Liquidación | **Diego** | *Próximo (P0)* | RF08, RF12 / HU-07, HU-12 | Reportes por propiedad y período con desglose reproducible y autorización por propietario. |
 | `/mantenimiento` | Mantenimiento y Salidas | **Compartido** | *Próximo (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out, necesidades de mantenimiento y asignación de trabajos. |
 | `/personal` | Personal y Cuentas | **Diego** | *Próximo (P1)* | RF09 / HU-19 | Administración de cuentas internas y roles de operador/mantenimiento. |
@@ -89,6 +89,57 @@
   * `CalendarGrid`: Cuadrícula mensual de 7 columnas (Lunes a Domingo) con cálculo de padding, pills de reserva clickeables y badges de transición (Check-out/Check-in).
   * `CalendarLegend`: Guía visual de estados (Disponible, Ocupado, Transición, Mantenimiento, Inactiva).
 
+### Módulo de Pagos y Conciliación (UI-ANDRE-003)
+* **Ubicación:** `frontend/src/features/payments/`
+* **Importación:**
+  ```tsx
+  import { PaymentsPage, paymentService, financialReadService } from '../features/payments';
+  import type { Payment, CreatePaymentDto, ReconcilePaymentDto, RejectPaymentDto, ReservationFinancialSummary } from '../features/payments';
+  ```
+* **Componentes internos reutilizables:**
+  * `PaymentsPage`: Vista completa con KPIs de cobranza (Total Conciliado, Pendientes, Rechazados, Sobrepagos detectados), banner de inmunidad financiera, filtros combinados, tabla y modales.
+  * `PaymentList`: Tabla de pagos con badges de estado (`PENDIENTE_CONCILIACION`, `CONCILIADO`, `RECHAZADO`), método, referencia, notas de rechazo y acciones contextuales.
+  * `PaymentFilters`: Filtro por texto libre, selector de propiedad, selector de reserva vinculada y estado de conciliación.
+  * `PaymentFormModal`: Registro de adelantos y abonos con validación de importes positivos y clave de idempotencia generada automáticamente.
+  * `PaymentReconcileModal`: Modal de conciliación bancaria explícita con fecha valor y nota de auditoría.
+  * `PaymentRejectModal`: Modal de rechazo formal con motivo obligatorio.
+  * `PaymentDetailModal`: Ficha de auditoría del pago con trazabilidad de fechas, reserva asociada y resumen de cobranza.
+
+### Módulo de Garantías en Custodia (UI-ANDRE-003)
+* **Ubicación:** `frontend/src/features/guarantees/`
+* **Importación:**
+  ```tsx
+  import { GuaranteesPage, guaranteeService } from '../features/guarantees';
+  import type { Guarantee, MovimientoGarantia, CreateGuaranteeDto, RegisterGuaranteeMovementDto } from '../features/guarantees';
+  ```
+* **Componentes internos reutilizables:**
+  * `GuaranteesPage`: Vista completa con KPIs de custodia (Total en Custodia Activa, Retenciones por Daños, Devoluciones, Garantías Liquidadas), banner de custodia separada, filtros y modales.
+  * `GuaranteeList`: Tabla de depósitos en garantía con badges de estado (`PENDIENTE`, `CUSTODIADA`, `DEVUELTA_PARCIAL`, `LIQUIDADA_TOTAL`), desglose de saldo disponible y acciones.
+  * `GuaranteeFilters`: Filtro por texto de reserva, selector de propiedad y estado de garantía.
+  * `GuaranteeFormModal`: Registro de recepción de depósito en garantía (política mock: máximo 1 garantía por reserva) que inicializa el movimiento en el libro mayor.
+  * `GuaranteeMovementModal`: Registro de movimientos contables (Devolución Parcial, Devolución Total o Retención por Daños) validando estrictamente no exceder el saldo disponible.
+  * `GuaranteeDetailModal`: Ficha del depósito con libro mayor cronológico e inmutable de todos los movimientos registrados.
+
+### Módulo de Utilidades Financieras Compartidas (UI-ANDRE-003)
+* **Ubicación:** `frontend/src/shared/money/`
+* **Importación:**
+  ```tsx
+  import {
+    toCents,
+    fromCents,
+    addMoney,
+    subtractMoney,
+    compareMoney,
+    formatMoney,
+    validateMoneyInput,
+    adaptReservationAmount,
+  } from '../shared/money';
+  ```
+* **Características:**
+  * Aritmética exacta en unidades enteras menores (céntimos). Evita errores de redondeo de punto flotante binario IEEE 754.
+  * Adaptador explícito y provisional `adaptReservationAmount` para interoperar con `Reservation.montoAcordado` sin alterar contratos legados de reservas.
+  * Validación estricta de importes (mayor que cero, máximo 2 decimales, no negativos ni NaN).
+
 ---
 
 ## 3. Contrato de Propiedades del Componente Sidebar
@@ -134,6 +185,8 @@ import { PropertiesPage } from './features/properties';
 import { GuestsPage } from './features/guests';
 import { ReservationsPage } from './features/reservations';
 import { CalendarPage } from './features/calendar';
+import { PaymentsPage } from './features/payments';
+import { GuaranteesPage } from './features/guarantees';
 
 export default function AdminLayout() {
   const navigate = useNavigate();
@@ -158,6 +211,8 @@ export default function AdminLayout() {
             <Route path="/huespedes" element={<GuestsPage />} />
             <Route path="/reservas" element={<ReservationsPage />} />
             <Route path="/calendario" element={<CalendarPage />} />
+            <Route path="/pagos" element={<PaymentsPage />} />
+            <Route path="/garantias" element={<GuaranteesPage />} />
             {/* Rutas de Diego y futuros módulos */}
             <Route path="/dashboard" element={<DashboardPlaceholder />} />
             {/* ... */}
@@ -168,6 +223,36 @@ export default function AdminLayout() {
   );
 }
 ```
+
+### Servicio Financiero de Lectura Compartido para Diego (`financialReadService`)
+Para construir el **Dashboard** y los **Reportes de Liquidación** sin duplicar cálculos contables ni vulnerar las reglas de separación patrimonial, Diego puede consumir directamente:
+
+```typescript
+import { financialReadService } from './features/payments';
+
+// 1. Resumen financiero consolidado por reserva:
+const summary = await financialReadService.getReservationSummary('res-01');
+// -> montoAcordado, totalConciliado, totalPendiente, saldoPendiente, hasOverpayment, sobrepagoMonto, estadoLiquidacion
+
+// 2. Desglose contable por propiedad y moneda (solo pagos CONCILIADO):
+const propertyIncome = await financialReadService.getConciliatedIncomeByProperty('prop-01', 'USD');
+// -> totalConciliado, totalPagosConciliados, reservasAfectadas
+
+// 3. Custodia de garantías separada de ingresos por propiedad:
+const propertyGuarantees = await financialReadService.getGuaranteesSummaryByProperty('prop-01', 'USD');
+// -> totalEnCustodia, totalDevuelto, totalRetenido, garantiasActivas
+
+// 4. Métricas globales para tarjetas del Dashboard:
+const globalKpis = await financialReadService.getGlobalFinancialKpis('USD');
+
+// 5. Libro mayor unificado con separación estricta de rubro (ALQUILER vs GARANTIA_CUSTODIA):
+const ledger = await financialReadService.getFinancialLedger({ rubro: 'ALQUILER', fechaInicio: '2026-10-01' });
+```
+
+> **Aviso de Gobernanza Financiera:**  
+> - Los filtros temporales y el criterio de devengo vs. caja en `financialReadService` tienen carácter **provisional** hasta que el negocio apruebe formalmente la política definitiva de liquidaciones a propietarios (RF08).
+> - Las garantías **NUNCA** deben sumarse a la línea de ingresos de alquiler de los propietarios.
+
 
 ---
 
@@ -184,9 +269,9 @@ graph TD
   Pagos --> Reportes
 ```
 
-* **Reservas** requerirá el selector de propiedades (`Property`) y de huéspedes (`Guest`).
-* **Pagos y Garantías** requerirán la referencia de una reserva confirmada (`reservaId`).
-* **Reportes** requerirá pagos conciliados y propiedad asociada.
+* **Reservas** utiliza el selector de propiedades (`Property`) y de huéspedes (`Guest`).
+* **Pagos y Garantías** asocian una reserva existente (`reservaId`), validan consistencia de moneda y mantienen estados y movimientos inmutables.
+* **Dashboard y Reportes (Diego)** consumirán los métodos de `financialReadService`, garantizando que únicamente los pagos `CONCILIADO` se reconozcan como ingresos y que los depósitos de garantía permanezcan en custodia contable separada.
 
 ---
 

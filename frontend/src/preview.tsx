@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
-import { CalendarCheck, CalendarDays, Home, TriangleAlert, Users } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Home, ShieldCheck, TriangleAlert, Users, Wallet } from 'lucide-react';
 import './styles.css';
 import { PropertiesPage } from './features/properties';
 import { GuestsPage } from './features/guests';
 import { ReservationsPage } from './features/reservations';
 import { CalendarPage } from './features/calendar';
+import { PaymentsPage } from './features/payments';
+import { GuaranteesPage } from './features/guarantees';
 import { Sidebar, NAVIGATION_ITEMS } from './shared/navigation';
 import type { NavigationItem } from './shared/navigation';
 
@@ -106,7 +108,7 @@ function PreviewApp() {
 
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-600">
-              Vista previa (UI-ANDRE-002)
+              Vista previa (UI-ANDRE-003)
             </span>
             <button
               type="button"
@@ -156,6 +158,30 @@ function PreviewApp() {
               <CalendarDays size={14} aria-hidden="true" />
               <span>Calendario</span>
             </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPath('/pagos')}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                currentPath === '/pagos'
+                  ? 'bg-[#162A2C] text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <Wallet size={14} aria-hidden="true" />
+              <span>Pagos</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPath('/garantias')}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors cursor-pointer ${
+                currentPath === '/garantias'
+                  ? 'bg-[#162A2C] text-white'
+                  : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+              }`}
+            >
+              <ShieldCheck size={14} aria-hidden="true" />
+              <span>Garantías</span>
+            </button>
           </div>
         </header>
 
@@ -165,10 +191,14 @@ function PreviewApp() {
           {currentPath === '/huespedes' && <GuestsPage />}
           {currentPath === '/reservas' && <ReservationsPage />}
           {currentPath === '/calendario' && <CalendarPage />}
+          {currentPath === '/pagos' && <PaymentsPage />}
+          {currentPath === '/garantias' && <GuaranteesPage />}
           {currentPath !== '/propiedades' &&
             currentPath !== '/huespedes' &&
             currentPath !== '/reservas' &&
-            currentPath !== '/calendario' && (
+            currentPath !== '/calendario' &&
+            currentPath !== '/pagos' &&
+            currentPath !== '/garantias' && (
               <PendingModuleView item={currentItem} />
             )}
         </main>

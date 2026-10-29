@@ -29,8 +29,8 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
     assert.equal(loginItem, undefined, 'Login should not be a navigation business item');
   });
 
-  it('marks Propiedades, Huéspedes, Reservas and Calendario as DISPONIBLE', () => {
-    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario'];
+  it('marks Propiedades, Huéspedes, Reservas, Calendario, Pagos and Garantías as DISPONIBLE', () => {
+    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario', '/pagos', '/garantias'];
     for (const path of availablePaths) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === path);
       assert.ok(item, `Path ${path} should exist in navigation`);
@@ -40,10 +40,10 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
   });
 
   it('marks remaining routes as PENDIENTE without simulating non-existent features', () => {
-    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario'];
+    const availablePaths = ['/propiedades', '/huespedes', '/reservas', '/calendario', '/pagos', '/garantias'];
     const pendingItems = NAVIGATION_ITEMS.filter((it) => !availablePaths.includes(it.path));
 
-    assert.equal(pendingItems.length, 6);
+    assert.equal(pendingItems.length, 4);
     for (const item of pendingItems) {
       assert.equal(item.status, 'PENDIENTE', `Item ${item.name} should be PENDIENTE`);
       assert.ok(item.description.length > 5);
