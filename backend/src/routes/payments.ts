@@ -454,6 +454,32 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         }
       }
 
+      // D. Detección segura de duplicación de referencia operativa (P2)
+      // Criterio seguro: Misma reserva + mismo método de pago + misma moneda + mismo importe + misma referencia
+      // Excluye pagos en estado 'RECHAZADO' para permitir corregir operaciones legítimas tras un rechazo.
+      // No impone índice único global para no colisionar referencias homónimas legítimas entre distintos bancos o reservas.
+      const pagoReferenciaDuplicada = await prisma.pago.findFirst({
+        where: {
+          reservaId,
+          moneda: monedaNormalizada,
+          monto: montoDecimal,
+          metodoPago: metodoPago as MetodoPago,
+          referenciaOperacion: { equals: referencia.trim(), mode: 'insensitive' },
+          estado: { in: ['PENDIENTE_CONCILIACION', 'CONCILIADO'] },
+          ...(safeIdempotencyKey ? { NOT: { idempotencyKey: safeIdempotencyKey } } : {}),
+        },
+      });
+
+      if (pagoReferenciaDuplicada) {
+        return reply.status(409).send({
+          error: {
+            code: 'DUPLICATE_PAYMENT_REFERENCE',
+            message: `Detección de duplicado bancario: ya existe un pago activo registrado para la reserva "${reservaId}" con la misma referencia ("${referencia.trim()}"), método de pago (${metodoPago}), moneda (${monedaNormalizada}) e importe (${montoDecimal.toFixed(2)}).`,
+            requestId: request.id,
+          },
+        });
+      }
+
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
       const actorId = request.user?.id || null;
 
@@ -534,7 +560,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
     });
 
-    // 6. Conciliar pago (HU-05)
+    // 6. Conciliar pago (HU-05) con bloqueo de fila atómico (P1)
     app.post<{
       Params: { id: string };
       Body: {
@@ -545,88 +571,104 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       const { id } = request.params;
       const { referencia, notas } = request.body || {};
 
-      const pagoExistente = await prisma.pago.findUnique({
-        where: { id },
-        include: {
-          reserva: { include: { propiedad: true, huesped: true } },
-          registradoPor: true,
-          conciliadoPor: true,
-        },
-      });
-
-      if (!pagoExistente) {
-        return reply.status(404).send({
-          error: { code: 'NOT_FOUND', message: `El pago "${id}" no existe.`, requestId: request.id },
-        });
-      }
-
-      // Si ya está conciliado: respuesta idempotente sin alterar montos ni fechas históricas
-      if (pagoExistente.estado === 'CONCILIADO') {
-        return reply.status(200).send({
-          data: formatPaymentResponse(pagoExistente),
-          idempotentReplay: true,
-        });
-      }
-
-      // Si está rechazado: no se permite conciliación directa
-      if (pagoExistente.estado === 'RECHAZADO') {
-        return reply.status(400).send({
-          error: {
-            code: 'INVALID_STATE_TRANSITION',
-            message: 'Un pago rechazado no puede ser conciliado directamente. Debe registrarse un nuevo pago válido.',
-            requestId: request.id,
-          },
-        });
-      }
-
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
       const actorId = request.user?.id || null;
       const now = new Date();
 
-      const pagoConciliado = await prisma.$transaction(async (tx) => {
-        const actualizado = await tx.pago.update({
-          where: { id },
-          data: {
-            estado: 'CONCILIADO',
-            conciliadoPorId: actorId,
-            conciliadoEn: now,
-            referenciaOperacion: referencia && referencia.trim() ? referencia.trim() : undefined,
-            notas: notas && notas.trim()
-              ? pagoExistente.notas
-                ? `${pagoExistente.notas} | Conciliación: ${notas.trim()}`
-                : notas.trim()
-              : undefined,
-          },
-          include: {
-            reserva: { include: { propiedad: true, huesped: true } },
-            registradoPor: true,
-            conciliadoPor: true,
-          },
+      try {
+        const resultado = await prisma.$transaction(async (tx) => {
+          // Bloqueo pesimista de fila en PostgreSQL para transiciones concurrentes atómicas
+          const lockedRows: any[] = await tx.$queryRaw`
+            SELECT id FROM "pagos" WHERE id = ${id} FOR UPDATE;
+          `;
+
+          if (!lockedRows || lockedRows.length === 0) {
+            throw new Error('PAYMENT_NOT_FOUND');
+          }
+
+          const pagoActual = await tx.pago.findUniqueOrThrow({
+            where: { id },
+            include: {
+              reserva: { include: { propiedad: true, huesped: true } },
+              registradoPor: true,
+              conciliadoPor: true,
+            },
+          });
+
+          // Si ya está conciliado: respuesta idempotente sin alterar montos ni fechas históricas ni duplicar auditoría
+          if (pagoActual.estado === 'CONCILIADO') {
+            return { pago: pagoActual, idempotentReplay: true };
+          }
+
+          // Si está rechazado: no se permite conciliación directa
+          if (pagoActual.estado === 'RECHAZADO') {
+            throw new Error('PAYMENT_ALREADY_REJECTED');
+          }
+
+          const actualizado = await tx.pago.update({
+            where: { id },
+            data: {
+              estado: 'CONCILIADO',
+              conciliadoPorId: actorId,
+              conciliadoEn: now,
+              referenciaOperacion: referencia && referencia.trim() ? referencia.trim() : undefined,
+              notas: notas && notas.trim()
+                ? pagoActual.notas
+                  ? `${pagoActual.notas} | Conciliación: ${notas.trim()}`
+                  : notas.trim()
+                : undefined,
+            },
+            include: {
+              reserva: { include: { propiedad: true, huesped: true } },
+              registradoPor: true,
+              conciliadoPor: true,
+            },
+          });
+
+          // Registrar auditoría ÚNICAMENTE para la transición efectivamente realizada
+          await recordAuditEvent(tx, {
+            entidad: 'Pago',
+            entidadId: id,
+            accion: 'PAGO_CONCILIADO',
+            actor: actorEmail,
+            motivo: `Pago por ${actualizado.monto} ${actualizado.moneda} conciliado formalmente.`,
+            detalles: {
+              pagoId: id,
+              monto: new Prisma.Decimal(actualizado.monto).toFixed(2),
+              moneda: actualizado.moneda,
+              conciliadoPor: actorEmail,
+              conciliadoEn: now.toISOString(),
+            },
+            requestId: request.id,
+          });
+
+          return { pago: actualizado, idempotentReplay: false };
         });
 
-        await recordAuditEvent(tx, {
-          entidad: 'Pago',
-          entidadId: id,
-          accion: 'PAGO_CONCILIADO',
-          actor: actorEmail,
-          motivo: `Pago por ${actualizado.monto} ${actualizado.moneda} conciliado formalmente.`,
-          detalles: {
-            pagoId: id,
-            monto: new Prisma.Decimal(actualizado.monto).toFixed(2),
-            moneda: actualizado.moneda,
-            conciliadoPor: actorEmail,
-            conciliadoEn: now.toISOString(),
-          },
-          requestId: request.id,
+        return reply.status(200).send({
+          data: formatPaymentResponse(resultado.pago),
+          idempotentReplay: resultado.idempotentReplay || undefined,
         });
-
-        return actualizado;
-      });
-
-      return reply.send({ data: formatPaymentResponse(pagoConciliado) });
+      } catch (err: any) {
+        if (err.message === 'PAYMENT_NOT_FOUND') {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message: `El pago "${id}" no existe.`, requestId: request.id },
+          });
+        }
+        if (err.message === 'PAYMENT_ALREADY_REJECTED') {
+          return reply.status(400).send({
+            error: {
+              code: 'INVALID_STATE_TRANSITION',
+              message: 'Un pago rechazado no puede ser conciliado directamente. Debe registrarse un nuevo pago válido.',
+              requestId: request.id,
+            },
+          });
+        }
+        throw err;
+      }
     });
 
-    // 7. Rechazar pago (HU-05)
+    // 7. Rechazar pago (HU-05) con bloqueo de fila atómico (P1)
     app.post<{
       Params: { id: string };
       Body: {
@@ -646,78 +688,94 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
         });
       }
 
-      const pagoExistente = await prisma.pago.findUnique({
-        where: { id },
-        include: {
-          reserva: { include: { propiedad: true, huesped: true } },
-          registradoPor: true,
-          conciliadoPor: true,
-        },
-      });
-
-      if (!pagoExistente) {
-        return reply.status(404).send({
-          error: { code: 'NOT_FOUND', message: `El pago "${id}" no existe.`, requestId: request.id },
-        });
-      }
-
-      // No permitir rechazo de pagos ya conciliados sin proceso contable formal
-      if (pagoExistente.estado === 'CONCILIADO') {
-        return reply.status(409).send({
-          error: {
-            code: 'INVALID_STATE_TRANSITION',
-            message: 'No se puede rechazar un pago previamente conciliado sin una política de reversa contable formal.',
-            requestId: request.id,
-          },
-        });
-      }
-
-      // Si ya está rechazado: respuesta idempotente
-      if (pagoExistente.estado === 'RECHAZADO') {
-        return reply.status(200).send({
-          data: formatPaymentResponse(pagoExistente),
-          idempotentReplay: true,
-        });
-      }
-
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
       const now = new Date();
 
-      const pagoRechazado = await prisma.$transaction(async (tx) => {
-        const actualizado = await tx.pago.update({
-          where: { id },
-          data: {
-            estado: 'RECHAZADO',
-            motivoRechazo: motivo.trim(),
-            rechazadoEn: now,
-          },
-          include: {
-            reserva: { include: { propiedad: true, huesped: true } },
-            registradoPor: true,
-            conciliadoPor: true,
-          },
+      try {
+        const resultado = await prisma.$transaction(async (tx) => {
+          // Bloqueo pesimista de fila en PostgreSQL para transiciones concurrentes atómicas
+          const lockedRows: any[] = await tx.$queryRaw`
+            SELECT id FROM "pagos" WHERE id = ${id} FOR UPDATE;
+          `;
+
+          if (!lockedRows || lockedRows.length === 0) {
+            throw new Error('PAYMENT_NOT_FOUND');
+          }
+
+          const pagoActual = await tx.pago.findUniqueOrThrow({
+            where: { id },
+            include: {
+              reserva: { include: { propiedad: true, huesped: true } },
+              registradoPor: true,
+              conciliadoPor: true,
+            },
+          });
+
+          // No permitir rechazo de pagos ya conciliados sin proceso contable formal
+          if (pagoActual.estado === 'CONCILIADO') {
+            throw new Error('PAYMENT_ALREADY_CONCILIATED');
+          }
+
+          // Si ya está rechazado: respuesta idempotente sin duplicar auditoría
+          if (pagoActual.estado === 'RECHAZADO') {
+            return { pago: pagoActual, idempotentReplay: true };
+          }
+
+          const actualizado = await tx.pago.update({
+            where: { id },
+            data: {
+              estado: 'RECHAZADO',
+              motivoRechazo: motivo.trim(),
+              rechazadoEn: now,
+            },
+            include: {
+              reserva: { include: { propiedad: true, huesped: true } },
+              registradoPor: true,
+              conciliadoPor: true,
+            },
+          });
+
+          // Registrar auditoría ÚNICAMENTE para la transición efectivamente realizada
+          await recordAuditEvent(tx, {
+            entidad: 'Pago',
+            entidadId: id,
+            accion: 'PAGO_RECHAZADO',
+            actor: actorEmail,
+            motivo: `Pago rechazado: ${motivo.trim()}`,
+            detalles: {
+              pagoId: id,
+              monto: new Prisma.Decimal(actualizado.monto).toFixed(2),
+              moneda: actualizado.moneda,
+              motivoRechazo: motivo.trim(),
+              rechazadoEn: now.toISOString(),
+            },
+            requestId: request.id,
+          });
+
+          return { pago: actualizado, idempotentReplay: false };
         });
 
-        await recordAuditEvent(tx, {
-          entidad: 'Pago',
-          entidadId: id,
-          accion: 'PAGO_RECHAZADO',
-          actor: actorEmail,
-          motivo: `Pago rechazado: ${motivo.trim()}`,
-          detalles: {
-            pagoId: id,
-            monto: new Prisma.Decimal(actualizado.monto).toFixed(2),
-            moneda: actualizado.moneda,
-            motivoRechazo: motivo.trim(),
-            rechazadoEn: now.toISOString(),
-          },
-          requestId: request.id,
+        return reply.status(200).send({
+          data: formatPaymentResponse(resultado.pago),
+          idempotentReplay: resultado.idempotentReplay || undefined,
         });
-
-        return actualizado;
-      });
-
-      return reply.send({ data: formatPaymentResponse(pagoRechazado) });
+      } catch (err: any) {
+        if (err.message === 'PAYMENT_NOT_FOUND') {
+          return reply.status(404).send({
+            error: { code: 'NOT_FOUND', message: `El pago "${id}" no existe.`, requestId: request.id },
+          });
+        }
+        if (err.message === 'PAYMENT_ALREADY_CONCILIATED') {
+          return reply.status(409).send({
+            error: {
+              code: 'INVALID_STATE_TRANSITION',
+              message: 'No se puede rechazar un pago previamente conciliado sin una política de reversa contable formal.',
+              requestId: request.id,
+            },
+          });
+        }
+        throw err;
+      }
     });
   };
 }

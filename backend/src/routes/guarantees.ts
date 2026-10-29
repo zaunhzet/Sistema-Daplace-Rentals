@@ -75,6 +75,49 @@ export function deriveGuaranteeState(
 }
 
 /**
+ * Compara canónicamente un movimiento existente con el payload esperado para verificar idempotencia estricta.
+ * Evalúa: garantía, tipo, importe decimal exacto, motivo y documento de soporte.
+ */
+export function isMatchingGuaranteeMovementPayload(
+  existente: {
+    garantiaId: string;
+    tipo: string;
+    monto: Prisma.Decimal | string | number;
+    motivo: string;
+    documentoSoporte: string | null;
+  },
+  esperado: {
+    garantiaId: string;
+    tipo: string;
+    importe: string;
+    motivo: string;
+    documentoSoporte?: string | null;
+  }
+): boolean {
+  if (existente.garantiaId !== esperado.garantiaId) {
+    return false;
+  }
+  if (existente.tipo !== esperado.tipo) {
+    return false;
+  }
+  const existenteMontoStr = new Prisma.Decimal(existente.monto).toFixed(2);
+  const esperadoMontoStr = new Prisma.Decimal(esperado.importe.trim()).toFixed(2);
+  if (existenteMontoStr !== esperadoMontoStr) {
+    return false;
+  }
+  if (existente.motivo.trim() !== esperado.motivo.trim()) {
+    return false;
+  }
+  const docExistente = existente.documentoSoporte ? existente.documentoSoporte.trim() : null;
+  const docEsperado = esperado.documentoSoporte && esperado.documentoSoporte.trim() ? esperado.documentoSoporte.trim() : null;
+  if (docExistente !== docEsperado) {
+    return false;
+  }
+  return true;
+}
+
+/**
+
  * Mapea una Garantía de Prisma al contrato esperado por el Frontend.
  */
 export function formatGuaranteeResponse(garantia: any) {
@@ -480,18 +523,36 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
             orderBy: { creadoEn: 'asc' },
           });
 
-          // Verificar si este movimiento ya fue registrado de forma idempotente
+          // Verificar si este movimiento ya fue registrado de forma idempotente con su payload canónico completo
           if (safeIdempotencyKey) {
-            const movimientoExistente = movimientosActuales.find((m) => m.idempotencyKey === safeIdempotencyKey);
+            const movimientoExistente = await tx.movimientoGarantia.findUnique({
+              where: { idempotencyKey: safeIdempotencyKey },
+            });
+
             if (movimientoExistente) {
-              const garantiaCompleta = await tx.garantia.findUniqueOrThrow({
-                where: { id: garantiaId },
-                include: {
-                  reserva: { include: { propiedad: true, huesped: true } },
-                  movimientos: { include: { actor: true }, orderBy: { creadoEn: 'asc' } },
-                },
+              const coincide = isMatchingGuaranteeMovementPayload(movimientoExistente, {
+                garantiaId,
+                tipo,
+                importe,
+                motivo,
+                documentoSoporte,
               });
-              return { garantia: garantiaCompleta, idempotentReplay: true };
+
+              if (coincide) {
+                const garantiaCompleta = await tx.garantia.findUniqueOrThrow({
+                  where: { id: garantiaId },
+                  include: {
+                    reserva: { include: { propiedad: true, huesped: true } },
+                    movimientos: { include: { actor: true }, orderBy: { creadoEn: 'asc' } },
+                  },
+                });
+                return { garantia: garantiaCompleta, idempotentReplay: true };
+              }
+
+              // Misma clave y payload diferente: 409 IDEMPOTENCY_CONFLICT
+              const conflictErr = new Error('IDEMPOTENCY_CONFLICT');
+              (conflictErr as any).code = 'IDEMPOTENCY_CONFLICT';
+              throw conflictErr;
             }
           }
 
@@ -596,11 +657,50 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
             },
           });
         }
-        if (err.code === 'P2002') {
+        if (err.message === 'IDEMPOTENCY_CONFLICT' || err.code === 'IDEMPOTENCY_CONFLICT') {
           return reply.status(409).send({
             error: {
               code: 'IDEMPOTENCY_CONFLICT',
-              message: 'La clave de idempotencia ya fue utilizada para otro movimiento.',
+              message: 'La clave de idempotencia ya fue utilizada con una carga útil diferente (garantía, tipo, importe, motivo o documento de soporte).',
+              requestId: request.id,
+            },
+          });
+        }
+        if (err.code === 'P2002') {
+          // Si ocurrió colisión única en la clave de idempotencia por concurrencia
+          if (safeIdempotencyKey) {
+            const mov = await prisma.movimientoGarantia.findUnique({
+              where: { idempotencyKey: safeIdempotencyKey },
+            });
+            if (
+              mov &&
+              isMatchingGuaranteeMovementPayload(mov, {
+                garantiaId,
+                tipo,
+                importe,
+                motivo,
+                documentoSoporte,
+              })
+            ) {
+              const garantiaCompleta = await prisma.garantia.findUnique({
+                where: { id: garantiaId },
+                include: {
+                  reserva: { include: { propiedad: true, huesped: true } },
+                  movimientos: { include: { actor: true }, orderBy: { creadoEn: 'asc' } },
+                },
+              });
+              if (garantiaCompleta) {
+                return reply.status(200).send({
+                  data: formatGuaranteeResponse(garantiaCompleta),
+                  idempotentReplay: true,
+                });
+              }
+            }
+          }
+          return reply.status(409).send({
+            error: {
+              code: 'IDEMPOTENCY_CONFLICT',
+              message: 'La clave de idempotencia ya fue utilizada para otro movimiento con diferente carga útil.',
               requestId: request.id,
             },
           });

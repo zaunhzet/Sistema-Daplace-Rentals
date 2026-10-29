@@ -238,7 +238,148 @@ describe('BACKEND-002: Persistencia Financiera, Pagos, Conciliación y Control d
       assert.ok(data.alertaSobrepago?.includes('ALERTA DE SOBREPAGO'));
       assert.equal(data.saldoPendiente, '0.00');
     });
+
+    it('1.9. Concurrencia transaccional: conciliar y rechazar simultáneamente el mismo pago garantiza transición atómica exclusiva y única auditoría', async () => {
+      // Registrar un pago nuevo en estado PENDIENTE_CONCILIACION
+      const regRes = await app.inject({
+        method: 'POST',
+        url: '/api/pagos',
+        payload: {
+          reservaId: 'res-05',
+          importe: '300.00',
+          moneda: 'PEN',
+          concepto: 'ADELANTO',
+          metodoPago: 'TRANSFERENCIA',
+          referencia: 'CONCURRENCY-RACE-01',
+          fechaPago: '2026-10-28',
+        },
+      });
+      assert.equal(regRes.statusCode, 201);
+      const pagoId = regRes.json().data.id;
+
+      // Disparar conciliación y rechazo concurrentes con Promise.all
+      const [resConciliar, resRechazar] = await Promise.all([
+        app.inject({
+          method: 'POST',
+          url: `/api/pagos/${pagoId}/conciliar`,
+          payload: { notas: 'Conciliación concurrente' },
+        }),
+        app.inject({
+          method: 'POST',
+          url: `/api/pagos/${pagoId}/rechazar`,
+          payload: { motivo: 'Rechazo concurrente por inconsistencia' },
+        }),
+      ]);
+
+      const codes = [resConciliar.statusCode, resRechazar.statusCode];
+      // Exactamente una solicitud debe haber ganado (200) y la otra debe haber fallado (409 o 400)
+      assert.ok(codes.includes(200), 'Exactamente una solicitud de transición debe triunfar');
+      const winningResponse = resConciliar.statusCode === 200 ? resConciliar : resRechazar;
+      const losingResponse = resConciliar.statusCode === 200 ? resRechazar : resConciliar;
+
+      const estadoFinal = winningResponse.json().data.estado;
+      assert.ok(estadoFinal === 'CONCILIADO' || estadoFinal === 'RECHAZADO');
+      assert.ok(
+        losingResponse.statusCode === 409 || losingResponse.statusCode === 400,
+        `La solicitud perdedora debe recibir conflicto o error de estado inválido. Recibió: ${losingResponse.statusCode}`
+      );
+
+      // Comprobar estado real en PostgreSQL
+      const pagoEnDb = await db.prisma.pago.findUniqueOrThrow({ where: { id: pagoId } });
+      assert.equal(pagoEnDb.estado, estadoFinal);
+
+      // Invariante crítico: registrar auditoría ÚNICAMENTE para la transición efectivamente realizada
+      const auditoriasTransicion = await db.prisma.auditoriaEvento.findMany({
+        where: {
+          entidad: 'Pago',
+          entidadId: pagoId,
+          accion: { in: ['PAGO_CONCILIADO', 'PAGO_RECHAZADO'] },
+        },
+      });
+      assert.equal(auditoriasTransicion.length, 1, 'Debe registrarse exactamente una auditoría para la transición ejecutada');
+      assert.equal(
+        auditoriasTransicion[0].accion,
+        estadoFinal === 'CONCILIADO' ? 'PAGO_CONCILIADO' : 'PAGO_RECHAZADO'
+      );
+    });
+
+    it('1.10. Detección segura de duplicación de referencia bancaria dentro de la misma reserva (P2)', async () => {
+      // Pago inicial legítimo
+      const res1 = await app.inject({
+        method: 'POST',
+        url: '/api/pagos',
+        payload: {
+          reservaId: 'res-05',
+          importe: '120.00',
+          moneda: 'PEN',
+          concepto: 'ADELANTO',
+          metodoPago: 'TRANSFERENCIA',
+          referencia: 'REF-BCP-SHARED-001',
+          fechaPago: '2026-10-28',
+          idempotencyKey: 'idem-ref-dup-1',
+        },
+      });
+      assert.equal(res1.statusCode, 201);
+      const pago1Id = res1.json().data.id;
+
+      // Intento de registrar la misma transacción con diferente clave de idempotencia en la misma reserva
+      const resDup = await app.inject({
+        method: 'POST',
+        url: '/api/pagos',
+        payload: {
+          reservaId: 'res-05',
+          importe: '120.00',
+          moneda: 'PEN',
+          concepto: 'ADELANTO',
+          metodoPago: 'TRANSFERENCIA',
+          referencia: 'REF-BCP-SHARED-001',
+          fechaPago: '2026-10-28',
+          idempotencyKey: 'idem-ref-dup-2', // Clave diferente
+        },
+      });
+      assert.equal(resDup.statusCode, 409);
+      assert.equal(resDup.json().error.code, 'DUPLICATE_PAYMENT_REFERENCE');
+
+      // Comprobar que en OTRA reserva diferente no se bloquea indebidamente
+      const resOtraReserva = await app.inject({
+        method: 'POST',
+        url: '/api/pagos',
+        payload: {
+          reservaId: 'res-04',
+          importe: '120.00',
+          moneda: 'PEN',
+          concepto: 'ADELANTO',
+          metodoPago: 'TRANSFERENCIA',
+          referencia: 'REF-BCP-SHARED-001', // Misma ref pero en otra reserva
+          fechaPago: '2026-10-28',
+        },
+      });
+      assert.equal(resOtraReserva.statusCode, 201);
+
+      // Si el pago original es rechazado, la referencia debe poder ser reutilizada para corrección legítima
+      await app.inject({
+        method: 'POST',
+        url: `/api/pagos/${pago1Id}/rechazar`,
+        payload: { motivo: 'Comprobante errado, volver a registrar' },
+      });
+
+      const resReintentoValido = await app.inject({
+        method: 'POST',
+        url: '/api/pagos',
+        payload: {
+          reservaId: 'res-05',
+          importe: '120.00',
+          moneda: 'PEN',
+          concepto: 'ADELANTO',
+          metodoPago: 'TRANSFERENCIA',
+          referencia: 'REF-BCP-SHARED-001',
+          fechaPago: '2026-10-28',
+        },
+      });
+      assert.equal(resReintentoValido.statusCode, 201);
+    });
   });
+
 
   describe('2. Idempotencia Robusta en PostgreSQL', () => {
     it('2.1. Idempotency key con payload idéntico devuelve registro existente (200/201)', async () => {
@@ -524,7 +665,166 @@ describe('BACKEND-002: Persistencia Financiera, Pagos, Conciliación y Control d
       assert.equal(data.totalPagosConciliados, '700.00'); // No incluye los 500 de garantía
       assert.equal(data.saldoPendiente, '700.00'); // 1400 acordado - 700 conciliado
     });
+
+    it('3.9. Idempotencia en movimientos de garantía: misma clave y mismo payload retorna respuesta idempotente sin duplicar movimientos ni auditoría', async () => {
+      // Creamos una garantía dedicada en res-06
+      const regGarantia = await app.inject({
+        method: 'POST',
+        url: '/api/garantias',
+        payload: {
+          reservaId: 'res-06',
+          importe: '400.00',
+          moneda: 'PEN',
+          motivo: 'Custodia para pruebas de idempotencia',
+        },
+      });
+      assert.equal(regGarantia.statusCode, 201);
+      const garantiaId = regGarantia.json().data.id;
+
+      const payloadMovimiento = {
+        tipo: 'RETENCION',
+        importe: '50.00',
+        motivo: 'Daño leve en cortinas',
+        documentoSoporte: 'https://docs.example/acta-01.pdf',
+        idempotencyKey: 'idem-gar-mov-01',
+      };
+
+      // Primer registro
+      const res1 = await app.inject({
+        method: 'POST',
+        url: `/api/garantias/${garantiaId}/movimientos`,
+        payload: payloadMovimiento,
+      });
+      assert.equal(res1.statusCode, 201);
+      assert.equal(res1.json().data.totalRetenido, '50.00');
+
+      // Reintento idéntico con misma clave y mismo payload canónico
+      const res2 = await app.inject({
+        method: 'POST',
+        url: `/api/garantias/${garantiaId}/movimientos`,
+        payload: payloadMovimiento,
+      });
+      assert.equal(res2.statusCode, 200);
+      assert.equal(res2.json().idempotentReplay, true);
+      assert.equal(res2.json().data.totalRetenido, '50.00');
+
+      // Verificar en BD que NO se duplicó el movimiento
+      const countMovimientos = await db.prisma.movimientoGarantia.count({
+        where: { idempotencyKey: 'idem-gar-mov-01' },
+      });
+      assert.equal(countMovimientos, 1, 'Debe existir exactamente un movimiento persistido');
+
+      // Verificar que NO se duplicó el evento de auditoría
+      const countAuditorias = await db.prisma.auditoriaEvento.count({
+        where: {
+          entidad: 'Garantia',
+          entidadId: garantiaId,
+          accion: 'GARANTIA_RETENCION',
+          motivo: 'Daño leve en cortinas',
+        },
+      });
+      assert.equal(countAuditorias, 1, 'Debe existir exactamente una auditoría para el movimiento idempotente');
+    });
+
+    it('3.10. Idempotencia en movimientos de garantía: misma clave y payload alterado retorna 409 IDEMPOTENCY_CONFLICT', async () => {
+      // Obtener la garantía creada en 3.9 (res-06)
+      const resGarantia = await app.inject({
+        method: 'GET',
+        url: '/api/reservas/res-06/garantia',
+      });
+      const garantiaId = resGarantia.json().data.id;
+
+      // Reutilizar clave 'idem-gar-mov-01' pero con monto diferente (75.00 en vez de 50.00)
+      const resConflictoMonto = await app.inject({
+        method: 'POST',
+        url: `/api/garantias/${garantiaId}/movimientos`,
+        payload: {
+          tipo: 'RETENCION',
+          importe: '75.00', // Alterado
+          motivo: 'Daño leve en cortinas',
+          documentoSoporte: 'https://docs.example/acta-01.pdf',
+          idempotencyKey: 'idem-gar-mov-01',
+        },
+      });
+      assert.equal(resConflictoMonto.statusCode, 409);
+      assert.equal(resConflictoMonto.json().error.code, 'IDEMPOTENCY_CONFLICT');
+
+      // Reutilizar clave 'idem-gar-mov-01' pero con motivo diferente
+      const resConflictoMotivo = await app.inject({
+        method: 'POST',
+        url: `/api/garantias/${garantiaId}/movimientos`,
+        payload: {
+          tipo: 'RETENCION',
+          importe: '50.00',
+          motivo: 'Otro motivo no registrado', // Alterado
+          documentoSoporte: 'https://docs.example/acta-01.pdf',
+          idempotencyKey: 'idem-gar-mov-01',
+        },
+      });
+      assert.equal(resConflictoMotivo.statusCode, 409);
+      assert.equal(resConflictoMotivo.json().error.code, 'IDEMPOTENCY_CONFLICT');
+
+      // Reutilizar clave 'idem-gar-mov-01' en OTRA garantía
+      const resConflictoGarantia = await app.inject({
+        method: 'POST',
+        url: '/api/garantias/gar-01/movimientos',
+        payload: {
+          tipo: 'RETENCION',
+          importe: '50.00',
+          motivo: 'Daño leve en cortinas',
+          documentoSoporte: 'https://docs.example/acta-01.pdf',
+          idempotencyKey: 'idem-gar-mov-01', // Clave ya usada en otra garantía
+        },
+      });
+      assert.equal(resConflictoGarantia.statusCode, 409);
+      assert.equal(resConflictoGarantia.json().error.code, 'IDEMPOTENCY_CONFLICT');
+    });
+
+    it('3.11. Concurrencia en movimientos de garantía con la misma clave de idempotencia no duplica registros', async () => {
+      const resGarantia = await app.inject({
+        method: 'GET',
+        url: '/api/reservas/res-06/garantia',
+      });
+      const garantiaId = resGarantia.json().data.id;
+
+      const payload = {
+        tipo: 'DEVOLUCION_PARCIAL',
+        importe: '30.00',
+        motivo: 'Devolución parcial concurrente',
+        idempotencyKey: 'idem-gar-concurrent-test',
+      };
+
+      const results = await Promise.all([
+        app.inject({ method: 'POST', url: `/api/garantias/${garantiaId}/movimientos`, payload }),
+        app.inject({ method: 'POST', url: `/api/garantias/${garantiaId}/movimientos`, payload }),
+        app.inject({ method: 'POST', url: `/api/garantias/${garantiaId}/movimientos`, payload }),
+      ]);
+
+      const codes = results.map((r) => r.statusCode);
+      assert.ok(codes.includes(201), 'Una de las solicitudes debió ser 201 Created');
+      for (const code of codes) {
+        assert.ok(code === 201 || code === 200, `Código inesperado en concurrencia: ${code}`);
+      }
+
+      // En base de datos PostgreSQL: exactamente 1 movimiento registrado con esta clave
+      const count = await db.prisma.movimientoGarantia.count({
+        where: { idempotencyKey: 'idem-gar-concurrent-test' },
+      });
+      assert.equal(count, 1, 'Debe persistirse exactamente un movimiento');
+
+      // Exactamente una auditoría
+      const countAuditorias = await db.prisma.auditoriaEvento.count({
+        where: {
+          entidad: 'Garantia',
+          entidadId: garantiaId,
+          accion: 'GARANTIA_DEVOLUCION_PARCIAL',
+          motivo: 'Devolución parcial concurrente',
+        },
+      });
+      assert.equal(countAuditorias, 1, 'Debe registrarse exactamente una auditoría');
+    });
   });
+
 
   describe('4. Autorización y Seguridad Financiera', () => {
     it('4.1. Deniega acceso sin autenticación (401)', async () => {
