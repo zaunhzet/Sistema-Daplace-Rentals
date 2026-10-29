@@ -6,6 +6,7 @@ import { registerReservationsRoutes } from '../routes/reservations.js';
 import { registerCalendarRoutes } from '../routes/calendar.js';
 import { registerPaymentsRoutes } from '../routes/payments.js';
 import { registerGuaranteesRoutes } from '../routes/guarantees.js';
+import { registerExpensesRoutes } from '../routes/expenses.js';
 import { authenticateRequestHook } from '../shared/auth.js';
 
 type ReadinessCheck = () => Promise<void>;
@@ -147,6 +148,7 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
     app.register(registerCalendarRoutes(prisma));
     app.register(registerPaymentsRoutes(prisma));
     app.register(registerGuaranteesRoutes(prisma));
+    app.register(registerExpensesRoutes(prisma));
   }
 
   return app;
