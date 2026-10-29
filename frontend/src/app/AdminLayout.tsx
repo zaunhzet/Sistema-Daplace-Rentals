@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router';
 import { Menu, ChevronRight } from 'lucide-react';
 import { Sidebar, NAVIGATION_ITEMS } from '../shared/navigation';
+import { useAuth } from '../features/auth';
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { session, logoutDemo } = useAuth();
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
@@ -65,14 +67,40 @@ export const AdminLayout: React.FC = () => {
             </nav>
           </div>
 
-          {/* Right Header: Discrete Neutral Environment Indicator */}
-          <div className="flex items-center gap-2 shrink-0">
-            <span
-              className="text-[11px] text-stone-400 font-normal tracking-tight select-none"
-              title="Entorno de demostración con datos mock en memoria. Autenticación de operadores en desarrollo."
-            >
-              Entorno de prueba <span className="hidden sm:inline">· Sin autenticación</span>
-            </span>
+          {/* Right Header: Discrete Neutral Environment Indicator + Demo Auth */}
+          <div className="flex items-center gap-3 shrink-0">
+            {session.isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
+                  <span className="size-1.5 rounded-full bg-emerald-600" />
+                  {session.user?.nombre} ({session.user?.rol}) <span className="text-[10px] text-emerald-600 font-bold tracking-wider">· DEMO</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={logoutDemo}
+                  className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 cursor-pointer"
+                  title="Cerrar la sesión de demostración"
+                >
+                  Cerrar sesión demo
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <span
+                  className="hidden md:inline text-[11px] text-stone-400 font-normal tracking-tight select-none"
+                  title="Entorno transaccional conectado a PostgreSQL. Autenticación demo en desarrollo."
+                >
+                  Entorno de prueba <span className="hidden lg:inline">· Sin autenticación</span>
+                </span>
+                <NavLink
+                  to="/login"
+                  className="rounded-lg bg-[#183b32] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#122e27] cursor-pointer"
+                  title="Acceso al formulario de Login Demo (HU-08)"
+                >
+                  Iniciar sesión demo
+                </NavLink>
+              </div>
+            )}
           </div>
         </header>
 

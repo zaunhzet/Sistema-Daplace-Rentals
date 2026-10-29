@@ -1,4 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router';
+import { AuthProvider, useAuth } from '../features/auth';
+import { LoginForm } from '../features/auth';
 import { AdminLayout } from './AdminLayout';
 import { PropertiesPage } from '../features/properties';
 import { GuestsPage } from '../features/guests';
@@ -15,11 +17,16 @@ import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../fe
 // de alcance y enfocado exclusivamente en gestión administrativa. Se activa con VITE_ENABLE_PUBLIC_BOOKING=true.
 const ENABLE_PUBLIC_BOOKING = import.meta.env.VITE_ENABLE_PUBLIC_BOOKING === 'true';
 
-export default function App() {
+function AppRoutes() {
+  const { session } = useAuth();
+
   return (
     <Routes>
-      {/* 1. Ruta de Login reservada fuera del shell administrativo para Diego */}
-      <Route path="/login" element={<PendingModuleView path="/login" />} />
+      {/* 1. Ruta de Login de Diego (formulario demo fuera del shell administrativo) */}
+      <Route
+        path="/login"
+        element={session.isAuthenticated ? <Navigate to="/propiedades" replace /> : <LoginForm />}
+      />
 
       {/* 2. Portal Público de Reservas (Pospuesto en esta etapa - activo solo con feature flag) */}
       {ENABLE_PUBLIC_BOOKING && (
@@ -29,9 +36,9 @@ export default function App() {
         </Route>
       )}
 
-      {/* 3. Panel Administrativo Transaccional (Shell Operativo Principal) */}
+      {/* 3. Panel Administrativo Transaccional (Shell Operativo Principal de André) */}
       <Route element={<AdminLayout />}>
-        {/* Ruta raíz redirige a /propiedades */}
+        {/* Ruta raíz redirige al módulo operativo disponible */}
         <Route index element={<Navigate to="/propiedades" replace />} />
 
         {/* Módulos Operativos (André) */}
@@ -53,5 +60,13 @@ export default function App() {
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }
