@@ -1,11 +1,39 @@
 import Fastify, { type FastifyError, type FastifyInstance } from 'fastify';
+import type { PrismaClient } from '../generated/prisma/client.js';
+import { registerPropertiesRoutes } from '../routes/properties.js';
+import { registerGuestsRoutes } from '../routes/guests.js';
 
 type ReadinessCheck = () => Promise<void>;
 
-export function buildApp(checkDatabase: ReadinessCheck = async () => undefined): FastifyInstance {
+export interface AppOptions {
+  prisma?: PrismaClient;
+  checkDatabase?: ReadinessCheck;
+}
+
+export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyInstance {
+  let checkDatabase: ReadinessCheck = async () => undefined;
+  let prisma: PrismaClient | undefined;
+
+  if (typeof optionsOrCheck === 'function') {
+    checkDatabase = optionsOrCheck;
+  } else if (optionsOrCheck) {
+    if (optionsOrCheck.checkDatabase) checkDatabase = optionsOrCheck.checkDatabase;
+    if (optionsOrCheck.prisma) prisma = optionsOrCheck.prisma;
+  }
+
   const app = Fastify({
     logger: true,
     ajv: { customOptions: { removeAdditional: false } },
+  });
+
+  // CORS local development support
+  app.addHook('onRequest', async (request, reply) => {
+    reply.header('Access-Control-Allow-Origin', '*');
+    reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+    reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-request-id');
+    if (request.method === 'OPTIONS') {
+      return reply.status(204).send();
+    }
   });
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
@@ -62,6 +90,11 @@ export function buildApp(checkDatabase: ReadinessCheck = async () => undefined):
       });
     }
   });
+
+  if (prisma) {
+    app.register(registerPropertiesRoutes(prisma));
+    app.register(registerGuestsRoutes(prisma));
+  }
 
   return app;
 }

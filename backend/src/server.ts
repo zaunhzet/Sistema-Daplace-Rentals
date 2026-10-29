@@ -17,7 +17,7 @@ if (!databaseUrl) {
 }
 
 const database = createDatabase(databaseUrl);
-const app = buildApp(database.check);
+const app = buildApp({ prisma: database.prisma, checkDatabase: database.check });
 
 app.addHook('onClose', async () => database.close());
 
