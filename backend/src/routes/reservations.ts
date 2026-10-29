@@ -2,10 +2,35 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
 import { requireAuth } from '../shared/auth.js';
+import {
+  evaluateConfirmationRequirements,
+  defaultPoliticaAdelantoProvider,
+  type PoliticaAdelantoProvider,
+} from '../modules/reservations/confirmationRequirements.js';
 
 const ALLOWED_RESERVATION_ORIGINS = ['WEB', 'DIRECTO', 'AIRBNB'] as const;
 const ALLOWED_CURRENCIES = ['PEN', 'USD'] as const;
 const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{2,64}$/;
+
+const FORBIDDEN_POLICY_PARAMS = [
+  'politicaAdelanto',
+  'politicaTipo',
+  'porcentajeExigible',
+  'versionPolitica',
+  'esExcepcion',
+  'autorizadoPorId',
+];
+
+export function hasClientCommercialAuthority(req: { body?: any; query?: any }): boolean {
+  const checkObj = (obj: any): boolean => {
+    if (!obj || typeof obj !== 'object') return false;
+    for (const key of FORBIDDEN_POLICY_PARAMS) {
+      if (key in obj && obj[key] !== undefined && obj[key] !== null) return true;
+    }
+    return false;
+  };
+  return checkObj(req.body) || checkObj(req.query);
+}
 
 export function calculateNights(ingreso: string, salida: string): number {
   const [y1, m1, d1] = ingreso.split('-').map(Number);
@@ -63,7 +88,10 @@ export function validateReservationDates(
   return { isValid: true };
 }
 
-export function registerReservationsRoutes(prisma: PrismaClient): FastifyPluginAsync {
+export function registerReservationsRoutes(
+  prisma: PrismaClient,
+  politicaAdelantoProvider?: PoliticaAdelantoProvider
+): FastifyPluginAsync {
   return async (app) => {
     // 1. Consultar disponibilidad de una propiedad en un intervalo [ingreso, salida)
     // Endpoint público (no requiere sesión para cotizar), con PRIVACIDAD ESTRICTA (no revela datos internos)
@@ -533,15 +561,37 @@ export function registerReservationsRoutes(prisma: PrismaClient): FastifyPluginA
     );
 
     // 5. Confirmar reserva (POST /api/reservas/:id/confirmar)
-    app.post<{ Params: { id: string } }>(
+    app.post<{
+      Params: { id: string };
+      Body?: Record<string, unknown>;
+    }>(
       '/api/reservas/:id/confirmar',
       { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
       async (request, reply) => {
         const { id } = request.params;
         const actorId = request.user!.id;
 
+        // DR02-01: Rechazo terminante de autoridad comercial del cliente
+        if (hasClientCommercialAuthority(request)) {
+          return reply.status(400).send({
+            error: {
+              code: 'CLIENT_POLICY_FORBIDDEN',
+              message: 'No está permitido establecer políticas comerciales, porcentajes o excepciones desde el cliente.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const effectiveProvider = politicaAdelantoProvider || defaultPoliticaAdelantoProvider;
+
         try {
           const updated = await prisma.$transaction(async (tx) => {
+            // DR02-02: Bloqueo pesimista estricto en orden jerárquico estable para evitar carreras e interbloqueos:
+            // 1. Bloquear primero la reserva
+            await tx.$queryRaw`SELECT id FROM "reservas" WHERE id = ${id} FOR UPDATE;`;
+            // 2. Bloquear después los pagos relevantes en orden determinístico ascendente por ID
+            await tx.$queryRaw`SELECT id FROM "pagos" WHERE "reservaId" = ${id} ORDER BY id ASC FOR UPDATE;`;
+
             const reserva = await tx.reserva.findUnique({
               where: { id },
               include: {
@@ -566,6 +616,28 @@ export function registerReservationsRoutes(prisma: PrismaClient): FastifyPluginA
               (err as any).statusCode = 409;
               (err as any).code = 'INVALID_STATE_TRANSITION';
               throw err;
+            }
+
+            // Para reservas de origen DIRECTO: evaluación estricta de requisitos verificables (DR-02)
+            if (reserva.origen === 'DIRECTO') {
+              // Obtener política del lado del servidor (proveedor compartido seguro)
+              const serverPolitica = await effectiveProvider(id, tx);
+              const evaluation = await evaluateConfirmationRequirements(
+                tx,
+                id,
+                serverPolitica
+              );
+
+              if (!evaluation.puedeConfirmar) {
+                const reqErr = new Error(
+                  'La reserva directa no cumple con los requisitos obligatorios para confirmación.'
+                );
+                (reqErr as any).statusCode = 409;
+                (reqErr as any).code = 'REQUIREMENTS_NOT_MET';
+                (reqErr as any).motivosPendientes = evaluation.motivosPendientes;
+                (reqErr as any).requisitos = evaluation.requisitos;
+                throw reqErr;
+              }
             }
 
             // Revalidar disponibilidad antes de confirmar
@@ -630,6 +702,15 @@ export function registerReservationsRoutes(prisma: PrismaClient): FastifyPluginA
               error: {
                 code: err.code || 'BAD_REQUEST',
                 message: err.message,
+                details:
+                  err.motivosPendientes || err.requisitos
+                    ? {
+                        motivosPendientes: err.motivosPendientes,
+                        requisitos: err.requisitos,
+                      }
+                    : undefined,
+                motivosPendientes: err.motivosPendientes,
+                requisitos: err.requisitos,
                 requestId: request.id,
               },
             });

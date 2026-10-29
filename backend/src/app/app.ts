@@ -8,13 +8,17 @@ import { registerPaymentsRoutes } from '../routes/payments.js';
 import { registerGuaranteesRoutes } from '../routes/guarantees.js';
 import { registerExpensesRoutes } from '../routes/expenses.js';
 import { registerPaymentEvidencesRoutes } from '../routes/payment-evidences.js';
+import { registerContractsRoutes } from '../routes/contracts.js';
 import { authenticateRequestHook } from '../shared/auth.js';
+
+import type { PoliticaAdelantoProvider } from '../modules/reservations/confirmationRequirements.js';
 
 type ReadinessCheck = () => Promise<void>;
 
 export interface AppOptions {
   prisma?: PrismaClient;
   checkDatabase?: ReadinessCheck;
+  politicaAdelantoProvider?: PoliticaAdelantoProvider;
 }
 
 export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyInstance {
@@ -143,14 +147,20 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
   });
 
   if (prisma) {
+    const politicaProvider =
+      optionsOrCheck && typeof optionsOrCheck === 'object'
+        ? optionsOrCheck.politicaAdelantoProvider
+        : undefined;
+
     app.register(registerPropertiesRoutes(prisma));
     app.register(registerGuestsRoutes(prisma));
-    app.register(registerReservationsRoutes(prisma));
+    app.register(registerReservationsRoutes(prisma, politicaProvider));
     app.register(registerCalendarRoutes(prisma));
     app.register(registerPaymentsRoutes(prisma));
     app.register(registerGuaranteesRoutes(prisma));
     app.register(registerExpensesRoutes(prisma));
     app.register(registerPaymentEvidencesRoutes(prisma));
+    app.register(registerContractsRoutes(prisma, politicaProvider));
   }
 
   return app;

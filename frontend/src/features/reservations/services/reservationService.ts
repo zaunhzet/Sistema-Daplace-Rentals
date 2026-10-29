@@ -1,7 +1,10 @@
 import type {
   AvailabilityCheckResult,
+  ConfirmationRequirementsResult,
+  CreateContractDto,
   CreateReservationDto,
   Reservation,
+  ReservationContract,
   ReservationFilterParams,
   ReservationValidationResult,
   UpdateReservationDatesDto,
@@ -116,18 +119,70 @@ export interface IReservationService {
     salida: string,
     excludeReservationId?: string
   ): Promise<AvailabilityCheckResult>;
+  getContracts(reservaId: string): Promise<ReservationContract[]>;
+  createContract(reservaId: string, dto: CreateContractDto): Promise<ReservationContract>;
+  getConfirmationRequirements(
+    reservaId: string
+  ): Promise<ConfirmationRequirementsResult>;
   reset(): void;
+}
+
+export interface MockPaymentFixture {
+  id: string;
+  reservaId: string;
+  monto: number;
+  moneda: string;
+  estado: 'PENDIENTE_CONCILIACION' | 'CONCILIADO' | 'RECHAZADO';
+  esGarantia?: boolean;
+  evidencias: Array<{
+    id: string;
+    estadoDoc: 'REFERENCIADA' | 'VALIDADA' | 'RECHAZADA';
+  }>;
+}
+
+interface ContractIdempotencySnapshot {
+  contract: ReservationContract;
+  nombreOriginal: string;
+  urlReferencia?: string;
+  reemplazaContratoId?: string;
 }
 
 class MockReservationService implements IReservationService {
   private reservations: Reservation[] = [];
+  private contracts: Map<string, ReservationContract[]> = new Map();
+  private mockPayments: Map<string, MockPaymentFixture[]> = new Map();
+  private idempotencySnapshots: Map<string, ContractIdempotencySnapshot> = new Map();
 
   constructor() {
     this.reset();
   }
 
+  public setMockPayments(reservaId: string, payments: MockPaymentFixture[]): void {
+    this.mockPayments.set(reservaId, payments);
+  }
+
   public reset(): void {
     this.reservations = JSON.parse(JSON.stringify(INITIAL_RESERVATIONS_MOCK));
+    this.contracts.clear();
+    this.mockPayments.clear();
+    this.idempotencySnapshots.clear();
+    // Sembrar contrato histórico para res-03 (reserva DIRECTO COMPLETADA)
+    this.contracts.set('res-03', [
+      {
+        id: 'ct-mock-01',
+        reservaId: 'res-03',
+        version: 1,
+        nombreOriginal: 'contrato_res03_firmado.pdf',
+        urlReferencia: 'https://docs.daplace.internal/contracts/res-03/c1.pdf',
+        estadoFirma: 'VALIDADA',
+        registradoPorId: 'usr-admin',
+        registradoPorNombre: 'Administrador Sistema',
+        registradoEn: new Date('2026-10-10').toISOString(),
+        validadoPorId: 'usr-admin',
+        validadoPorNombre: 'Administrador Sistema',
+        validadoEn: new Date('2026-10-11').toISOString(),
+      },
+    ]);
   }
 
   public async getReservations(filters?: ReservationFilterParams): Promise<Reservation[]> {
@@ -366,6 +421,20 @@ class MockReservationService implements IReservationService {
       throw new Error('No es posible confirmar una reserva que ha sido cancelada.');
     }
 
+    // Regla DR-02: Para reservas DIRECTO, evaluar requisitos obligatorios
+    if (current.origen === 'DIRECTO') {
+      const evaluation = await this.getConfirmationRequirements(id);
+      if (!evaluation.puedeConfirmar) {
+        const err = new ApiError(
+          'La reserva directa no cumple con los requisitos obligatorios para confirmación.',
+          409,
+          'REQUIREMENTS_NOT_MET',
+          { motivosPendientes: evaluation.motivosPendientes, requisitos: evaluation.requisitos }
+        );
+        throw err;
+      }
+    }
+
     // Revalidar disponibilidad antes de confirmar
     const availability = await this.checkAvailability(
       current.propiedadId,
@@ -388,6 +457,238 @@ class MockReservationService implements IReservationService {
 
     this.reservations[index] = updated;
     return JSON.parse(JSON.stringify(updated));
+  }
+
+  public async getContracts(reservaId: string): Promise<ReservationContract[]> {
+    const list = this.contracts.get(reservaId) || [];
+    return JSON.parse(JSON.stringify(list));
+  }
+
+  public async createContract(reservaId: string, dto: CreateContractDto): Promise<ReservationContract> {
+    const res = this.reservations.find((r) => r.id === reservaId);
+    if (!res) {
+      throw new Error(`Reserva no encontrada con ID: ${reservaId}`);
+    }
+
+    if (!dto.nombreOriginal || dto.nombreOriginal.trim().length < 3) {
+      throw new Error('El nombre original del contrato debe tener al menos 3 caracteres.');
+    }
+
+    if ((dto as any).estadoFirma && (dto as any).estadoFirma !== 'REFERENCIADA') {
+      throw new Error('No se permite establecer el estado de validación desde el cliente.');
+    }
+
+    const normalizedNombre = dto.nombreOriginal.trim();
+    const normalizedUrl = dto.urlReferencia?.trim() || undefined;
+    const normalizedReemplaza = dto.reemplazaContratoId?.trim() || undefined;
+    const idempotencyKey = dto.idempotencyKey?.trim() || undefined;
+
+    const existing = this.contracts.get(reservaId) || [];
+
+    // DR02-06 FIX: Idempotencia coherente con snapshot canónico inmutable
+    if (idempotencyKey) {
+      const snapKey = `${reservaId}:${idempotencyKey}`;
+      const snapshot = this.idempotencySnapshots.get(snapKey);
+      if (snapshot) {
+        const sameNombre = snapshot.nombreOriginal === normalizedNombre;
+        const sameUrl = snapshot.urlReferencia === normalizedUrl;
+        const sameReemplaza = snapshot.reemplazaContratoId === normalizedReemplaza;
+
+        if (sameNombre && sameUrl && sameReemplaza) {
+          // Replay del mismo contrato sin efectos secundarios
+          return JSON.parse(JSON.stringify(snapshot.contract));
+        }
+
+        // Misma clave pero contenido diferente: conflicto 409
+        throw new ApiError(
+          'Conflicto de idempotencia: ya existe un contrato registrado con la misma clave pero diferente contenido.',
+          409,
+          'IDEMPOTENCY_CONFLICT',
+          { idempotencyKey, reservaId }
+        );
+      }
+    }
+
+    const nextVersion = existing.length > 0 ? Math.max(...existing.map((c) => c.version)) + 1 : 1;
+
+    const newContract: ReservationContract = {
+      id: `ct-mock-${Date.now()}-${nextVersion}`,
+      reservaId,
+      version: nextVersion,
+      nombreOriginal: normalizedNombre,
+      urlReferencia: normalizedUrl,
+      estadoFirma: 'REFERENCIADA',
+      registradoPorId: 'usr-admin',
+      registradoPorNombre: 'Usuario Actual',
+      registradoEn: new Date().toISOString(),
+      reemplazaContratoId: normalizedReemplaza,
+      idempotencyKey,
+    };
+
+    existing.push(newContract);
+    this.contracts.set(reservaId, existing);
+
+    if (idempotencyKey) {
+      const snapKey = `${reservaId}:${idempotencyKey}`;
+      this.idempotencySnapshots.set(snapKey, {
+        contract: JSON.parse(JSON.stringify(newContract)),
+        nombreOriginal: normalizedNombre,
+        urlReferencia: normalizedUrl,
+        reemplazaContratoId: normalizedReemplaza,
+      });
+    }
+
+    return JSON.parse(JSON.stringify(newContract));
+  }
+
+  public async getConfirmationRequirements(
+    reservaId: string
+  ): Promise<ConfirmationRequirementsResult> {
+    const res = this.reservations.find((r) => r.id === reservaId);
+    if (!res) {
+      return {
+        reservaId,
+        puedeConfirmar: false,
+        requisitos: {
+          reservaApta: false,
+          contratoFirmado: false,
+          pagoRegistrado: false,
+          evidenciaAdelanto: false,
+          evidenciaRevisada: false,
+          adelantoCubierto: false,
+          adelantoConciliado: false,
+          politicaAdelantoDefinida: false,
+          disponibilidadValida: false,
+        },
+        motivosPendientes: ['RESERVA_NO_ENCONTRADA'],
+      };
+    }
+
+    const motivosPendientes: string[] = [];
+    const reservaApta = res.estado === 'SOLICITADA';
+    if (!reservaApta) motivosPendientes.push('RESERVA_NO_APTA');
+
+    // DR02-03 y DR02-05: Resolución estricta de contratos sustituidos
+    const allContracts = this.contracts.get(reservaId) || [];
+    const replacedIds = new Set(
+      allContracts
+        .map((c) => c.reemplazaContratoId)
+        .filter((id): id is string => Boolean(id))
+    );
+    const activeContracts = allContracts.filter((c) => !replacedIds.has(c.id));
+
+    let contratoFirmado = false;
+    if (activeContracts.length === 0) {
+      motivosPendientes.push('CONTRATO_NO_VALIDADO');
+    } else if (activeContracts.length > 1) {
+      motivosPendientes.push('CONTRATO_VIGENCIA_PENDIENTE');
+    } else {
+      const [unicoVigente] = activeContracts;
+      if (unicoVigente.estadoFirma === 'VALIDADA') {
+        contratoFirmado = true;
+      } else {
+        motivosPendientes.push('CONTRATO_NO_VALIDADO');
+      }
+    }
+
+    // DR02-02 y DR02-05: Exclusivamente fixtures sintéticos explícitos sin inferencia ni inventar totales
+    const payments = this.mockPayments.get(reservaId) || [];
+    const eligiblePayments = payments.filter((p) => {
+      if (p.reservaId !== reservaId) return false;
+      if (p.moneda !== res.moneda) return false;
+      if (p.esGarantia) return false;
+      if (p.estado === 'RECHAZADO') return false;
+      return true;
+    });
+
+    const pagoRegistrado = res.origen !== 'DIRECTO' || res.estado === 'CONFIRMADA' || eligiblePayments.length > 0;
+    if (!pagoRegistrado) motivosPendientes.push('PAGO_ADELANTO_FALTANTE');
+
+    const hasAnyEvidence = eligiblePayments.some((p) => p.evidencias.length > 0);
+    const evidenciaAdelanto = res.origen !== 'DIRECTO' || res.estado === 'CONFIRMADA' || hasAnyEvidence;
+    if (!evidenciaAdelanto && pagoRegistrado) motivosPendientes.push('EVIDENCIA_ADELANTO_FALTANTE');
+
+    const paymentsWithValidEvidence = eligiblePayments.filter((p) =>
+      p.evidencias.some((e) => e.estadoDoc === 'VALIDADA')
+    );
+    const evidenciaRevisada = res.origen !== 'DIRECTO' || res.estado === 'CONFIRMADA' || paymentsWithValidEvidence.length > 0;
+    if (!evidenciaRevisada && evidenciaAdelanto) motivosPendientes.push('EVIDENCIA_NO_REVISADA');
+
+    // DR02-01 y DR02-05: El cliente no define políticas; el mock conserva PENDIENTE_APROBACION por defecto
+    const politicaAdelantoDefinida = false;
+    const permitePendienteConVoucher = false;
+    const porcentajeExigible = 50;
+    motivosPendientes.push('POLITICA_ADELANTO_PENDIENTE');
+
+    let totalPagadoNum = 0;
+    let totalConciliadoNum = 0;
+    // Cada pago se suma una sola vez
+    for (const p of eligiblePayments) {
+      const tieneVoucherValidado = p.evidencias.some((e) => e.estadoDoc === 'VALIDADA');
+      if (p.estado === 'CONCILIADO') {
+        totalPagadoNum += p.monto;
+        totalConciliadoNum += p.monto;
+      } else if (p.estado === 'PENDIENTE_CONCILIACION') {
+        if (permitePendienteConVoucher && tieneVoucherValidado) {
+          totalPagadoNum += p.monto;
+        }
+      }
+    }
+
+    const adelantoRequeridoNum = Number(((res.montoAcordado * porcentajeExigible) / 100).toFixed(2));
+    const adelantoCubierto =
+      res.origen !== 'DIRECTO' ||
+      (politicaAdelantoDefinida && totalPagadoNum >= adelantoRequeridoNum && adelantoRequeridoNum > 0);
+    if (politicaAdelantoDefinida && !adelantoCubierto) {
+      motivosPendientes.push('ADELANTO_INSUFICIENTE');
+    }
+
+    const adelantoConciliado = totalConciliadoNum >= adelantoRequeridoNum && adelantoRequeridoNum > 0;
+
+    const availability = await this.checkAvailability(res.propiedadId, res.ingreso, res.salida, res.id);
+    const disponibilidadValida = availability.disponible;
+    if (!disponibilidadValida) motivosPendientes.push('DISPONIBILIDAD_NO_VALIDA');
+
+    const puedeConfirmar =
+      reservaApta &&
+      contratoFirmado &&
+      pagoRegistrado &&
+      evidenciaAdelanto &&
+      evidenciaRevisada &&
+      politicaAdelantoDefinida &&
+      adelantoCubierto &&
+      disponibilidadValida;
+
+    return {
+      reservaId,
+      puedeConfirmar,
+      requisitos: {
+        reservaApta,
+        contratoFirmado,
+        pagoRegistrado,
+        evidenciaAdelanto,
+        evidenciaRevisada,
+        adelantoCubierto,
+        adelantoConciliado,
+        politicaAdelantoDefinida,
+        disponibilidadValida,
+      },
+      motivosPendientes,
+      detalles: {
+        montoAcordado: res.montoAcordado.toFixed(2),
+        totalPagado: totalPagadoNum.toFixed(2),
+        totalConciliado: totalConciliadoNum.toFixed(2),
+        moneda: res.moneda,
+        adelantoRequerido: adelantoRequeridoNum.toFixed(2),
+        porcentajeAplicado: porcentajeExigible,
+        versionPolitica:
+          politicaAdelantoDefinida ? 'HABITUAL_50_V1' : 'PENDIENTE_APROBACION',
+        contratosCount: activeContracts.length,
+        pagosCount: eligiblePayments.length,
+        evidenciasCount: eligiblePayments.reduce((acc, p) => acc + p.evidencias.length, 0),
+        evidenciasRevisadasCount: paymentsWithValidEvidence.length,
+      },
+    };
   }
 
   public async cancelReservation(id: string, motivo?: string): Promise<Reservation> {
@@ -505,11 +806,40 @@ export class ApiReservationService implements IReservationService {
     });
   }
 
+  // DR02-01: El cliente no envía autoridad comercial en body ni query
   public async confirmReservation(id: string): Promise<Reservation> {
     return apiClient<Reservation>(`/api/reservas/${encodeURIComponent(id)}/confirmar`, {
       method: 'POST',
       body: JSON.stringify({}),
     });
+  }
+
+  public async getContracts(reservaId: string): Promise<ReservationContract[]> {
+    const res = await apiClient<{ data: ReservationContract[] }>(
+      `/api/reservas/${encodeURIComponent(reservaId)}/contratos`
+    );
+    return res.data;
+  }
+
+  public async createContract(reservaId: string, dto: CreateContractDto): Promise<ReservationContract> {
+    const res = await apiClient<{ data: ReservationContract }>(
+      `/api/reservas/${encodeURIComponent(reservaId)}/contratos`,
+      {
+        method: 'POST',
+        body: JSON.stringify(dto),
+      }
+    );
+    return res.data;
+  }
+
+  // DR02-01: El cliente no envía política comercial en query params
+  public async getConfirmationRequirements(
+    reservaId: string
+  ): Promise<ConfirmationRequirementsResult> {
+    const res = await apiClient<{ data: ConfirmationRequirementsResult }>(
+      `/api/reservas/${encodeURIComponent(reservaId)}/requisitos-confirmacion`
+    );
+    return res.data;
   }
 
   public async cancelReservation(id: string, motivo?: string): Promise<Reservation> {
