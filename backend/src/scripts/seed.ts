@@ -14,8 +14,24 @@ export async function seedDatabase(target?: PrismaClient | string) {
   if (target && typeof target === 'object' && '$queryRaw' in target) {
     prisma = target as PrismaClient;
   } else {
+    const isTestEnv = process.env.NODE_ENV === 'test';
+    if (!target && isTestEnv) {
+      throw new Error(
+        'OPERACIÓN ABORTADA POR SEGURIDAD: En entorno de test, seedDatabase debe recibir explícitamente la instancia de Prisma de prueba o DATABASE_TEST_URL.'
+      );
+    }
+
     const url = typeof target === 'string' ? target : process.env.DATABASE_URL;
-    if (!url) throw new Error('DATABASE_URL is required to seed the database.');
+    if (!url) throw new Error('DATABASE_URL es obligatoria para sembrar la base de datos.');
+
+    // Validar host local
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    const allowedHosts = ['localhost', '127.0.0.1', '::1'];
+    if (!allowedHosts.includes(host)) {
+      throw new Error(`OPERACIÓN ABORTADA: No se permite sembrar en un host remoto "${host}".`);
+    }
+
     const db = createDatabase(url);
     prisma = db.prisma;
     shouldClose = true;

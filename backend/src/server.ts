@@ -23,6 +23,9 @@ app.addHook('onClose', async () => database.close());
 
 try {
   await app.listen({ host, port });
+  if (process.env.ENABLE_DEMO_AUTH_BYPASS === 'true') {
+    app.log.warn('[SECURITY NOTICE] ENABLE_DEMO_AUTH_BYPASS está activado en desarrollo local. El acceso administrativo no requiere token JWT.');
+  }
 } catch (error) {
   app.log.error(error);
   await app.close();

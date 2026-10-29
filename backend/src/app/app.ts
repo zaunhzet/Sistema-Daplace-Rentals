@@ -4,6 +4,7 @@ import { registerPropertiesRoutes } from '../routes/properties.js';
 import { registerGuestsRoutes } from '../routes/guests.js';
 import { registerReservationsRoutes } from '../routes/reservations.js';
 import { registerCalendarRoutes } from '../routes/calendar.js';
+import { authenticateRequestHook } from '../shared/auth.js';
 
 type ReadinessCheck = () => Promise<void>;
 
@@ -23,20 +24,55 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
     if (optionsOrCheck.prisma) prisma = optionsOrCheck.prisma;
   }
 
+  const nodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
+  const demoBypassEnabled = process.env.ENABLE_DEMO_AUTH_BYPASS === 'true';
+
+  // Validación de seguridad crítica: jamás permitir bypass en producción
+  if (nodeEnv === 'production' && demoBypassEnabled) {
+    throw new Error('CONFIGURACIÓN INSEGURA CRÍTICA: ENABLE_DEMO_AUTH_BYPASS no puede estar activo en entorno de producción.');
+  }
+
   const app = Fastify({
     logger: true,
     ajv: { customOptions: { removeAdditional: false } },
   });
 
-  // CORS local development support
+  // Configuración CORS segura
+  const rawAllowedOrigins = process.env.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173';
+  const allowedOrigins = rawAllowedOrigins.split(',').map((o) => o.trim()).filter(Boolean);
+
   app.addHook('onRequest', async (request, reply) => {
-    reply.header('Access-Control-Allow-Origin', '*');
+    const origin = request.headers.origin;
+    if (origin) {
+      let isAllowed = allowedOrigins.includes(origin);
+      if (!isAllowed && nodeEnv !== 'production') {
+        try {
+          const originUrl = new URL(origin);
+          if (['localhost', '127.0.0.1', '::1'].includes(originUrl.hostname)) {
+            isAllowed = true;
+          }
+        } catch {
+          isAllowed = false;
+        }
+      }
+
+      if (isAllowed) {
+        reply.header('Access-Control-Allow-Origin', origin);
+        reply.header('Access-Control-Allow-Credentials', 'true');
+        reply.header('Vary', 'Origin');
+      }
+    }
+
     reply.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-request-id');
+
     if (request.method === 'OPTIONS') {
       return reply.status(204).send();
     }
   });
+
+  // Hook centralizado de resolución de autenticación
+  app.addHook('onRequest', authenticateRequestHook);
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error.validation) {

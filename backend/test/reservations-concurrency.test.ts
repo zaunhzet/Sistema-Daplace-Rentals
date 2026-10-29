@@ -1,23 +1,18 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'node:url';
 import { buildApp } from '../src/app/app.js';
-import { createDatabase } from '../src/shared/database.js';
-import { safeResetDatabase } from '../src/scripts/reset.js';
+import { getRequiredTestDatabaseUrl, safeResetTestDatabase, createDatabase } from './test-helpers.js';
 import { seedDatabase } from '../src/scripts/seed.js';
 
-dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
-
-const testDbUrl = process.env.DATABASE_TEST_URL || process.env.DATABASE_URL;
+const testDbUrl = getRequiredTestDatabaseUrl();
 
 describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (PostgreSQL)', () => {
   let db: ReturnType<typeof createDatabase>;
   let app: ReturnType<typeof buildApp>;
 
   before(async () => {
-    assert.ok(testDbUrl, 'DATABASE_URL o DATABASE_TEST_URL requerida');
-    await safeResetDatabase({ forceConfirm: true, databaseUrl: testDbUrl });
+    process.env.ENABLE_DEMO_AUTH_BYPASS = 'true';
+    await safeResetTestDatabase(testDbUrl);
     db = createDatabase(testDbUrl);
     await db.check();
     await seedDatabase(db.prisma);
@@ -30,20 +25,25 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
   });
 
   describe('1. Consulta de Disponibilidad e Intervalos Semiabiertos [ingreso, salida)', () => {
-    it('detecta solapes en fechas ocupadas por reservas activas', async () => {
+    it('detecta solapes en fechas ocupadas por reservas activas con estricta privacidad', async () => {
       // res-01 está en prop-01 del 2026-11-10 al 2026-11-15 (CONFIRMADA)
       const res = await app.inject({
         method: 'GET',
         url: '/api/propiedades/prop-01/disponibilidad?ingreso=2026-11-12&salida=2026-11-14',
       });
       assert.equal(res.statusCode, 200);
-      assert.equal(res.json().disponible, false);
-      assert.ok(res.json().motivo.includes('Conflicto de solape'));
+      const data = res.json();
+      assert.equal(data.disponible, false);
+
+      // Verificación de privacidad: Jamás filtrar identificadores de reserva ni datos personales de otros huéspedes
+      assert.ok(!JSON.stringify(data).includes('res-01'), 'No debe revelar el ID de la reserva en conflicto');
+      assert.ok(!JSON.stringify(data).includes('hue-01'), 'No debe revelar el ID del huésped');
+      assert.ok(!JSON.stringify(data).includes('Alejandro'), 'No debe revelar el nombre del huésped');
+      assert.ok(data.motivo.includes('no están disponibles'));
     });
 
     it('permite estancias consecutivas exactamente acopladas [ingreso, salida)', async () => {
       // res-01 sale el 2026-11-15. Un nuevo huésped que entra el 2026-11-15 y sale el 2026-11-18 es admitido.
-      // (En el seed, res-06 ocupa 15 al 18, probemos del 2026-11-18 al 2026-11-20 que está completamente libre)
       const res = await app.inject({
         method: 'GET',
         url: '/api/propiedades/prop-01/disponibilidad?ingreso=2026-11-18&salida=2026-11-20',
@@ -59,6 +59,24 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
       });
       assert.equal(res.statusCode, 400);
       assert.equal(res.json().error.code, 'VALIDATION_ERROR');
+    });
+
+    it('rechaza fechas inexistentes en el calendario real (ej. 2026-02-30 o 2026-04-31)', async () => {
+      // Febrero 2026 no tiene 30 días
+      const resFeb30 = await app.inject({
+        method: 'GET',
+        url: '/api/propiedades/prop-01/disponibilidad?ingreso=2026-02-30&salida=2026-03-05',
+      });
+      assert.equal(resFeb30.statusCode, 400);
+      assert.ok(resFeb30.json().error.message.includes('calendario'));
+
+      // Abril no tiene 31 días
+      const resApr31 = await app.inject({
+        method: 'GET',
+        url: '/api/propiedades/prop-01/disponibilidad?ingreso=2026-04-31&salida=2026-05-02',
+      });
+      assert.equal(resApr31.statusCode, 400);
+      assert.ok(resApr31.json().error.message.includes('calendario'));
     });
 
     it('indica no disponible si la propiedad está en mantenimiento o inactiva', async () => {
@@ -115,6 +133,7 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
         where: { entidad: 'Reserva', entidadId: 'res-test-lifecycle', accion: 'CREAR_SOLICITUD_RESERVA' },
       });
       assert.ok(audit, 'Debe registrarse auditoría de creación');
+      assert.equal(audit.actor, 'usr-admin');
     });
 
     it('rechaza creación si las fechas se solapan con reserva activa existente (409)', async () => {

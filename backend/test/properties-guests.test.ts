@@ -1,23 +1,18 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'node:url';
 import { buildApp } from '../src/app/app.js';
-import { createDatabase } from '../src/shared/database.js';
-import { safeResetDatabase } from '../src/scripts/reset.js';
+import { getRequiredTestDatabaseUrl, safeResetTestDatabase, createDatabase } from './test-helpers.js';
 import { seedDatabase } from '../src/scripts/seed.js';
 
-dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
-
-const testDbUrl = process.env.DATABASE_TEST_URL || process.env.DATABASE_URL;
+const testDbUrl = getRequiredTestDatabaseUrl();
 
 describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', () => {
   let db: ReturnType<typeof createDatabase>;
   let app: ReturnType<typeof buildApp>;
 
   before(async () => {
-    assert.ok(testDbUrl, 'DATABASE_URL o DATABASE_TEST_URL requerida');
-    await safeResetDatabase({ forceConfirm: true, databaseUrl: testDbUrl });
+    process.env.ENABLE_DEMO_AUTH_BYPASS = 'true';
+    await safeResetTestDatabase(testDbUrl);
     db = createDatabase(testDbUrl);
     await db.check();
     await seedDatabase(db.prisma);
@@ -27,6 +22,33 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
   after(async () => {
     await app.close();
     await db.close();
+  });
+
+  // --- SEGURIDAD Y AUTORIZACIÓN ---
+  describe('Seguridad y Capa de Autorización', () => {
+    it('rechaza acceso con 401 a endpoints administrativos si no hay identidad ni bypass', async () => {
+      // Crear app sin bypass
+      const originalBypass = process.env.ENABLE_DEMO_AUTH_BYPASS;
+      try {
+        process.env.ENABLE_DEMO_AUTH_BYPASS = 'false';
+        const secureApp = buildApp({ prisma: db.prisma, checkDatabase: db.check });
+
+        const unauthRes = await secureApp.inject({ method: 'GET', url: '/api/propiedades' });
+        assert.equal(unauthRes.statusCode, 401);
+        assert.equal(unauthRes.json().error.code, 'UNAUTHORIZED');
+
+        const unauthPost = await secureApp.inject({
+          method: 'POST',
+          url: '/api/propiedades',
+          payload: { nombre: 'Test Sin Auth' },
+        });
+        assert.equal(unauthPost.statusCode, 401);
+
+        await secureApp.close();
+      } finally {
+        process.env.ENABLE_DEMO_AUTH_BYPASS = originalBypass;
+      }
+    });
   });
 
   // --- PROPIEDADES ---
@@ -68,7 +90,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
       assert.equal(notFoundRes.json().error.code, 'PROPERTY_NOT_FOUND');
     });
 
-    it('4. POST /api/propiedades — crea propiedad con validación y auditoría', async () => {
+    it('4. POST /api/propiedades — crea propiedad con validación estricta y auditoría atómica', async () => {
       // Rechazar nombre corto
       const badRes = await app.inject({
         method: 'POST',
@@ -80,6 +102,19 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         },
       });
       assert.equal(badRes.statusCode, 400);
+
+      // Rechazar precio base no finito o negativo
+      const badPriceRes = await app.inject({
+        method: 'POST',
+        url: '/api/propiedades',
+        payload: {
+          nombre: 'Propiedad Precio Inválido',
+          propietarioId: 'usr-102',
+          direccion: 'Av. Test 1234',
+          precioBaseNoche: -50,
+        },
+      });
+      assert.equal(badPriceRes.statusCode, 400);
 
       // Crear válida
       const validRes = await app.inject({
@@ -111,6 +146,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Propiedad', entidadId: 'prop-test-01', accion: 'CREAR_PROPIEDAD' },
       });
       assert.ok(audit, 'Debe existir registro de auditoría');
+      assert.equal(audit.actor, 'usr-admin', 'El actor debe corresponder al usuario autenticado');
     });
 
     it('5. PATCH /api/propiedades/:id — actualiza propiedad', async () => {
@@ -229,6 +265,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Huesped', entidadId: 'hue-test-01', accion: 'ACTUALIZAR_HUESPED' },
       });
       assert.ok(audit, 'Debe registrarse evento de auditoría');
+      assert.equal(audit.actor, 'usr-admin');
     });
   });
 });

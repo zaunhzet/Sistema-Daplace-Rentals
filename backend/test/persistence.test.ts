@@ -1,21 +1,17 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'node:url';
-import { createDatabase } from '../src/shared/database.js';
-import { safeResetDatabase } from '../src/scripts/reset.js';
+import { getRequiredTestDatabaseUrl, safeResetTestDatabase, createDatabase } from './test-helpers.js';
+import { safeResetDatabase, validateResetTarget } from '../src/scripts/reset.js';
 import { seedDatabase } from '../src/scripts/seed.js';
+import { recordAuditEvent } from '../src/shared/audit.js';
 
-dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
+const testDbUrl = getRequiredTestDatabaseUrl();
 
-const testDbUrl = process.env.DATABASE_TEST_URL || process.env.DATABASE_URL;
-
-describe('Hito 1 — PostgreSQL, Prisma y Persistencia Real', () => {
+describe('Hito 1 — PostgreSQL, Prisma, Persistencia Real y Seguridad de Entorno', () => {
   let db: ReturnType<typeof createDatabase>;
 
   before(async () => {
-    assert.ok(testDbUrl, 'DATABASE_URL o DATABASE_TEST_URL debe estar configurada');
-    await safeResetDatabase({ forceConfirm: true, databaseUrl: testDbUrl });
+    await safeResetTestDatabase(testDbUrl);
     db = createDatabase(testDbUrl);
     await db.check();
     await seedDatabase(db.prisma);
@@ -33,8 +29,7 @@ describe('Hito 1 — PostgreSQL, Prisma y Persistencia Real', () => {
   });
 
   it('2. Persistencia y lectura de datos sintéticos (Seed)', async () => {
-    // Asegurar que hay datos del seed
-    await seedDatabase();
+    await seedDatabase(db.prisma);
 
     const usuarios = await db.prisma.usuario.findMany();
     const propiedades = await db.prisma.propiedad.findMany({ include: { propietario: true } });
@@ -56,19 +51,80 @@ describe('Hito 1 — PostgreSQL, Prisma y Persistencia Real', () => {
   });
 
   it('3. Idempotencia del seed sintético', async () => {
-    // Correr de nuevo el seed no debe duplicar ni fallar
     await seedDatabase(db.prisma);
     const count = await db.prisma.propiedad.count();
     assert.equal(count, 5, 'El número de propiedades no debe duplicarse');
   });
 
-  it('4. Protección de reset seguro contra operaciones no autorizadas', async () => {
+  it('4. Protección contra destrucción accidental de bases de datos', async () => {
+    // A. Rechazar intento de test sobre daplace_dev
+    assert.throws(
+      () => {
+        validateResetTarget('postgresql://daplace:pass@127.0.0.1:5432/daplace_dev', 'test');
+      },
+      /Las suites de prueba solo pueden operar y limpiar "daplace_test"/i
+    );
+
+    // B. Rechazar bases en hosts remotos
+    assert.throws(
+      () => {
+        validateResetTarget('postgresql://daplace:pass@db.production-server.com:5432/daplace_test', 'test');
+      },
+      /no es una base local permitida/i
+    );
+
+    // C. Rechazar bases de datos no autorizadas (ej. bases de producción u otros proyectos)
+    assert.throws(
+      () => {
+        validateResetTarget('postgresql://daplace:pass@localhost:5432/sistemagi_db', 'dev');
+      },
+      /no está autorizada para reset/i
+    );
+
+    // D. Exigir confirmación explícita para reset en desarrollo
+    assert.throws(
+      () => {
+        validateResetTarget('postgresql://daplace:pass@localhost:5432/daplace_dev', 'dev', false);
+      },
+      /El comando requiere confirmación explícita/i
+    );
+  });
+
+  it('5. Atomicidad transaccional: rollback garantizado ante fallo de auditoría', async () => {
+    const testPropId = 'prop-rollback-test';
+
+    // Intentar crear una propiedad donde el registro de auditoría falla deliberadamente
     await assert.rejects(
       async () => {
-        // Sin confirmar explícitamente debe fallar
-        await safeResetDatabase({ forceConfirm: false });
+        await db.prisma.$transaction(async (tx) => {
+          await tx.propiedad.create({
+            data: {
+              id: testPropId,
+              nombre: 'Propiedad Rollback Test',
+              propietarioId: 'usr-102',
+              direccion: 'Calle Test 123',
+              estadoOperativo: 'OPERATIVA',
+              estadoPublicacion: 'BORRADOR',
+              capacidadHuespedes: 2,
+              precioBaseNoche: 100,
+              moneda: 'PEN',
+            },
+          });
+
+          // Forzar fallo de auditoría pasando actor vacío
+          await recordAuditEvent(tx, {
+            entidad: 'Propiedad',
+            entidadId: testPropId,
+            accion: 'CREAR_PROPIEDAD',
+            actor: '', // Actor inválido: dispara error y aborta la transacción
+          });
+        });
       },
-      /confirmación explícita/i
+      /Toda acción auditable requiere un actor identificado/i
     );
+
+    // Verificar que la propiedad NO fue persistida en la base de datos (rollback exitoso)
+    const found = await db.prisma.propiedad.findUnique({ where: { id: testPropId } });
+    assert.equal(found, null, 'La propiedad no debe persistir si la auditoría falla');
   });
 });
