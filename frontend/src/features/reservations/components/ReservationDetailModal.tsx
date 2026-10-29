@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
-import { AlertCircle, X } from 'lucide-react';
-import type { Reservation } from '../types';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertCircle, CheckCircle2, Clock, FileText, Plus, ShieldAlert, X } from 'lucide-react';
+import type {
+  ConfirmationRequirementsResult,
+  Reservation,
+  ReservationContract,
+} from '../types';
+import { reservationService } from '../services/reservationService';
+import { ApiError } from '../../../shared/api/client';
 
 interface ReservationDetailModalProps {
   reservation: Reservation | null;
@@ -9,6 +15,118 @@ interface ReservationDetailModalProps {
   onConfirm: (id: string) => Promise<void>;
   onCancel: (id: string, motivo: string) => Promise<void>;
   onOpenEditDates: (reservation: Reservation) => void;
+}
+
+export interface ModalAsyncLoadHandlers {
+  setContracts: (contracts: ReservationContract[]) => void;
+  setRequirements: (requirements: ConfirmationRequirementsResult | null) => void;
+  setRequirementsError: (err: string | null) => void;
+  setIsLoadingContracts: (loading: boolean) => void;
+  setIsLoadingRequirements: (loading: boolean) => void;
+}
+
+export function evaluateDirectCannotConfirm(
+  origen: string,
+  estado: string,
+  state: {
+    isLoadingRequirements: boolean;
+    requirements: ConfirmationRequirementsResult | null;
+    requirementsError: string | null;
+  },
+  currentReservationId: string
+): boolean {
+  return (
+    origen === 'DIRECTO' &&
+    estado === 'SOLICITADA' &&
+    (state.isLoadingRequirements ||
+      state.requirements === null ||
+      state.requirements.reservaId !== currentReservationId ||
+      !state.requirements.puedeConfirmar ||
+      Boolean(state.requirementsError))
+  );
+}
+
+export function createModalLoadCoordinator(
+  service: Pick<typeof reservationService, 'getContracts' | 'getConfirmationRequirements'>,
+  handlers: ModalAsyncLoadHandlers
+) {
+  let activeGeneration = 0;
+  let activeReservationId: string | null = null;
+
+  return {
+    async startLoad(reservaId: string, origen: string) {
+      const generation = ++activeGeneration;
+      activeReservationId = reservaId;
+
+      handlers.setContracts([]);
+      handlers.setRequirements(null);
+      handlers.setRequirementsError(null);
+      handlers.setIsLoadingContracts(true);
+      handlers.setIsLoadingRequirements(origen === 'DIRECTO');
+
+      const pContracts = service
+        .getContracts(reservaId)
+        .then((fetched) => {
+          if (activeGeneration === generation && activeReservationId === reservaId) {
+            handlers.setContracts(fetched);
+          }
+        })
+        .catch(() => {
+          if (activeGeneration === generation && activeReservationId === reservaId) {
+            handlers.setContracts([]);
+          }
+        })
+        .finally(() => {
+          if (activeGeneration === generation && activeReservationId === reservaId) {
+            handlers.setIsLoadingContracts(false);
+          }
+        });
+
+      let pReq: Promise<void> | undefined;
+      if (origen === 'DIRECTO') {
+        pReq = service
+          .getConfirmationRequirements(reservaId)
+          .then((fetched) => {
+            if (
+              activeGeneration === generation &&
+              activeReservationId === reservaId &&
+              fetched.reservaId === reservaId
+            ) {
+              handlers.setRequirements(fetched);
+              handlers.setRequirementsError(null);
+            }
+          })
+          .catch((err: unknown) => {
+            if (activeGeneration === generation && activeReservationId === reservaId) {
+              const msg =
+                err instanceof Error
+                  ? err.message
+                  : 'No se pudieron consultar los requisitos de confirmación.';
+              handlers.setRequirements(null);
+              handlers.setRequirementsError(msg);
+            }
+          })
+          .finally(() => {
+            if (activeGeneration === generation && activeReservationId === reservaId) {
+              handlers.setIsLoadingRequirements(false);
+            }
+          });
+      }
+
+      await Promise.all([pContracts, pReq]);
+    },
+    cancel() {
+      activeGeneration++;
+      activeReservationId = null;
+      handlers.setContracts([]);
+      handlers.setRequirements(null);
+      handlers.setRequirementsError(null);
+      handlers.setIsLoadingContracts(false);
+      handlers.setIsLoadingRequirements(false);
+    },
+    getActiveGeneration: () => activeGeneration,
+    getActiveReservationId: () => activeReservationId,
+  };
 }
 
 export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
@@ -23,6 +141,104 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   const [cancelMotivo, setCancelMotivo] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Estados DR-02: Contratos y Requisitos de Confirmación
+  const [contracts, setContracts] = useState<ReservationContract[]>([]);
+  const [requirements, setRequirements] = useState<ConfirmationRequirementsResult | null>(null);
+  const [isLoadingContracts, setIsLoadingContracts] = useState(false);
+  const [isLoadingRequirements, setIsLoadingRequirements] = useState(false);
+  const [requirementsError, setRequirementsError] = useState<string | null>(null);
+  const [isRegisteringContract, setIsRegisteringContract] = useState(false);
+  const [newContractName, setNewContractName] = useState('');
+  const [newContractUrl, setNewContractUrl] = useState('');
+  const [contractError, setContractError] = useState<string | null>(null);
+
+  // DR02-06: Clave idempotente por borrador de envío contractual
+  const [contractIdempotencyKey, setContractIdempotencyKey] = useState<string>(() => crypto.randomUUID());
+
+  // FIX 3: Mecanismo de generación / invalidación para evitar condiciones de carrera entre reservas
+  const handlersRef = useRef<ModalAsyncLoadHandlers>({
+    setContracts,
+    setRequirements,
+    setRequirementsError,
+    setIsLoadingContracts,
+    setIsLoadingRequirements,
+  });
+  handlersRef.current = {
+    setContracts,
+    setRequirements,
+    setRequirementsError,
+    setIsLoadingContracts,
+    setIsLoadingRequirements,
+  };
+
+  const coordinatorRef = useRef<ReturnType<typeof createModalLoadCoordinator> | null>(null);
+  if (!coordinatorRef.current) {
+    coordinatorRef.current = createModalLoadCoordinator(reservationService, {
+      setContracts: (c) => handlersRef.current.setContracts(c),
+      setRequirements: (r) => handlersRef.current.setRequirements(r),
+      setRequirementsError: (e) => handlersRef.current.setRequirementsError(e),
+      setIsLoadingContracts: (l) => handlersRef.current.setIsLoadingContracts(l),
+      setIsLoadingRequirements: (l) => handlersRef.current.setIsLoadingRequirements(l),
+    });
+  }
+
+  useEffect(() => {
+    if (isOpen && reservation) {
+      setActionError(null);
+      setContractError(null);
+      setRequirementsError(null);
+      setIsCanceling(false);
+      setIsRegisteringContract(false);
+      setContractIdempotencyKey(crypto.randomUUID());
+
+      coordinatorRef.current?.startLoad(reservation.id, reservation.origen);
+
+      return () => {
+        coordinatorRef.current?.cancel();
+      };
+    } else {
+      coordinatorRef.current?.cancel();
+    }
+  }, [isOpen, reservation?.id, reservation?.origen]);
+
+  const handleRegisterContractSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reservation) return;
+
+    if (!newContractName || newContractName.trim().length < 3) {
+      setContractError('El nombre del archivo de contrato debe tener al menos 3 caracteres.');
+      return;
+    }
+
+    try {
+      setIsProcessing(true);
+      setContractError(null);
+
+      // DR02-06: Conservar la misma clave durante reintentos de ese envío
+      await reservationService.createContract(reservation.id, {
+        nombreOriginal: newContractName.trim(),
+        urlReferencia: newContractUrl.trim() || undefined,
+        idempotencyKey: contractIdempotencyKey,
+      });
+
+      // Renovarla SOLAMENTE tras éxito
+      setContractIdempotencyKey(crypto.randomUUID());
+      setNewContractName('');
+      setNewContractUrl('');
+      setIsRegisteringContract(false);
+      await coordinatorRef.current?.startLoad(reservation.id, reservation.origen);
+    } catch (err: unknown) {
+      // Si falla, se conserva contractIdempotencyKey para que el reintento use la misma clave
+      if (err instanceof Error) {
+        setContractError(err.message);
+      } else {
+        setContractError('Error al registrar la referencia del contrato.');
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   if (!isOpen || !reservation) return null;
 
@@ -41,13 +257,62 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
     }
   };
 
+  const getContractBadge = (estadoFirma: string) => {
+    switch (estadoFirma) {
+      case 'VALIDADA':
+        return <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Firma Validada</span>;
+      case 'RECHAZADA':
+        return <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-800">Rechazada</span>;
+      case 'REFERENCIADA':
+      default:
+        return <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Referenciada (Pendiente)</span>;
+    }
+  };
+
+  const formatMotivoPendiente = (motivo: string): string => {
+    switch (motivo) {
+      case 'CONTRATO_NO_VALIDADO':
+        return 'Contrato firmado por el cliente aún no ha sido validado por el coordinador.';
+      case 'CONTRATO_VIGENCIA_PENDIENTE':
+        return 'Existen múltiples versiones de contrato vigentes sin relación de reemplazo inequívoca.';
+      case 'PAGO_ADELANTO_FALTANTE':
+        return 'No se ha registrado ningún pago correspondiente al adelanto.';
+      case 'EVIDENCIA_ADELANTO_FALTANTE':
+        return 'Falta registrar el voucher documental del adelanto.';
+      case 'EVIDENCIA_NO_REVISADA':
+        return 'El voucher del adelanto fue recibido pero aún no ha sido revisado/validado por el coordinador.';
+      case 'POLITICA_ADELANTO_PENDIENTE':
+        return 'La base o porcentaje de cálculo del adelanto está pendiente de aprobación comercial.';
+      case 'EXCEPCION_NO_AUTORIZADA':
+        return 'La política de adelanto excepcional requiere autorización explícita de Gerencia.';
+      case 'ADELANTO_INSUFICIENTE':
+        return 'El monto de los pagos con voucher revisado no cubre el porcentaje exigido.';
+      case 'MONEDA_INCONSISTENTE':
+        return 'Existen pagos en monedas distintas que no pueden sumarse (Inmunidad Financiera).';
+      case 'DISPONIBILIDAD_NO_VALIDA':
+        return 'Las fechas solicitadas ya no están disponibles en el calendario.';
+      case 'RESERVA_NO_APTA':
+        return 'La reserva no se encuentra en estado SOLICITADA.';
+      default:
+        return motivo;
+    }
+  };
+
   const handleConfirmClick = async () => {
     try {
       setIsProcessing(true);
       setActionError(null);
       await onConfirm(reservation.id);
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      if (err instanceof ApiError) {
+        const details = err.details as any;
+        const motivos = details?.motivosPendientes || (err as any).motivosPendientes;
+        if (Array.isArray(motivos) && motivos.length > 0) {
+          setActionError(`${err.message} Motivos pendientes: ${motivos.map(formatMotivoPendiente).join('; ')}`);
+        } else {
+          setActionError(err.message);
+        }
+      } else if (err instanceof Error) {
         setActionError(err.message);
       } else {
         setActionError('Error al confirmar la reserva.');
@@ -75,6 +340,16 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
       setIsProcessing(false);
     }
   };
+
+  // DR02-04: Bloqueo estricto del botón confirmar si es DIRECTO:
+  // Se mantiene deshabilitada mientras se cargan requisitos, si la evaluación falla o no está disponible,
+  // o si no cumple con los requisitos obligatorios.
+  const isDirectAndCannotConfirm = evaluateDirectCannotConfirm(
+    reservation.origen,
+    reservation.estado,
+    { isLoadingRequirements, requirements, requirementsError },
+    reservation.id
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
@@ -157,6 +432,249 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             <p className="mt-3 text-[11px] text-stone-400">
               * El día de check-out ({reservation.salida}) queda disponible para un nuevo check-in en la tarde (consecutivas permitidas).
             </p>
+          </div>
+
+          {/* DR-02: SECCIÓN DE REQUISITOS DE CONFIRMACIÓN (SOLO DIRECTO) */}
+          {reservation.origen === 'DIRECTO' && (
+            <div className="rounded-2xl border border-stone-200 bg-stone-50/60 p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                  <ShieldAlert size={15} className="text-emerald-800" />
+                  Requisitos de Confirmación (Canal Directo)
+                </h3>
+                {requirements && (
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                      requirements.puedeConfirmar
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}
+                  >
+                    {requirements.puedeConfirmar ? 'Apta para Confirmar' : 'Requisitos Incompletos'}
+                  </span>
+                )}
+              </div>
+
+              {requirements ? (
+                <div className="space-y-3">
+                  <div className="grid gap-2 sm:grid-cols-2 text-xs">
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-700">Contrato Firmado</span>
+                      {requirements.requisitos.contratoFirmado ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Validado
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 font-bold flex items-center gap-1">
+                          <Clock size={13} /> Pendiente
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-700">Voucher Recibido</span>
+                      {requirements.requisitos.evidenciaAdelanto ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Adjunto
+                        </span>
+                      ) : (
+                        <span className="text-red-700 font-bold flex items-center gap-1">
+                          <AlertCircle size={13} /> Faltante
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-700">Voucher Revisado</span>
+                      {requirements.requisitos.evidenciaRevisada ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Revisado
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 font-bold flex items-center gap-1">
+                          <Clock size={13} /> Pendiente
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-700">Adelanto Comercial</span>
+                      {requirements.requisitos.adelantoCubierto ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Cubierto
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 font-bold flex items-center gap-1">
+                          <Clock size={13} /> Insuficiente
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-700">Disponibilidad Fechas</span>
+                      {requirements.requisitos.disponibilidadValida ? (
+                        <span className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 size={13} /> Disponible
+                        </span>
+                      ) : (
+                        <span className="text-red-700 font-bold flex items-center gap-1">
+                          <AlertCircle size={13} /> Solape
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-white border border-stone-200">
+                      <span className="text-stone-500">Conciliación Bancaria</span>
+                      {requirements.requisitos.adelantoConciliado ? (
+                        <span className="text-stone-600 font-medium">Conciliado</span>
+                      ) : (
+                        <span className="text-stone-500 font-medium text-[11px]">En Proceso (Tesorería)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-stone-500 italic">
+                    * Según Adenda DR-02: La confirmación comercial exige contrato firmado y voucher revisado por coordinador. La conciliación bancaria es un proceso de tesorería y no bloquea la confirmación.
+                  </p>
+
+                  {requirements.motivosPendientes.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900 space-y-1">
+                      <p className="font-bold flex items-center gap-1">
+                        <AlertCircle size={14} className="text-amber-700" />
+                        Requisitos pendientes detectados:
+                      </p>
+                      <ul className="list-disc list-inside space-y-0.5 text-amber-800">
+                        {requirements.motivosPendientes.map((m) => (
+                          <li key={m}>{formatMotivoPendiente(m)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : requirementsError ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-900 flex items-center gap-2">
+                  <AlertCircle size={14} className="text-red-700 shrink-0" />
+                  <span>{requirementsError}</span>
+                </div>
+              ) : (
+                <p className="text-xs text-stone-500 italic">
+                  {isLoadingRequirements ? 'Consultando requisitos de confirmación...' : 'Cargando requisitos...'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* DR-02: SECCIÓN DE CONTRATOS ASOCIADOS Y VERSIONES */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-stone-700 flex items-center gap-1.5">
+                <FileText size={15} className="text-stone-600" />
+                Contratos de Reserva y Versiones
+              </h3>
+              {!isRegisteringContract && reservation.estado !== 'CANCELADA' && (
+                <button
+                  type="button"
+                  onClick={() => setIsRegisteringContract(true)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 hover:bg-stone-50 cursor-pointer"
+                >
+                  <Plus size={13} />
+                  Nueva Referencia
+                </button>
+              )}
+            </div>
+
+            {/* Formulario para registrar nueva referencia de contrato */}
+            {isRegisteringContract && (
+              <form onSubmit={handleRegisterContractSubmit} className="rounded-xl border border-stone-200 bg-stone-50 p-3.5 space-y-3">
+                <p className="text-xs font-bold text-stone-800">Registrar Referencia Documental de Contrato</p>
+                {contractError && (
+                  <p className="text-xs text-red-700 bg-red-50 p-2 rounded-lg border border-red-200">{contractError}</p>
+                )}
+                <div>
+                  <label className="block text-[11px] font-semibold text-stone-600 mb-1">
+                    Nombre Original del Archivo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newContractName}
+                    onChange={(e) => setNewContractName(e.target.value)}
+                    placeholder="ej. contrato_alquiler_firmado_cliente.pdf"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-900 focus:outline-hidden"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold text-stone-600 mb-1">
+                    URL Privada de Referencia (Google Drive / Repositorio interno)
+                  </label>
+                  <input
+                    type="url"
+                    value={newContractUrl}
+                    onChange={(e) => setNewContractUrl(e.target.value)}
+                    placeholder="https://drive.google.com/... o referencia interna"
+                    className="w-full rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs text-stone-900 focus:outline-hidden"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsRegisteringContract(false);
+                      setContractError(null);
+                      setContractIdempotencyKey(crypto.randomUUID());
+                    }}
+                    className="rounded-lg border border-stone-300 bg-white px-3 py-1 text-xs font-semibold text-stone-600 hover:bg-stone-100 cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="rounded-lg bg-[#183b32] px-3.5 py-1 text-xs font-semibold text-white hover:bg-[#122e27] cursor-pointer"
+                  >
+                    {isProcessing ? 'Guardando...' : 'Registrar Referencia'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Listado de versiones */}
+            {contracts.length > 0 ? (
+              <div className="space-y-2">
+                {contracts.map((ct) => (
+                  <div
+                    key={ct.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-xl border border-stone-200 bg-stone-50/40 text-xs gap-2"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-stone-800 bg-stone-200/80 px-1.5 py-0.5 rounded text-[11px]">
+                          v{ct.version}
+                        </span>
+                        <span className="font-semibold text-stone-900">{ct.nombreOriginal}</span>
+                        {getContractBadge(ct.estadoFirma)}
+                      </div>
+                      <p className="mt-1 text-[11px] text-stone-500">
+                        Registrado el {new Date(ct.registradoEn).toLocaleString('es-PE')}
+                        {ct.registradoPorNombre && ` por ${ct.registradoPorNombre}`}
+                      </p>
+                    </div>
+
+                    {ct.urlReferencia && (
+                      <span className="text-[11px] text-stone-400 font-mono italic truncate max-w-xs">
+                        [Referencia privada adjunta]
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-stone-400 italic">
+                {isLoadingContracts
+                  ? 'Cargando contratos...'
+                  : 'No se han registrado versiones de contrato para esta reserva.'}
+              </p>
+            )}
           </div>
 
           {/* Reference & Notes */}
@@ -269,11 +787,20 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             {reservation.estado === 'SOLICITADA' && (
               <button
                 type="button"
-                disabled={isProcessing}
+                disabled={isProcessing || isDirectAndCannotConfirm}
                 onClick={handleConfirmClick}
-                className="rounded-xl bg-[#183b32] px-5 py-2 text-sm font-semibold text-white hover:bg-[#122e27] cursor-pointer disabled:opacity-50"
+                title={
+                  isDirectAndCannotConfirm
+                    ? 'Requisitos pendientes: Debe contar con contrato firmado validado y voucher revisado.'
+                    : undefined
+                }
+                className="rounded-xl bg-[#183b32] px-5 py-2 text-sm font-semibold text-white hover:bg-[#122e27] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isProcessing ? 'Validando...' : 'Confirmar Reserva'}
+                {isProcessing
+                  ? 'Validando...'
+                  : isDirectAndCannotConfirm
+                  ? 'Requisitos Pendientes'
+                  : 'Confirmar Reserva'}
               </button>
             )}
           </div>

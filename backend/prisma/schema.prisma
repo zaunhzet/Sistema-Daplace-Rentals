@@ -63,6 +63,12 @@ enum EstadoEvidenciaPago {
   RECHAZADA
 }
 
+enum EstadoFirmaContrato {
+  REFERENCIADA
+  VALIDADA
+  RECHAZADA
+}
+
 enum ConceptoPago {
   ADELANTO
   SALDO
@@ -120,6 +126,8 @@ model Usuario {
   gastosAnulados      Gasto[]              @relation("GastosAnulados")
   sustentosRegistrados SustentoGasto[]     @relation("SustentosRegistrados")
   evidenciasPagoRegistradas EvidenciaPago[] @relation("EvidenciasPagoRegistradas")
+  contratosRegistrados ContratoReserva[]    @relation("ContratosRegistrados")
+  contratosValidados   ContratoReserva[]    @relation("ContratosValidados")
 
   @@map("usuarios")
 }
@@ -188,6 +196,7 @@ model Reserva {
   huesped           Huesped       @relation(fields: [huespedId], references: [id], onDelete: Restrict)
   pagos             Pago[]
   garantia          Garantia?
+  contratos         ContratoReserva[]
 
   @@index([propiedadId, ingreso, salida])
   @@index([huespedId])
@@ -363,5 +372,34 @@ model EvidenciaPago {
   @@index([pagoId])
   @@index([estado])
   @@map("evidencias_pago")
+}
+
+model ContratoReserva {
+  id                  String              @id @default(uuid())
+  reservaId           String
+  version             Int
+  nombreOriginal      String
+  urlReferencia       String?
+  estadoFirma         EstadoFirmaContrato @default(REFERENCIADA)
+  registradoPorId     String
+  registradoEn        DateTime            @default(now())
+  validadoPorId       String?
+  validadoEn          DateTime?
+  motivoValidacion    String?
+  reemplazaContratoId String?
+  idempotencyKey      String?
+  payloadHash         String?
+
+  reserva             Reserva             @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+  registradoPor       Usuario             @relation("ContratosRegistrados", fields: [registradoPorId], references: [id], onDelete: Restrict)
+  validadoPor         Usuario?            @relation("ContratosValidados", fields: [validadoPorId], references: [id], onDelete: SetNull)
+  reemplazaContrato   ContratoReserva?    @relation("ContratoReemplazado", fields: [reemplazaContratoId], references: [id], onDelete: SetNull)
+  contratosSustitutos ContratoReserva[]   @relation("ContratoReemplazado")
+
+  @@unique([reservaId, version])
+  @@unique([reservaId, idempotencyKey])
+  @@index([reservaId])
+  @@index([estadoFirma])
+  @@map("contratos_reserva")
 }
 
