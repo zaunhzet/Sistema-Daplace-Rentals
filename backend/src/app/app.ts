@@ -21,6 +21,7 @@ import type { ExpirationPolicyProvider } from '../modules/reservations/expiratio
 import type { ExpirationClock } from '../modules/reservations/expirationClock.js';
 
 import { authRoutes } from '../modules/auth/auth.routes.js';
+import { isUserAccountActive } from '../modules/auth/auth.service.js';
 import { AuthError } from '../modules/auth/auth.service.js';
 import type { AccessTokenPayload, IAuthRepository } from '../modules/auth/auth.types.js';
 
@@ -170,8 +171,8 @@ export function buildApp(
 
           if (options.authRepository) {
             const liveUser = await options.authRepository.findUserById(decoded.sub);
-            if (!liveUser || !liveUser.isActive) {
-              // Usuario inactivo o inexistente en base de datos: denegación estricta
+            if (!liveUser || !isUserAccountActive(liveUser)) {
+              // Usuario inactivo o identidad de dominio desactivada/inexistente: denegación estricta
               (request as any).user = undefined;
               return;
             }

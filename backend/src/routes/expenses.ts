@@ -580,7 +580,16 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar gastos en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
 
       try {
         const nuevoGasto = await prisma.$transaction(async (tx) => {
@@ -601,7 +610,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
               estado: 'REGISTRADO',
               idempotencyKey: safeIdempotencyKey,
               payloadHash: incomingHash,
-              registradoPorId: actorId,
+              registradoPorId: actorUsuarioId,
               sustentos: sustentos && sustentos.length > 0
                 ? {
                     create: sustentos.map((s) => ({
@@ -609,7 +618,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
                       nombreArchivo: s.nombreArchivo.trim(),
                       url: s.url.trim(),
                       origen: s.origen && s.origen.trim() ? s.origen.trim() : 'MANUAL',
-                      registradoPorId: actorId,
+                      registradoPorId: actorUsuarioId,
                     })),
                   }
                 : undefined,
@@ -972,7 +981,16 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para anular gastos en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
       const now = new Date();
 
       try {
@@ -1008,7 +1026,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
               estado: 'ANULADO',
               motivoAnulacion: motivo.trim(),
               anuladoEn: now,
-              anuladoPorId: actorId,
+              anuladoPorId: actorUsuarioId,
             },
             include: {
               propiedad: true,
@@ -1086,7 +1104,16 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar sustentos de gasto en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
 
       try {
         const sustentoCreado = await prisma.$transaction(async (tx) => {
@@ -1106,7 +1133,7 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
               nombreArchivo: nombreArchivo.trim(),
               url: url.trim(),
               origen: origen && origen.trim() ? origen.trim() : 'MANUAL',
-              registradoPorId: actorId,
+              registradoPorId: actorUsuarioId,
             },
             include: { registradoPor: true },
           });

@@ -11,6 +11,13 @@ export interface UserEntity {
   rol: UserRole;
   isActive: boolean;
   usuarioId?: string | null;
+  usuario?: {
+    id: string;
+    email: string;
+    nombre: string;
+    rol: string;
+    activo: boolean;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
 }

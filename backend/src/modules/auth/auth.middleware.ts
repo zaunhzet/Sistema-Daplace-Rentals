@@ -3,6 +3,7 @@ import {
   AuthError,
   ForbiddenError,
   UnauthorizedError,
+  isUserAccountActive,
 } from './auth.service.js';
 import type { AccessTokenPayload, IAuthRepository, UserRole } from './auth.types.js';
 
@@ -52,8 +53,8 @@ export function createAuthMiddleware(
     // Garantiza que un usuario desactivado o cuyo rol haya cambiado no conserve permisos sensibles
     if (config.repository) {
       const liveUser = await config.repository.findUserById(decoded.sub);
-      if (!liveUser || !liveUser.isActive) {
-        request.log.warn({ userId: decoded.sub }, 'Acceso revocado: cuenta de usuario desactivada o eliminada');
+      if (!liveUser || !isUserAccountActive(liveUser)) {
+        request.log.warn({ userId: decoded.sub }, 'Acceso revocado: cuenta de usuario o identidad de dominio desactivada');
         throw new UnauthorizedError('La cuenta de usuario ha sido desactivada o no está disponible.');
       }
 

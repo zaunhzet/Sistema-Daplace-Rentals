@@ -383,7 +383,16 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar garantías en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
       const motivoRecepcion = motivo && motivo.trim()
         ? motivo.trim()
         : `Recepción inicial de depósito de garantía en custodia para reserva ${reservaId}.`;
@@ -407,7 +416,7 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
               tipo: 'RECEPCION',
               monto: montoDecimal,
               motivo: motivoRecepcion,
-              actorId,
+              actorId: actorUsuarioId,
               idempotencyKey: idempotencyKey && idempotencyKey.trim() ? idempotencyKey.trim() : null,
             },
           });
@@ -503,7 +512,16 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar movimientos de garantía en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
       const safeIdempotencyKey = idempotencyKey && idempotencyKey.trim() ? idempotencyKey.trim() : null;
 
       try {
@@ -582,7 +600,7 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
               monto: montoMovimiento,
               motivo: motivo.trim(),
               documentoSoporte: documentoSoporte && documentoSoporte.trim() ? documentoSoporte.trim() : null,
-              actorId,
+              actorId: actorUsuarioId,
               idempotencyKey: safeIdempotencyKey,
             },
           });

@@ -15,6 +15,7 @@ export class PrismaAuthRepository implements IAuthRepository {
   async findUserByEmail(email: string): Promise<UserEntity | null> {
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      include: { usuario: true },
     });
     if (!user) return null;
     return {
@@ -26,6 +27,7 @@ export class PrismaAuthRepository implements IAuthRepository {
   async findUserById(id: string): Promise<UserEntity | null> {
     const user = await this.prisma.user.findUnique({
       where: { id },
+      include: { usuario: true },
     });
     if (!user) return null;
     return {
@@ -44,6 +46,7 @@ export class PrismaAuthRepository implements IAuthRepository {
         ...data,
         rol: data.rol ? (data.rol as any) : undefined,
       },
+      include: { usuario: true },
     });
     return {
       ...updated,
@@ -68,6 +71,7 @@ export class PrismaAuthRepository implements IAuthRepository {
         rol: (data.rol ?? 'CLIENTE') as any,
         usuarioId: data.usuarioId ?? null,
       },
+      include: { usuario: true },
     });
     return {
       ...user,

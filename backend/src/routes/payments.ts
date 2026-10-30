@@ -780,7 +780,16 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar pagos en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
 
       try {
         const nuevoPago = await prisma.$transaction(async (tx) => {
@@ -796,7 +805,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
               estado: 'PENDIENTE_CONCILIACION',
               idempotencyKey: safeIdempotencyKey,
               payloadHash,
-              registradoPorId: actorId,
+              registradoPorId: actorUsuarioId,
               notas: notas ? notas.trim() : null,
               beneficiarioTipo: resolvedBeneficiario,
               beneficiarioNombre: safeBeneficiarioNombre,
@@ -819,7 +828,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
                   url: ev.url && ev.url.trim() ? ev.url.trim() : null,
                   estado: 'REFERENCIADA',
                   notas: ev.notas && ev.notas.trim() ? ev.notas.trim() : null,
-                  registradoPorId: actorId,
+                  registradoPorId: actorUsuarioId,
                 },
               });
             }
@@ -896,7 +905,16 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       const { referencia, notas } = request.body || {};
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para conciliar pagos en el sistema.',
+            requestId: request.id,
+          },
+        });
+      }
       const now = new Date();
 
       try {
@@ -929,7 +947,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
             where: { id },
             data: {
               estado: 'CONCILIADO',
-              conciliadoPorId: actorId,
+              conciliadoPorId: actorUsuarioId,
               conciliadoEn: now,
               referenciaOperacion: referencia && referencia.trim() ? referencia.trim() : undefined,
               notas: notas && notas.trim()

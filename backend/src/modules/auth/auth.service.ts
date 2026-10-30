@@ -69,6 +69,31 @@ export interface AuthServiceConfig {
   signAccessToken: (payload: AccessTokenPayload) => string;
 }
 
+
+/**
+ * Evalúa si una cuenta está activa y autorizada para autenticarse o realizar peticiones protegidas.
+ * Regla:
+ * 1. Si User.isActive = false, deniega el acceso.
+ * 2. Si User tiene usuarioId, exige también que el Usuario vinculado exista y tenga activo = true.
+ * 3. Las cuentas sin usuarioId (como CLIENTE) se rigen exclusivamente por User.isActive.
+ */
+export function isUserAccountActive(user: {
+  isActive: boolean;
+  usuarioId?: string | null;
+  usuario?: { activo: boolean } | null;
+}): boolean {
+  if (!user.isActive) {
+    return false;
+  }
+  if (user.usuarioId && typeof user.usuarioId === 'string' && user.usuarioId.trim() !== '') {
+    if (!user.usuario) {
+      return false;
+    }
+    return user.usuario.activo === true;
+  }
+  return true;
+}
+
 export class AuthService {
   private readonly refreshTokenTtlDays: number;
   private readonly gracePeriodMs: number;
@@ -123,7 +148,7 @@ export class AuthService {
 
     // Si el usuario no existe o está inactivo, ejecutamos la verificación ficticia
     // de Argon2id para igualar el tiempo de respuesta y prevenir la enumeración de cuentas por temporización
-    if (!user || !user.isActive) {
+    if (!user || !isUserAccountActive(user)) {
       await AuthService.verifyPassword(AuthService.DUMMY_HASH, params.password);
       throw new InvalidCredentialsError();
     }
@@ -212,7 +237,7 @@ export class AuthService {
     }
 
     const user = await this.repository.findUserById(rotationResult.userId);
-    if (!user || !user.isActive) {
+    if (!user || !isUserAccountActive(user)) {
       throw new InvalidRefreshTokenError('Usuario no disponible o desactivado.');
     }
 
@@ -266,7 +291,7 @@ export class AuthService {
 
   async getUserProfile(userId: string): Promise<SafeUser> {
     const user = await this.repository.findUserById(userId);
-    if (!user || !user.isActive) {
+    if (!user || !isUserAccountActive(user)) {
       throw new UnauthorizedError('El usuario no existe o se encuentra desactivado.');
     }
 

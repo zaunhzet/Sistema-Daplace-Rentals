@@ -151,7 +151,16 @@ export function registerPaymentEvidencesRoutes(prisma: PrismaClient): FastifyPlu
 
       const effectiveTipo = tipo && tipo.trim() ? tipo.trim() : 'VOUCHER';
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorUsuarioId = request.user?.usuarioId;
+      if (!actorUsuarioId || typeof actorUsuarioId !== 'string' || actorUsuarioId.trim() === '') {
+        return reply.status(403).send({
+          error: {
+            code: 'DOMAIN_IDENTITY_REQUIRED',
+            message: 'Se requiere una identidad transaccional (usuarioId) válida y vinculada para registrar evidencias de pago.',
+            requestId: request.id,
+          },
+        });
+      }
 
       // E. Canonicalización y cálculo del hash de evidencia
       const calculatedHash = computeEvidencePayloadHash({
@@ -207,7 +216,7 @@ export function registerPaymentEvidencesRoutes(prisma: PrismaClient): FastifyPlu
               notas: notas && notas.trim() ? notas.trim() : null,
               idempotencyKey,
               payloadHash: calculatedHash,
-              registradoPorId: actorId,
+              registradoPorId: actorUsuarioId,
             },
             include: { registradoPor: true },
           });
