@@ -67,37 +67,37 @@ export const AdminLayout: React.FC = () => {
             </nav>
           </div>
 
-          {/* Right Header: Discrete Neutral Environment Indicator + Demo Auth */}
+          {/* Right Header: Indicador de sesión real y control de acceso */}
           <div className="flex items-center gap-3 shrink-0">
             {session.isAuthenticated ? (
               <div className="flex items-center gap-2">
                 <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
                   <span className="size-1.5 rounded-full bg-emerald-600" />
-                  {session.user?.nombre} ({session.user?.rol}) <span className="text-[10px] text-emerald-600 font-bold tracking-wider">· DEMO</span>
+                  {session.user?.nombre} ({session.user?.rol})
                 </span>
                 <button
                   type="button"
                   onClick={logoutDemo}
                   className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 cursor-pointer"
-                  title="Cerrar la sesión de demostración"
+                  title="Cerrar la sesión activa"
                 >
-                  Cerrar sesión demo
+                  Cerrar sesión
                 </button>
               </div>
             ) : (
               <div className="flex items-center gap-2.5">
                 <span
                   className="hidden md:inline text-[11px] text-stone-400 font-normal tracking-tight select-none"
-                  title="Entorno transaccional conectado a PostgreSQL. Autenticación demo en desarrollo."
+                  title="Entorno administrativo con autenticación segura."
                 >
-                  Entorno de prueba <span className="hidden lg:inline">· Sin autenticación</span>
+                  Acceso restringido
                 </span>
                 <NavLink
                   to="/login"
                   className="rounded-lg bg-[#183b32] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#122e27] cursor-pointer"
-                  title="Acceso al formulario de Login Demo (HU-08)"
+                  title="Iniciar sesión en Daplace Rentals"
                 >
-                  Iniciar sesión demo
+                  Iniciar sesión
                 </NavLink>
               </div>
             )}

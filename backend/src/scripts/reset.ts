@@ -98,7 +98,9 @@ export async function safeResetTestDatabase(databaseUrl: string) {
         "reservas",
         "propiedades",
         "huespedes",
-        "usuarios"
+        "usuarios",
+        "auth_sessions",
+        "users"
       RESTART IDENTITY CASCADE;
     `);
   } finally {
@@ -131,7 +133,9 @@ export async function safeResetDatabase(options: ResetOptions = {}) {
         "reservas",
         "propiedades",
         "huespedes",
-        "usuarios"
+        "usuarios",
+        "auth_sessions",
+        "users"
       RESTART IDENTITY CASCADE;
     `);
 

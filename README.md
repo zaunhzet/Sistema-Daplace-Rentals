@@ -1,116 +1,150 @@
-# Daplace Rentals
+# Daplace Rentals — Monorepo Transaccional
 
-Monorepo de desarrollo para el sistema transaccional Daplace Rentals. Este bootstrap configura la interfaz, API, PostgreSQL local y Prisma; **no implementa reservas, pagos, garantías ni autenticación**.
+Monorepo de desarrollo para el **Sistema Web Transaccional para la Gobernanza y Estandarización de Datos de Daplace Rentals**.
 
-## Requisitos
+El sistema integra la gestión integral de operaciones inmobiliarias de alquiler temporal (propiedades, huéspedes, reservas, calendario, pagos, garantías, gastos y contratos) con un motor de backend en **Fastify 5**, base de datos relacional **PostgreSQL** mediante **Prisma ORM 7**, control de concurrencia y un sistema de **autenticación y autorización basada en roles (RBAC) con sesiones persistentes y revocación durable**.
 
-- Node.js 24.x (LTS) y npm 11.x.
-- Docker Desktop con motor Linux activo para ejecutar PostgreSQL local con Compose.
-- Git.
+---
 
-Las dependencias quedan fijadas en `package-lock.json`. El frontend usa React, Vite, React Router y Tailwind CSS; el backend usa Fastify, TypeScript y Prisma ORM 7 con PostgreSQL. Prisma ORM 8 se mantiene fuera del stack porque está en release candidate al momento de preparar esta base.
-
-## Estructura
+## 1. Arquitectura y Módulos del Sistema
 
 ```text
-frontend/             React + Vite + TypeScript + Tailwind CSS
-backend/              Fastify + TypeScript + Prisma
-  prisma/              esquema y migraciones SQL versionadas
-database/              guía de base de datos local
-compose.yaml           PostgreSQL local de desarrollo
-.env.example           configuración local de ejemplo
+daplace-rentals/
+├── frontend/                     React 19 + Vite + TypeScript + Tailwind CSS
+│   ├── src/features/auth/        Autenticación real, rotación, contexto seguro y sesión
+│   ├── src/features/properties/  Gestión de inmuebles, estado operativo y ownership
+│   ├── src/features/guests/      Directorio de huéspedes con validación de contacto
+│   ├── src/features/reservations/ Ciclo de vida de reservas, solape y outbox
+│   ├── src/features/calendar/    Grilla mensual de ocupación y sincronización
+│   ├── src/features/payments/    Pagos, conciliación contable y vouchers probatorios
+│   ├── src/features/guarantees/  Custodia de depósitos y libro de movimientos
+│   ├── src/features/expenses/    Gastos operativos por inmueble y sustentos
+│   └── src/shared/api/           Cliente API unificado con epoch y reintento idempotente
+├── backend/                      Fastify 5 + TypeScript + Prisma 7 + PostgreSQL
+│   ├── prisma/                   Esquema unificado (User, Usuario, Reserva, Pago, etc.)
+│   ├── src/modules/auth/         Servicio atómico de autenticación, JWT y sesiones
+│   ├── src/modules/reservations/ Expiración transaccional (DR-03) y worker de avisos
+│   ├── src/routes/               Endpoints REST de dominio protegidos por roles
+│   └── src/scripts/              Seeds seguros de desarrollo y reseteo idempotente
+├── docs/                         Documentación técnica, auditorías y trazabilidad
+└── compose.yaml                  Contenedor Docker para PostgreSQL local
 ```
 
-El esquema de Prisma intencionalmente no declara tablas de negocio. La primera migración es una línea base sin tablas; agregar modelos/migraciones solo dentro de las tareas aprobadas.
+---
 
-## Preparación inicial — PowerShell
+## 2. Requisitos de Entorno
 
-Clona el repositorio y entra a su carpeta. Si ya lo tienes, omite las dos primeras líneas:
+* **Node.js:** Versión 24.x LTS (compatible con Node 20+).
+* **npm:** Versión 11.x o superior.
+* **PostgreSQL / Docker:** PostgreSQL 16+ con extensión `btree_gist` habilitada (proporcionada mediante `compose.yaml`).
+* **Git:** Para control de versiones.
 
+---
+
+## 3. Puesta en Marcha Local
+
+### Paso 1: Configurar variables de entorno e instalar dependencias
+
+En PowerShell (Windows):
 ```powershell
-git clone https://github.com/zaunhzet/Sistema-Web-Transaccional-para-la-Gobernanza-y-Estandarizacion-de-Datos-DAPLACE-RENTALS.git
-Set-Location Sistema-Web-Transaccional-para-la-Gobernanza-y-Estandarizacion-de-Datos-DAPLACE-RENTALS
 Copy-Item .env.example .env
 npm ci
-npm run db:up
-npm run db:generate
-npm run db:validate
-npm run db:migrate:deploy
 ```
 
-Espera a que PostgreSQL termine de iniciar. `npm run db:up` usa un volumen local persistente de Docker; `npm run db:down` solo detiene el contenedor y conserva los datos.
-
-## Preparación inicial — macOS / Linux
-
+En Bash (macOS / Linux):
 ```sh
-git clone https://github.com/zaunhzet/Sistema-Web-Transaccional-para-la-Gobernanza-y-Estandarizacion-de-Datos-DAPLACE-RENTALS.git
-cd Sistema-Web-Transaccional-para-la-Gobernanza-y-Estandarizacion-de-Datos-DAPLACE-RENTALS
 cp .env.example .env
 npm ci
+```
+
+### Paso 2: Iniciar PostgreSQL y aplicar migraciones
+
+```sh
 npm run db:up
 npm run db:generate
 npm run db:validate
 npm run db:migrate:deploy
 ```
 
-## Desarrollo
+### Paso 3: Inicializar datos de desarrollo (Seed Seguro)
 
-Desde la raíz del repositorio:
+Configure en su archivo `.env` local:
+* `ALLOW_DEV_SEED="true"`
+* `DEV_DEFAULT_PASSWORD="<contraseña_elegida_min_8_caracteres>"`
 
+Y ejecute:
+```sh
+npm run db:seed
+```
+
+#### Cuentas de Prueba Creadas:
+| Rol | Correo | Propósito en el Sistema |
+| :--- | :--- | :--- |
+| **ADMINISTRADOR** | `admin.dev@daplace.pe` | Gestión total, anulación de pagos, aprobación de gastos |
+| **OPERADOR** | `operador.dev@daplace.pe` | Registro de reservas, pagos y atención de huéspedes |
+| **PROPIETARIO** | `propietario.dev@daplace.pe` | Acceso restringido a sus inmuebles y calendario propio |
+| **CLIENTE** | `cliente.dev@daplace.pe` | Cuenta base de huésped/usuario |
+
+---
+
+## 4. Ejecución del Entorno de Desarrollo
+
+Para iniciar tanto el frontend como el backend simultáneamente:
 ```sh
 npm run dev
 ```
 
-- Interfaz: <http://127.0.0.1:5173>
-- API viva: <http://127.0.0.1:3000/health>
-- API lista (comprueba PostgreSQL): <http://127.0.0.1:3000/health/ready>
+* **Frontend Web:** <http://127.0.0.1:5173>
+* **Backend API:** <http://127.0.0.1:3000>
+* **Health Check API:** <http://127.0.0.1:3000/health>
+* **Health Check Base de Datos:** <http://127.0.0.1:3000/health/ready>
 
-`/health` confirma que el proceso responde. `/health/ready` consulta PostgreSQL y devuelve 503 si la base no está accesible. Ninguna ruta de salud lee ni modifica datos de negocio.
+Para ejecutarlos en terminales independientes:
+* Frontend: `npm run dev:web`
+* Backend: `npm run dev:api`
 
-Para iniciar cada proceso por separado: `npm run dev:web` o `npm run dev:api`.
+---
 
-## Verificaciones
+## 5. Suites de Pruebas y Calidad de Código
 
-```sh
-npm run typecheck
-npm test
-npm run build
-npm run db:validate
-```
-
-Generar el cliente después de cambiar el esquema:
+El proyecto cuenta con validación integral automatizada sin mocks destructivos:
 
 ```sh
-npm run db:generate
+# Ejecutar verificación completa (Typecheck, Tests y Build)
+npm run verify
+
+# O de forma independiente:
+npm run typecheck       # Verificación estricta de tipos en frontend y backend
+npm test                # Ejecuta 234 tests backend (PostgreSQL) y 140 tests frontend
+npm run build           # Compilación de paquetes de producción
 ```
 
-## Migraciones
+---
 
-- Las migraciones viven en `backend/prisma/migrations/` y se versionan junto con el esquema.
-- `npm run db:migrate:dev` crea/aplica migraciones durante desarrollo local. Úsalo solo contra una base local/desocupable identificada; Prisma puede pedir resolver divergencias de esquema.
-- `npm run db:migrate:deploy` ejecuta solo el SQL de las migraciones versionadas pendientes; no genera migraciones nuevas.
-- `npm run db:status` informa el estado de migraciones.
-- No usar comandos `reset`, no borrar volúmenes y no apuntar estas órdenes a una base compartida o de producción. Revisar `DATABASE_URL` antes de cualquier migración.
-- La base de Compose usa valores de ejemplo exclusivos para desarrollo local; cambiar credenciales/URL para cualquier otro entorno. No guardar `.env` ni secretos en Git.
+## 6. Aspectos Clave de Seguridad y Negocio
 
-## Convenciones iniciales
+1. **Separación de Identidades (`User` vs `Usuario`):**
+   * `User` gestiona credenciales de acceso, contraseñas cifradas y sesiones activas.
+   * `Usuario` representa la identidad transaccional en el dominio (propietario o personal interno).
+   * Vínculo relacional `User.usuarioId -> Usuario.id` con integridad referencial estricta `ON DELETE RESTRICT`. Nunca se sustituye `User.id` por `Usuario.id`.
+2. **Aislamiento de Dominio para Propietarios:**
+   * Si un usuario con rol `PROPIETARIO` no posee vínculo transaccional en `usuarios`, los endpoints responden `403 DOMAIN_IDENTITY_REQUIRED`.
+   * Un propietario jamás puede ver inmuebles ni calendarios de otros propietarios.
+3. **Control Transaccional de Solape de Reservas:**
+   * La base de datos PostgreSQL rechaza reservas conflictivas con restricción de exclusión mediante `btree_gist` en intervalos semiabiertos `[ingreso, salida)`.
+4. **Idempotencia e Inmunidad Financiera:**
+   * Pagos, garantías y gastos exigen `idempotencyKey` para evitar cargos duplicados.
+   * Los registros contables y movimientos no se eliminan físicamente; se preservan mediante estados `CONCILIADO`, `RECHAZADO` o `ANULADO` con auditoría.
 
-- Módulos backend: `backend/src/modules/<dominio>/` cuando se asignen tareas de negocio; separar rutas, validación HTTP, servicio de dominio y persistencia.
-- Frontend: `frontend/src/features/<dominio>/`; componentes compartidos bajo `frontend/src/shared/`.
-- Componentes React en PascalCase; funciones/variables en camelCase; rutas HTTP en minúscula plural según contrato aprobado.
-- Respuestas de error usan `{ "error": { "code", "message", "details?", "requestId" } }`. Fastify valida JSON Schema y responde 400 ante errores de validación. No incluir secretos ni datos personales innecesarios en mensajes/logs.
-- Los contratos de negocio requieren aprobación antes de implementarse; este bootstrap solo añade rutas de salud.
+---
 
-## Variables de entorno
+## 7. Documentación Técnica del Proyecto
 
-`.env.example` contiene valores locales de referencia:
+Para consultar los informes de arquitectura, matrices de requisitos y planes de continuidad, consulte la carpeta [`docs/`](docs/):
 
-- `DATABASE_URL`: conexión PostgreSQL leída por Prisma.
-- `API_HOST`, `API_PORT`: interfaz y puerto de Fastify.
-- `VITE_API_BASE_URL`: base prevista para el cliente HTTP futuro.
-
-El archivo `.env` local está excluido de Git. No usar información real en fixtures.
-
-## Estado y límites
-
-La pantalla inicial es una estructura de navegación, no un módulo de negocio. No existe autenticación ni operaciones de negocio implementadas. PostgreSQL está configurado mediante Prisma y la ruta de readiness, pero requiere que el contenedor/base esté iniciado.
+* [**04 — Arquitectura del Sistema**](docs/04-ARQUITECTURA.md): Modelo por capas, monorepo y flujo de datos.
+* [**05 — Modelo de Datos**](docs/05-MODELO-DATOS.md): Esquema relacional, entidades financieras y sesiones.
+* [**06 — Contratos API**](docs/06-CONTRATOS-API.md): Especificación de endpoints REST, códigos de error y payloads.
+* [**Estado Consolidado del Proyecto**](docs/ESTADO-PROYECTO-2026-10-30.md): Auditoría completa del estado de implementación al 30 de octubre de 2026.
+* [**Informe Histórico de Integración André–Diego**](docs/INTEGRACION-ANDRE-DIEGO-2026-10-30.md): Detalle técnico del merge de autenticación y transacciones.
+* [**Plan de Continuidad MVP**](docs/PLAN-CONTINUIDAD-MVP.md): Roadmap operativo priorizado (P0, P1, P2) rumbo a la demo del 2 de noviembre.

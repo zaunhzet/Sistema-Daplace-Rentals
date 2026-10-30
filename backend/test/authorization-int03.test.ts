@@ -1,0 +1,303 @@
+import assert from 'node:assert/strict';
+import { after, before, beforeEach, describe, it } from 'node:test';
+import { getRequiredTestDatabaseUrl, safeResetTestDatabase, createDatabase } from './test-helpers.js';
+import { buildApp } from '../src/app/app.js';
+import { PrismaAuthRepository } from '../src/modules/auth/auth.repository.js';
+import { AuthService } from '../src/modules/auth/auth.service.js';
+
+const testDbUrl = getRequiredTestDatabaseUrl();
+const TEST_JWT_SECRET = 'secreto_jwt_super_seguro_para_pruebas_de_autorizacion_int03!';
+
+describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamiento por Propiedad', () => {
+  let db: ReturnType<typeof createDatabase>;
+  let repository: PrismaAuthRepository;
+  let app: ReturnType<typeof buildApp>;
+
+  let adminToken: string;
+  let operadorToken: string;
+  let propietario1Token: string;
+  let propietario2Token: string;
+  let clienteToken: string;
+
+  let prop1Id: string;
+  let prop2Id: string;
+  let reservaId: string;
+
+  before(async () => {
+    db = createDatabase(testDbUrl);
+    repository = new PrismaAuthRepository(db.prisma);
+    app = buildApp({
+      prisma: db.prisma,
+      authRepository: repository,
+      jwtSecret: TEST_JWT_SECRET,
+      allowedOrigins: ['http://127.0.0.1:5173', 'http://localhost:5173'],
+      secureCookies: false,
+    });
+    await app.ready();
+  });
+
+  beforeEach(async () => {
+    await safeResetTestDatabase(testDbUrl);
+
+    const passwordHash = await AuthService.hashPassword('PassSecure2026!');
+
+    // 1. Crear usuarios transaccionales y de autenticación
+    const usuarioAdmin = await db.prisma.usuario.create({
+      data: { id: 'usr-admin-trans', nombre: 'Admin Sistema', email: 'admin@daplace.pe', rol: 'ADMIN' },
+    });
+    const userAdmin = await repository.createUser({
+      email: 'admin@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Sistema',
+      rol: 'ADMINISTRADOR',
+      usuarioId: usuarioAdmin.id,
+    });
+
+    const usuarioOperador = await db.prisma.usuario.create({
+      data: { id: 'usr-operador-trans', nombre: 'Operador Turno', email: 'operador@daplace.pe', rol: 'OPERADOR' },
+    });
+    const userOperador = await repository.createUser({
+      email: 'operador@daplace.pe',
+      passwordHash,
+      nombre: 'Operador Turno',
+      rol: 'OPERADOR',
+      usuarioId: usuarioOperador.id,
+    });
+
+    const usuarioProp1 = await db.prisma.usuario.create({
+      data: { id: 'usr-prop1-trans', nombre: 'Propietario Uno', email: 'prop1@daplace.pe', rol: 'PROPIETARIO' },
+    });
+    const userProp1 = await repository.createUser({
+      email: 'prop1@daplace.pe',
+      passwordHash,
+      nombre: 'Propietario Uno',
+      rol: 'PROPIETARIO',
+      usuarioId: usuarioProp1.id,
+    });
+
+    const usuarioProp2 = await db.prisma.usuario.create({
+      data: { id: 'usr-prop2-trans', nombre: 'Propietario Dos', email: 'prop2@daplace.pe', rol: 'PROPIETARIO' },
+    });
+    const userProp2 = await repository.createUser({
+      email: 'prop2@daplace.pe',
+      passwordHash,
+      nombre: 'Propietario Dos',
+      rol: 'PROPIETARIO',
+      usuarioId: usuarioProp2.id,
+    });
+
+    const userCliente = await repository.createUser({
+      email: 'cliente@daplace.pe',
+      passwordHash,
+      nombre: 'Cliente Web',
+      rol: 'CLIENTE',
+    });
+
+    // 2. Crear Propiedades
+    const p1 = await db.prisma.propiedad.create({
+      data: {
+        id: 'prop-autorizacion-1',
+        nombre: 'Penthouse Miraflores Malecón',
+        propietarioId: usuarioProp1.id,
+        direccion: 'Malecón de la Reserva 100',
+        precioBaseNoche: 350.0,
+      },
+    });
+    prop1Id = p1.id;
+
+    const p2 = await db.prisma.propiedad.create({
+      data: {
+        id: 'prop-autorizacion-2',
+        nombre: 'Loft Barranco Artes',
+        propietarioId: usuarioProp2.id,
+        direccion: 'Av. Pedro de Osma 200',
+        precioBaseNoche: 280.0,
+      },
+    });
+    prop2Id = p2.id;
+
+    // 3. Crear Huésped y Reserva en Propiedad 1
+    const huesped = await db.prisma.huesped.create({
+      data: {
+        id: 'huesped-int03-1',
+        nombreCompleto: 'Huésped Internacional',
+        email: 'guest@example.com',
+      },
+    });
+
+    const reserva = await db.prisma.reserva.create({
+      data: {
+        id: 'res-int03-1',
+        propiedadId: prop1Id,
+        huespedId: huesped.id,
+        ingreso: new Date('2026-11-10T00:00:00.000Z'),
+        salida: new Date('2026-11-15T00:00:00.000Z'),
+        noches: 5,
+        montoAcordado: 1750.0,
+        estado: 'SOLICITADA',
+      },
+    });
+    reservaId = reserva.id;
+
+    // 4. Obtener tokens JWT para cada rol
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+
+    const resAdmin = await authService.login({ email: 'admin@daplace.pe', password: 'PassSecure2026!' });
+    adminToken = resAdmin.accessToken;
+
+    const resOperador = await authService.login({ email: 'operador@daplace.pe', password: 'PassSecure2026!' });
+    operadorToken = resOperador.accessToken;
+
+    const resProp1 = await authService.login({ email: 'prop1@daplace.pe', password: 'PassSecure2026!' });
+    propietario1Token = resProp1.accessToken;
+
+    const resProp2 = await authService.login({ email: 'prop2@daplace.pe', password: 'PassSecure2026!' });
+    propietario2Token = resProp2.accessToken;
+
+    const resCliente = await authService.login({ email: 'cliente@daplace.pe', password: 'PassSecure2026!' });
+    clienteToken = resCliente.accessToken;
+  });
+
+  after(async () => {
+    await app.close();
+    await db.close();
+  });
+
+  it('1. Usuario no autenticado (sin Authorization): recibe HTTP 401 en endpoints administrativos', async () => {
+    const resPagos = await app.inject({ method: 'GET', url: '/api/pagos' });
+    assert.equal(resPagos.statusCode, 401);
+
+    const resReservas = await app.inject({ method: 'GET', url: '/api/reservas' });
+    assert.equal(resReservas.statusCode, 401);
+
+    const resGarantias = await app.inject({ method: 'GET', url: '/api/garantias' });
+    assert.equal(resGarantias.statusCode, 401);
+  });
+
+  it('2. Rol CLIENTE no tiene privilegios operativos: recibe HTTP 403 en pagos, reservas y propiedades', async () => {
+    const resPagos = await app.inject({
+      method: 'GET',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    assert.equal(resPagos.statusCode, 403);
+
+    const resReservas = await app.inject({
+      method: 'GET',
+      url: '/api/reservas',
+      headers: { authorization: `Bearer ${clienteToken}` },
+    });
+    assert.equal(resReservas.statusCode, 403);
+  });
+
+  it('3. Aislamiento estricto de Propietario: solo accede a su propia propiedad y recibe 403 en propiedad ajena', async () => {
+    // Propietario 1 consulta su propiedad (prop1Id) -> 200 OK
+    const resPropia = await app.inject({
+      method: 'GET',
+      url: `/api/propiedades/${prop1Id}`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resPropia.statusCode, 200);
+
+    // Propietario 1 intenta consultar la propiedad de Propietario 2 (prop2Id) -> 403 FORBIDDEN
+    const resAjena = await app.inject({
+      method: 'GET',
+      url: `/api/propiedades/${prop2Id}`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resAjena.statusCode, 403);
+    const bodyAjena = JSON.parse(resAjena.payload);
+    assert.equal(bodyAjena.error.code, 'FORBIDDEN');
+  });
+
+  it('4. Propietario listando propiedades solo recibe las que le pertenecen', async () => {
+    const resLista = await app.inject({
+      method: 'GET',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resLista.statusCode, 200);
+    const bodyLista = JSON.parse(resLista.payload);
+    assert.ok(Array.isArray(bodyLista));
+    assert.equal(bodyLista.length, 1);
+    assert.equal(bodyLista[0].id, prop1Id);
+  });
+
+  it('5. Administrador y Operador tienen acceso a la gestión de reservas y pagos', async () => {
+    const resAdmin = await app.inject({
+      method: 'GET',
+      url: '/api/reservas',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    assert.equal(resAdmin.statusCode, 200);
+
+    const resOperador = await app.inject({
+      method: 'GET',
+      url: '/api/reservas',
+      headers: { authorization: `Bearer ${operadorToken}` },
+    });
+    assert.equal(resOperador.statusCode, 200);
+  });
+
+  it('6. Propietario NO tiene autorización para listar ni operar pagos globales (HTTP 403)', async () => {
+    const resPagosProp = await app.inject({
+      method: 'GET',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resPagosProp.statusCode, 403);
+  });
+
+  it('7. Cuenta PROPIETARIO activa sin usuarioId transaccional: denegada con 403 DOMAIN_IDENTITY_REQUIRED en dominio', async () => {
+    const passwordHash = await AuthService.hashPassword('PassSecure2026!');
+    // Usuario de autenticación activo con rol PROPIETARIO pero sin vínculo transaccional (usuarioId: null)
+    await repository.createUser({
+      email: 'propietario.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Propietario Sin Entidad',
+      rol: 'PROPIETARIO',
+      usuarioId: null,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginResult = await authService.login({
+      email: 'propietario.huerfano@daplace.pe',
+      password: 'PassSecure2026!',
+    });
+    const huerfanoToken = loginResult.accessToken;
+
+    // 1. Intento de listar propiedades
+    const resList = await app.inject({
+      method: 'GET',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${huerfanoToken}` },
+    });
+    assert.equal(resList.statusCode, 403);
+    const bodyList = JSON.parse(resList.payload);
+    assert.equal(bodyList.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // 2. Intento de consultar propiedad por ID
+    const resDetail = await app.inject({
+      method: 'GET',
+      url: `/api/propiedades/${prop1Id}`,
+      headers: { authorization: `Bearer ${huerfanoToken}` },
+    });
+    assert.equal(resDetail.statusCode, 403);
+    const bodyDetail = JSON.parse(resDetail.payload);
+    assert.equal(bodyDetail.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // 3. Intento de consultar calendario
+    const resCal = await app.inject({
+      method: 'GET',
+      url: `/api/calendario?propiedadId=${prop1Id}&month=11&year=2026`,
+      headers: { authorization: `Bearer ${huerfanoToken}` },
+    });
+    assert.equal(resCal.statusCode, 403);
+    const bodyCal = JSON.parse(resCal.payload);
+    assert.equal(bodyCal.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+});

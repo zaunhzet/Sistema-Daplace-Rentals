@@ -10,19 +10,20 @@
 
 | Ruta | Nombre del Módulo | Responsable | Estado Actual | HU / RF Relacionada | Descripción |
 |---|---|---|---|---|---|
-| `/catalogo` | Catálogo Público de Propiedades | **André** | **DISPONIBLE (Mock)** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Exclusivamente propiedades activas, operativas y publicadas. Protección de privacidad (sin datos de propietario ni finanzas privadas). |
-| `/solicitar-reserva` | Solicitud Pública de Reserva | **André** | **DISPONIBLE (Mock)** | RF01, RF02 / HU-01, HU-02 | Formulario público con verificación en tiempo real de disponibilidad por intervalo [ingreso, salida), validación de contacto y registro de reserva en estado SOLICITADA. |
-| `/login` | Acceso al Sistema | **Diego** | *En desarrollo por Diego* | RF09 / HU-08 | Pantalla de inicio de sesión y gestión de credenciales. **No forma parte del menú lateral.** |
-| `/dashboard` | Dashboard Principal | **Diego** | *Pendiente* | RF09 / HU-08 | Resumen general, KPIs iniciales y accesos directos. |
-| `/propiedades` | Gestión de Propiedades | **André** | **DISPONIBLE (Mock)** | RF01 / HU-18 | Catálogo, alta, edición, filtros, vinculación de propietario e inmunidad financiera (desactivación lógica). |
-| `/huespedes` | Directorio de Huéspedes | **André** | **DISPONIBLE (Mock)** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas relacionadas. Validación de al menos un contacto. |
-| `/reservas` | Gestión de Reservas | **André** | **DISPONIBLE (Mock)** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes con intervalos [ingreso, salida), liberación por cancelación y reprogramación. |
-| `/calendario` | Calendario Operativo | **André** | **DISPONIBLE (Mock)** | RF01 / HU-01 | Vista mensual de disponibilidad, días ocupados, días de transición (check-out/check-in), detección de bloqueos y trazabilidad directa a reservas. |
-| `/pagos` | Pagos y Conciliación | **André** | **DISPONIBLE (Mock)** | RF05 / HU-05 | Registro de adelantos, saldos pendientes, alertas de sobrepago e idempotencia mock con conciliación explícita. |
-| `/garantias` | Control de Garantías | **André** | **DISPONIBLE (Mock)** | RF06 / HU-06 | Custodia separada de fondos (no ingresos), libro mayor inmutable de movimientos, devoluciones y retenciones limitadas al saldo disponible. |
-| `/reportes` | Reportes de Liquidación | **Diego** | *Próximo (P0)* | RF08, RF12 / HU-07, HU-12 | Reportes por propiedad y período con desglose reproducible y autorización por propietario. |
-| `/mantenimiento` | Mantenimiento y Salidas | **Compartido** | *Próximo (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out, necesidades de mantenimiento y asignación de trabajos. |
-| `/personal` | Personal y Cuentas | **Diego** | *Próximo (P1)* | RF09 / HU-19 | Administración de cuentas internas y roles de operador/mantenimiento. |
+| `/login` | Acceso al Sistema | **Diego** | **COMPLETO_VERIFICADO** | RF09 / HU-08 | Pantalla de inicio de sesión real, cookies seguras, JWT en memoria y selector de cuentas demo. |
+| `/propiedades` | Gestión de Propiedades | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-18 | Catálogo, alta, edición, filtros, vinculación de propietario y filtrado estricto por `usuarioId`. |
+| `/huespedes` | Directorio de Huéspedes | **André** | **COMPLETO_VERIFICADO** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas. Validación obligatoria de contacto. |
+| `/reservas` | Gestión de Reservas | **André** | **COMPLETO_VERIFICADO** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes en PostgreSQL, cancelación con motivo y contratos. |
+| `/calendario` | Calendario Operativo | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-01 | Vista mensual de disponibilidad, días ocupados, días de transición (check-out/check-in) y sincronización API. |
+| `/pagos` | Pagos y Conciliación | **André** | **COMPLETO_VERIFICADO** | RF05 / HU-05 | Registro de adelantos con idempotencia, conciliación explícita, rechazo, saldo exacto y vouchers. |
+| `/garantias` | Control de Garantías | **André** | **COMPLETO_VERIFICADO** | RF06 / HU-06 | Custodia separada, libro inmutable de movimientos, devoluciones y retenciones limitadas al saldo. |
+| `/gastos` | Gastos Operativos | **André** | **COMPLETO_VERIFICADO** | — / HU-21 | Egresos por propiedad y categoría contable, sustentos digitales, aprobación y anulación controlada. |
+| `/catalogo` | Catálogo Público de Propiedades | **André** | **FEATURE_FLAG** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
+| `/solicitar-reserva` | Solicitud Pública de Reserva | **André** | **FEATURE_FLAG** | RF01, RF02 / HU-01, HU-02 | Formulario público de reserva. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
+| `/dashboard` | Dashboard Principal | **Diego** | *PENDIENTE (Placeholder)* | RF09 / HU-08 | Resumen general y KPIs operativos (muestra `PendingModuleView`). |
+| `/reportes` | Reportes de Liquidación | **Diego / André** | *PENDIENTE (P0 Demo)* | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible (muestra `PendingModuleView`). |
+| `/personal` | Personal y Cuentas | **Diego** | *PARCIAL (P1)* | RF09 / HU-19 | Cuentas gestionadas vía script `seed-dev.ts` (pantalla muestra `PendingModuleView`). |
+| `/mantenimiento` | Mantenimiento y Salidas | **Compartido** | *PENDIENTE (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out y trabajos de campo (muestra `PendingModuleView`). |
 
 ---
 

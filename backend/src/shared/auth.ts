@@ -1,17 +1,11 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { AccessTokenPayload, UserRole } from '../modules/auth/auth.types.js';
 
-export type UserRole = 'ADMIN' | 'OPERADOR' | 'PROPIETARIO';
-
-export interface AuthUser {
-  id: string;
-  nombre: string;
-  email: string;
-  rol: UserRole;
-}
+export type { UserRole };
+export type AuthUser = AccessTokenPayload;
 
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: AuthUser;
     isDemoBypass?: boolean;
   }
 }
@@ -27,20 +21,14 @@ function isLoopbackRequest(request: FastifyRequest): boolean {
 }
 
 /**
- * Resuelve la identidad de la petición.
- * 1. Si existe un token o sesión verificada (preparado para el módulo auth de Diego), la asigna.
- * 2. Si no existe identidad, evalúa las condiciones estrictas del bypass de demostración local.
- * 3. En cualquier otro caso, deja request.user como undefined (denegación por defecto).
+ * Resuelve la identidad de la petición si no fue resuelta por token Bearer.
  */
 export async function authenticateRequestHook(request: FastifyRequest): Promise<void> {
-  // A. Conexión futura con el módulo de Diego (Bearer token / Session)
-  const authHeader = request.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    // Cuando Diego suministre el verificador de token, se validará aquí criptográficamente.
-    // Por el momento, si no es una firma válida comprobada, no se asume identidad.
+  if (request.user) {
+    return;
   }
 
-  // B. Bypass de demostración local temporal (estrictamente condicionado)
+  // Bypass de demostración local temporal (estrictamente condicionado)
   const nodeEnv = (process.env.NODE_ENV || 'development').toLowerCase();
   const demoBypassEnabled = process.env.ENABLE_DEMO_AUTH_BYPASS === 'true';
 
@@ -53,6 +41,7 @@ export async function authenticateRequestHook(request: FastifyRequest): Promise<
     // Actor de demostración local autorizado
     request.user = {
       id: 'usr-admin',
+      sub: 'usr-admin',
       nombre: 'Administrador Demo Local',
       email: 'admin@daplace.example.invalid',
       rol: 'ADMIN',
@@ -61,8 +50,8 @@ export async function authenticateRequestHook(request: FastifyRequest): Promise<
     return;
   }
 
-  // C. Sin identidad verificada
-  request.user = undefined;
+  // Sin identidad verificada
+  (request as any).user = undefined;
 }
 
 /**
@@ -82,14 +71,23 @@ export function requireAuth(allowedRoles?: UserRole[]) {
     }
 
     // 2. Verificar rol si se especificaron roles permitidos
-    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(request.user.rol)) {
-      return reply.status(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'El usuario no cuenta con los permisos requeridos para esta operación.',
-          requestId: request.id,
-        },
+    if (allowedRoles && allowedRoles.length > 0) {
+      const userRole = request.user.rol;
+      const isAllowed = allowedRoles.some((role) => {
+        if (role === userRole) return true;
+        if ((role === 'ADMIN' || role === 'ADMINISTRADOR') && (userRole === 'ADMIN' || userRole === 'ADMINISTRADOR')) return true;
+        return false;
       });
+
+      if (!isAllowed) {
+        return reply.status(403).send({
+          error: {
+            code: 'FORBIDDEN',
+            message: 'El usuario no cuenta con los permisos requeridos para esta operación.',
+            requestId: request.id,
+          },
+        });
+      }
     }
   };
 }
