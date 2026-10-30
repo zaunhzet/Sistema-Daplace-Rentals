@@ -19,6 +19,7 @@
     "db:migrate:dev": "npm run db:migrate:dev --workspace @daplace/backend",
     "db:migrate:deploy": "npm run db:migrate:deploy --workspace @daplace/backend",
     "db:status": "npm run db:status --workspace @daplace/backend",
+    "db:seed": "npm run db:seed --workspace @daplace/backend",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose stop postgres",
     "verify": "npm run db:validate && npm run typecheck && npm test && npm run build"

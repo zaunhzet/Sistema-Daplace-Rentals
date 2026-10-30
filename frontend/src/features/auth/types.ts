@@ -1,42 +1,34 @@
 export type UserRole = 'ADMINISTRADOR' | 'OPERADOR' | 'PROPIETARIO' | 'CLIENTE';
 
-export interface DemoUser {
+export interface User {
+  id: string;
+  email: string;
   nombre: string;
-  correo: string;
+  cargo: string | null;
   rol: UserRole;
-  cargo: string;
 }
 
-export interface DemoSession {
+export interface AuthSession {
   isAuthenticated: boolean;
-  user: DemoUser | null;
+  user: User | null;
   ingresoEn: string | null;
-  modoDemo: true;
 }
 
-export const USUARIOS_DEMO_PREDEFINIDOS: DemoUser[] = [
-  {
-    nombre: 'Valeria Méndez',
-    correo: 'valeria.mendez@daplace.pe',
-    rol: 'ADMINISTRADOR',
-    cargo: 'Administradora General',
-  },
-  {
-    nombre: 'Diego Navarro',
-    correo: 'diego.operaciones@daplace.pe',
-    rol: 'OPERADOR',
-    cargo: 'Operador de Turno',
-  },
-  {
-    nombre: 'Carlos Echevarría',
-    correo: 'carlos.propietario@daplace.pe',
-    rol: 'PROPIETARIO',
-    cargo: 'Propietario de Inmuebles',
-  },
-  {
-    nombre: 'Ana Sofía Rivas',
-    correo: 'ana.cliente@daplace.pe',
-    rol: 'CLIENTE',
-    cargo: 'Cliente / Huésped',
-  },
-];
+export interface LoginResponse {
+  accessToken: string;
+  user: User;
+}
+
+export interface RefreshResponse {
+  accessToken: string;
+  user: User;
+}
+
+export interface ApiErrorResponse {
+  error: {
+    code: string;
+    message: string;
+    details?: Array<{ field?: string; code?: string }>;
+    requestId?: string;
+  };
+}

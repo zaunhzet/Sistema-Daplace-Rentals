@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import { buildApp } from './app/app.js';
 import { createDatabase } from './shared/database.js';
+import { PrismaAuthRepository } from './modules/auth/auth.repository.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 
@@ -17,7 +18,17 @@ if (!databaseUrl) {
 }
 
 const database = createDatabase(databaseUrl);
-const app = buildApp(database.check);
+const authRepository = new PrismaAuthRepository(database.prisma);
+
+const app = buildApp({
+  checkDatabase: database.check,
+  authRepository,
+  jwtSecret: process.env.JWT_SECRET,
+  allowedOrigins: process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
+    : ['http://127.0.0.1:5173', 'http://localhost:5173'],
+  secureCookies: process.env.COOKIE_SECURE === 'true' || process.env.NODE_ENV === 'production',
+});
 
 app.addHook('onClose', async () => database.close());
 
