@@ -1,4 +1,4 @@
-export type EstadoReserva = 'SOLICITADA' | 'CONFIRMADA' | 'COMPLETADA' | 'CANCELADA';
+export type EstadoReserva = 'SOLICITADA' | 'CONFIRMADA' | 'COMPLETADA' | 'CANCELADA' | 'EXPIRADA';
 
 export type OrigenReserva = 'WEB' | 'DIRECTO' | 'AIRBNB';
 
@@ -19,6 +19,12 @@ export interface Reservation {
   referenciaCanal?: string;
   notas?: string;
   motivoCancelacion?: string;
+  plazoIniciadoEn?: string;
+  venceEn?: string;
+  politicaPlazoVersion?: string;
+  politicaPlazoSnapshot?: Record<string, unknown>;
+  avisoProgramadoEn?: string;
+  expiradaEn?: string;
   creadaEn: string;
   actualizadaEn: string;
 }

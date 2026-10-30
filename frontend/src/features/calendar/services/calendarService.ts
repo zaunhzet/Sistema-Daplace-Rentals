@@ -36,8 +36,10 @@ class CalendarService implements ICalendarService {
       reservationService.getReservationsByPropertyId(propiedadId),
     ]);
 
-    // Ignorar reservas canceladas (cancelar libera disponibilidad)
-    const activeReservations = allReservations.filter((r) => r.estado !== 'CANCELADA');
+    // Reservas activas bloqueantes (SOLICITADA, CONFIRMADA, COMPLETADA). CANCELADA y EXPIRADA no bloquean.
+    const activeReservations = allReservations.filter((r) =>
+      ['SOLICITADA', 'CONFIRMADA', 'COMPLETADA'].includes(r.estado)
+    );
 
     const isPropertyInactive = !property || !property.activa || property.estadoOperativo === 'INACTIVA';
     const isPropertyMaintenance = property?.estadoOperativo === 'EN_MANTENIMIENTO';

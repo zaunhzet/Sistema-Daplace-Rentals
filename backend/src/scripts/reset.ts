@@ -87,6 +87,7 @@ export async function safeResetTestDatabase(databaseUrl: string) {
     await prisma.$executeRawUnsafe(`
       TRUNCATE TABLE
         "auditoria_eventos",
+        "avisos_reserva",
         "contratos_reserva",
         "evidencias_pago",
         "sustentos_gasto",
@@ -119,6 +120,7 @@ export async function safeResetDatabase(options: ResetOptions = {}) {
     await prisma.$executeRawUnsafe(`
       TRUNCATE TABLE
         "auditoria_eventos",
+        "avisos_reserva",
         "contratos_reserva",
         "evidencias_pago",
         "sustentos_gasto",

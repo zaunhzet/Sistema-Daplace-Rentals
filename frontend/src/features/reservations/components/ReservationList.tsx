@@ -71,9 +71,21 @@ export const ReservationList: React.FC<ReservationListProps> = ({
             Cancelada
           </span>
         );
+      case 'EXPIRADA':
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-800 bg-rose-50 px-2 py-0.5 rounded-md">
+            <span className="size-1.5 rounded-full bg-rose-600 shrink-0" aria-hidden="true" />
+            Expirada
+          </span>
+        );
       default:
         return <span className="text-xs text-stone-600">{estado}</span>;
     }
+  };
+
+  const isOverduePending = (r: Reservation) => {
+    if (r.estado !== 'SOLICITADA' || !r.venceEn) return false;
+    return new Date(r.venceEn).getTime() <= Date.now();
   };
 
   return (
@@ -118,7 +130,14 @@ export const ReservationList: React.FC<ReservationListProps> = ({
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  {getStatusBadge(r.estado)}
+                  <div className="flex flex-col gap-0.5">
+                    <div>{getStatusBadge(r.estado)}</div>
+                    {isOverduePending(r) && (
+                      <span className="text-[10px] text-amber-700 font-medium">
+                        Actualización pendiente
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-stone-900">
                   {r.moneda === 'USD' ? '$' : 'S/'} {r.montoAcordado.toFixed(2)}
@@ -141,7 +160,7 @@ export const ReservationList: React.FC<ReservationListProps> = ({
                         Confirmar
                       </button>
                     )}
-                    {r.estado !== 'CANCELADA' && (
+                    {r.estado !== 'CANCELADA' && r.estado !== 'EXPIRADA' && (
                       <button
                         type="button"
                         onClick={() => onOpenEditDates(r)}
