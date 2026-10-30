@@ -129,6 +129,7 @@ model Usuario {
   evidenciasPagoRegistradas EvidenciaPago[] @relation("EvidenciasPagoRegistradas")
   contratosRegistrados ContratoReserva[]    @relation("ContratosRegistrados")
   contratosValidados   ContratoReserva[]    @relation("ContratosValidados")
+  user                 User?
 
   @@map("usuarios")
 }
@@ -469,3 +470,46 @@ model AvisoReserva {
   @@map("avisos_reserva")
 }
 
+enum UserRole {
+  ADMINISTRADOR
+  OPERADOR
+  PROPIETARIO
+  CLIENTE
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  nombre       String
+  cargo        String?
+  rol          UserRole      @default(CLIENTE)
+  isActive     Boolean       @default(true)
+  usuarioId    String?       @unique
+  usuario      Usuario?      @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     AuthSession[]
+
+  @@map("users")
+}
+
+model AuthSession {
+  id                  String    @id @default(uuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash           String    @unique
+  family              String    @default(uuid())
+  revokedAt           DateTime?
+  replacedByTokenHash String?
+  expiresAt           DateTime
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  userAgent           String?
+  ipAddress           String?
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([family])
+  @@map("auth_sessions")
+}

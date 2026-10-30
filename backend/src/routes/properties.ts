@@ -40,14 +40,23 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
     }>(
       '/api/propiedades',
       { preHandler: requireAuth(['ADMIN', 'OPERADOR', 'PROPIETARIO']) },
-      async (request) => {
+      async (request, reply) => {
         const { search, estadoOperativo, estadoPublicacion, soloActivas } = request.query;
 
         const where: any = {};
 
-        // Si el usuario es propietario, restringir estrictamente a sus propiedades
+        // Si el usuario es propietario, restringir estrictamente a sus propiedades por su identidad transaccional
         if (request.user?.rol === 'PROPIETARIO') {
-          where.propietarioId = request.user.id;
+          if (!request.user.usuarioId) {
+            return reply.status(403).send({
+              error: {
+                code: 'DOMAIN_IDENTITY_REQUIRED',
+                message: 'Se requiere una identidad transaccional (usuarioId) vinculada para acceder a recursos de propietario.',
+                requestId: request.id,
+              },
+            });
+          }
+          where.propietarioId = request.user.usuarioId;
         }
 
         if (soloActivas === 'true' || soloActivas === true) {
@@ -129,15 +138,26 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        // Restricción para rol PROPIETARIO
-        if (request.user?.rol === 'PROPIETARIO' && propiedad.propietarioId !== request.user.id) {
-          return reply.status(403).send({
-            error: {
-              code: 'FORBIDDEN',
-              message: 'No tiene autorización para visualizar los datos de esta propiedad.',
-              requestId: request.id,
-            },
-          });
+        // Restricción para rol PROPIETARIO: exige usuarioId y pertenencia estricta
+        if (request.user?.rol === 'PROPIETARIO') {
+          if (!request.user.usuarioId) {
+            return reply.status(403).send({
+              error: {
+                code: 'DOMAIN_IDENTITY_REQUIRED',
+                message: 'Se requiere una identidad transaccional (usuarioId) vinculada para acceder a recursos de propietario.',
+                requestId: request.id,
+              },
+            });
+          }
+          if (propiedad.propietarioId !== request.user.usuarioId) {
+            return reply.status(403).send({
+              error: {
+                code: 'FORBIDDEN',
+                message: 'No tiene autorización para visualizar los datos de esta propiedad.',
+                requestId: request.id,
+              },
+            });
+          }
         }
 
         return {
