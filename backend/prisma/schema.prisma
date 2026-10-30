@@ -37,6 +37,7 @@ enum EstadoReserva {
   CONFIRMADA
   COMPLETADA
   CANCELADA
+  EXPIRADA
 }
 
 enum OrigenReserva {
@@ -188,19 +189,29 @@ model Reserva {
   origen            OrigenReserva @default(WEB)
   referenciaCanal   String?
   notas             String?
-  motivoCancelacion String?
-  creadaEn          DateTime      @default(now())
-  actualizadaEn     DateTime      @updatedAt
+  motivoCancelacion     String?
+  plazoIniciadoEn       DateTime?     @db.Timestamptz(3)
+  venceEn               DateTime?     @db.Timestamptz(3)
+  politicaPlazoVersion  String?
+  politicaPlazoSnapshot Json?
+  avisoProgramadoEn     DateTime?     @db.Timestamptz(3)
+  expiradaEn            DateTime?     @db.Timestamptz(3)
+  creadaEn              DateTime      @default(now())
+  actualizadaEn         DateTime      @updatedAt
 
-  propiedad         Propiedad     @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
-  huesped           Huesped       @relation(fields: [huespedId], references: [id], onDelete: Restrict)
-  pagos             Pago[]
-  garantia          Garantia?
-  contratos         ContratoReserva[]
+  propiedad             Propiedad     @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
+  huesped               Huesped       @relation(fields: [huespedId], references: [id], onDelete: Restrict)
+  pagos                 Pago[]
+  garantia              Garantia?
+  contratos             ContratoReserva[]
+  avisos                AvisoReserva[]
 
   @@index([propiedadId, ingreso, salida])
   @@index([huespedId])
   @@index([estado])
+  @@index([venceEn])
+  @@index([estado, venceEn])
+  @@index([avisoProgramadoEn])
   @@map("reservas")
 }
 
@@ -401,5 +412,60 @@ model ContratoReserva {
   @@index([reservaId])
   @@index([estadoFirma])
   @@map("contratos_reserva")
+}
+
+enum TipoAvisoReserva {
+  EXPIRACION_PROXIMA
+  SOLICITUD_EXPIRADA
+}
+
+enum EstadoAvisoReserva {
+  PROGRAMADO
+  PENDIENTE
+  EN_ENVIO
+  ENVIADO
+  FALLIDO
+  CANCELADO
+}
+
+enum CanalAvisoReserva {
+  EMAIL
+  WHATSAPP
+  SISTEMA
+}
+
+model AvisoReserva {
+  id                 String             @id @default(uuid())
+  reservaId          String
+  tipoAviso          TipoAvisoReserva
+  politicaVersion    String
+  venceEnSnapshot    DateTime           @db.Timestamptz(3)
+  programadoPara     DateTime           @db.Timestamptz(3)
+  canal              CanalAvisoReserva
+  plantilla          String
+  estado             EstadoAvisoReserva @default(PROGRAMADO)
+  reintentos         Int                @default(0)
+  maxReintentos      Int                @default(3)
+  leaseToken         String?
+  leaseVenceEn       DateTime?          @db.Timestamptz(3)
+  enviadoEn          DateTime?          @db.Timestamptz(3)
+  canceladoEn        DateTime?          @db.Timestamptz(3)
+  motivoCancelacion  String?
+  proveedorId        String?
+  ultimoErrorCodigo  String?
+  ultimoErrorMensaje String?
+  idempotencyKey     String?
+  proximoIntentoEn   DateTime?          @db.Timestamptz(3)
+  creadoEn           DateTime           @default(now()) @db.Timestamptz(3)
+  actualizadoEn      DateTime           @updatedAt @db.Timestamptz(3)
+
+  reserva            Reserva            @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+
+  @@unique([reservaId, tipoAviso, politicaVersion, venceEnSnapshot], name: "aviso_reserva_logica_unica")
+  @@index([reservaId])
+  @@index([estado, programadoPara])
+  @@index([estado, proximoIntentoEn])
+  @@index([leaseToken, leaseVenceEn])
+  @@map("avisos_reserva")
 }
 

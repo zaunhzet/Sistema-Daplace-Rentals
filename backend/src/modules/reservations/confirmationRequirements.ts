@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 export type MotivoRequisitoPendiente =
   | 'RESERVA_NO_ENCONTRADA'
   | 'RESERVA_NO_APTA'
+  | 'PLAZO_SOLICITUD_VENCIDO'
   | 'CONTRATO_NO_VALIDADO'
   | 'CONTRATO_VIGENCIA_PENDIENTE'
   | 'PAGO_ADELANTO_FALTANTE'
@@ -52,6 +53,7 @@ export const defaultPoliticaAdelantoProvider: PoliticaAdelantoProvider = async (
 
 export interface RequisitosEvaluacion {
   reservaApta: boolean;
+  plazoVigente: boolean;
   contratoFirmado: boolean;
   pagoRegistrado: boolean;
   evidenciaAdelanto: boolean;
@@ -75,6 +77,8 @@ export interface ConfirmationRequirementsResult {
     adelantoRequerido?: string;
     porcentajeAplicado?: number;
     versionPolitica?: string;
+    venceEn?: string;
+    plazoVencido?: boolean;
     contratosCount?: number;
     pagosCount?: number;
     evidenciasCount?: number;
@@ -98,7 +102,8 @@ export interface ConfirmationRequirementsResult {
 export async function evaluateConfirmationRequirements(
   prismaClient: any,
   reservaId: string,
-  politica: PoliticaAdelanto = { tipo: 'PENDIENTE_APROBACION' }
+  politica: PoliticaAdelanto = { tipo: 'PENDIENTE_APROBACION' },
+  options?: { now?: Date }
 ): Promise<ConfirmationRequirementsResult> {
   const motivosPendientes: MotivoRequisitoPendiente[] = [];
 
@@ -123,6 +128,7 @@ export async function evaluateConfirmationRequirements(
       puedeConfirmar: false,
       requisitos: {
         reservaApta: false,
+        plazoVigente: false,
         contratoFirmado: false,
         pagoRegistrado: false,
         evidenciaAdelanto: false,
@@ -140,6 +146,13 @@ export async function evaluateConfirmationRequirements(
   const reservaApta = reserva.estado === 'SOLICITADA';
   if (!reservaApta) {
     motivosPendientes.push('RESERVA_NO_APTA');
+  }
+
+  // 1b. Vigencia del plazo de solicitud (DR-03): si venció, no puede confirmarse
+  const evalNow = options?.now || new Date();
+  const plazoVigente = !reserva.venceEn || evalNow.getTime() < new Date(reserva.venceEn).getTime();
+  if (!plazoVigente) {
+    motivosPendientes.push('PLAZO_SOLICITUD_VENCIDO');
   }
 
   // 2. DR02-03: Vigencia y sustitución contractual
@@ -343,6 +356,7 @@ export async function evaluateConfirmationRequirements(
 
   const puedeConfirmar =
     reservaApta &&
+    plazoVigente &&
     contratoFirmado &&
     pagoRegistrado &&
     evidenciaAdelanto &&
@@ -356,6 +370,7 @@ export async function evaluateConfirmationRequirements(
     puedeConfirmar,
     requisitos: {
       reservaApta,
+      plazoVigente,
       contratoFirmado,
       pagoRegistrado,
       evidenciaAdelanto,
@@ -374,6 +389,8 @@ export async function evaluateConfirmationRequirements(
       adelantoRequerido: adelantoRequeridoDecimal.toFixed(2),
       porcentajeAplicado,
       versionPolitica,
+      venceEn: reserva.venceEn ? new Date(reserva.venceEn).toISOString() : undefined,
+      plazoVencido: !plazoVigente,
       contratosCount: contratosMismaReserva.length,
       pagosCount: pagosElegibles.length,
       evidenciasCount: totalEvidencias,

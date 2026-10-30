@@ -7,6 +7,17 @@ import {
   defaultPoliticaAdelantoProvider,
   type PoliticaAdelantoProvider,
 } from '../modules/reservations/confirmationRequirements.js';
+import {
+  defaultExpirationPolicyProvider,
+  resolveExpirationForReservation,
+  type ExpirationPolicyProvider,
+} from '../modules/reservations/expirationPolicy.js';
+import {
+  productionExpirationClock,
+  type ExpirationClock,
+} from '../modules/reservations/expirationClock.js';
+import { expireLockedReservation } from '../modules/reservations/expirationService.js';
+import { scheduleExpirationNotice } from '../modules/reservations/expirationNoticeService.js';
 
 const ALLOWED_RESERVATION_ORIGINS = ['WEB', 'DIRECTO', 'AIRBNB'] as const;
 const ALLOWED_CURRENCIES = ['PEN', 'USD'] as const;
@@ -19,6 +30,13 @@ const FORBIDDEN_POLICY_PARAMS = [
   'versionPolitica',
   'esExcepcion',
   'autorizadoPorId',
+  'plazoIniciadoEn',
+  'venceEn',
+  'politicaPlazoVersion',
+  'politicaPlazoSnapshot',
+  'avisoProgramadoEn',
+  'expiradaEn',
+  'duracionMs',
 ];
 
 export function hasClientCommercialAuthority(req: { body?: any; query?: any }): boolean {
@@ -90,8 +108,13 @@ export function validateReservationDates(
 
 export function registerReservationsRoutes(
   prisma: PrismaClient,
-  politicaAdelantoProvider?: PoliticaAdelantoProvider
+  politicaAdelantoProvider?: PoliticaAdelantoProvider,
+  expirationPolicyProvider?: ExpirationPolicyProvider,
+  expirationClock?: ExpirationClock
 ): FastifyPluginAsync {
+  const effectiveExpirationProvider = expirationPolicyProvider || defaultExpirationPolicyProvider;
+  const effectiveClock = expirationClock || productionExpirationClock;
+
   return async (app) => {
     // 1. Consultar disponibilidad de una propiedad en un intervalo [ingreso, salida)
     // Endpoint público (no requiere sesión para cotizar), con PRIVACIDAD ESTRICTA (no revela datos internos)
@@ -262,6 +285,12 @@ export function registerReservationsRoutes(
           referenciaCanal: r.referenciaCanal || undefined,
           notas: r.notas || undefined,
           motivoCancelacion: r.motivoCancelacion || undefined,
+          plazoIniciadoEn: r.plazoIniciadoEn ? r.plazoIniciadoEn.toISOString() : undefined,
+          venceEn: r.venceEn ? r.venceEn.toISOString() : undefined,
+          politicaPlazoVersion: r.politicaPlazoVersion || undefined,
+          politicaPlazoSnapshot: r.politicaPlazoSnapshot || undefined,
+          avisoProgramadoEn: r.avisoProgramadoEn ? r.avisoProgramadoEn.toISOString() : undefined,
+          expiradaEn: r.expiradaEn ? r.expiradaEn.toISOString() : undefined,
           creadaEn: r.creadaEn.toISOString(),
           actualizadaEn: r.actualizadaEn.toISOString(),
         }));
@@ -310,6 +339,12 @@ export function registerReservationsRoutes(
           referenciaCanal: r.referenciaCanal || undefined,
           notas: r.notas || undefined,
           motivoCancelacion: r.motivoCancelacion || undefined,
+          plazoIniciadoEn: r.plazoIniciadoEn ? r.plazoIniciadoEn.toISOString() : undefined,
+          venceEn: r.venceEn ? r.venceEn.toISOString() : undefined,
+          politicaPlazoVersion: r.politicaPlazoVersion || undefined,
+          politicaPlazoSnapshot: r.politicaPlazoSnapshot || undefined,
+          avisoProgramadoEn: r.avisoProgramadoEn ? r.avisoProgramadoEn.toISOString() : undefined,
+          expiradaEn: r.expiradaEn ? r.expiradaEn.toISOString() : undefined,
           creadaEn: r.creadaEn.toISOString(),
           actualizadaEn: r.actualizadaEn.toISOString(),
         };
@@ -467,7 +502,16 @@ export function registerReservationsRoutes(
               throw err;
             }
 
-            // D. Creación de la reserva en PostgreSQL
+            // D. Resolver política de expiración backend (inmune a parámetros del cliente)
+            const policy = await effectiveExpirationProvider({ origen, propiedadId });
+            const now = await effectiveClock.now(tx);
+            const expirationCalc = resolveExpirationForReservation(policy, {
+              origen,
+              now,
+              clientPayload: request.body as any,
+            });
+
+            // E. Creación de la reserva en PostgreSQL
             const created = await tx.reserva.create({
               data: {
                 ...(id ? { id } : {}),
@@ -482,6 +526,11 @@ export function registerReservationsRoutes(
                 origen,
                 referenciaCanal: referenciaCanal?.trim() || null,
                 notas: notas?.trim() || null,
+                plazoIniciadoEn: expirationCalc.aplica ? expirationCalc.plazoIniciadoEn : null,
+                venceEn: expirationCalc.aplica ? expirationCalc.venceEn : null,
+                politicaPlazoVersion: expirationCalc.aplica ? expirationCalc.politicaPlazoVersion : null,
+                politicaPlazoSnapshot: expirationCalc.aplica ? (expirationCalc.politicaPlazoSnapshot as any) : undefined,
+                avisoProgramadoEn: expirationCalc.aplica ? expirationCalc.avisoProgramadoEn : null,
               },
               include: {
                 propiedad: { select: { nombre: true } },
@@ -489,7 +538,26 @@ export function registerReservationsRoutes(
               },
             });
 
-            // E. Auditoría atómica en la misma transacción
+            // F. Planificar aviso durable si la política configuró aviso previo con canal y plantilla explícitos
+            if (
+              expirationCalc.aplica &&
+              expirationCalc.avisoProgramadoEn &&
+              expirationCalc.venceEn &&
+              expirationCalc.canalAviso &&
+              expirationCalc.plantillaAviso
+            ) {
+              await scheduleExpirationNotice(tx, {
+                reservaId: created.id,
+                tipoAviso: 'EXPIRACION_PROXIMA',
+                politicaVersion: expirationCalc.politicaPlazoVersion!,
+                venceEnSnapshot: expirationCalc.venceEn,
+                programadoPara: expirationCalc.avisoProgramadoEn,
+                canal: expirationCalc.canalAviso,
+                plantilla: expirationCalc.plantillaAviso,
+              });
+            }
+
+            // G. Auditoría atómica en la misma transacción
             await recordAuditEvent(tx, {
               entidad: 'Reserva',
               entidadId: created.id,
@@ -503,6 +571,9 @@ export function registerReservationsRoutes(
                 salida,
                 noches,
                 montoAcordado: numMonto,
+                plazoIniciadoEn: created.plazoIniciadoEn ? created.plazoIniciadoEn.toISOString() : null,
+                venceEn: created.venceEn ? created.venceEn.toISOString() : null,
+                politicaPlazoVersion: created.politicaPlazoVersion || null,
               },
               requestId: request.id,
             });
@@ -526,6 +597,12 @@ export function registerReservationsRoutes(
             origen: result.origen,
             referenciaCanal: result.referenciaCanal || undefined,
             notas: result.notas || undefined,
+            plazoIniciadoEn: result.plazoIniciadoEn ? result.plazoIniciadoEn.toISOString() : undefined,
+            venceEn: result.venceEn ? result.venceEn.toISOString() : undefined,
+            politicaPlazoVersion: result.politicaPlazoVersion || undefined,
+            politicaPlazoSnapshot: result.politicaPlazoSnapshot || undefined,
+            avisoProgramadoEn: result.avisoProgramadoEn ? result.avisoProgramadoEn.toISOString() : undefined,
+            expiradaEn: result.expiradaEn ? result.expiradaEn.toISOString() : undefined,
             creadaEn: result.creadaEn.toISOString(),
             actualizadaEn: result.actualizadaEn.toISOString(),
           });
@@ -608,7 +685,7 @@ export function registerReservationsRoutes(
             }
 
             if (reserva.estado === 'CONFIRMADA') {
-              return reserva;
+              return { action: 'CONFIRMED' as const, reserva };
             }
 
             if (reserva.estado === 'CANCELADA') {
@@ -618,6 +695,38 @@ export function registerReservationsRoutes(
               throw err;
             }
 
+            if (reserva.estado === 'COMPLETADA') {
+              const err = new Error('No es posible confirmar una reserva que ya ha sido completada.');
+              (err as any).statusCode = 409;
+              (err as any).code = 'INVALID_STATE_TRANSITION';
+              throw err;
+            }
+
+            if (reserva.estado === 'EXPIRADA') {
+              const err = new Error('No es posible confirmar una solicitud de reserva que ya ha expirado.');
+              (err as any).statusCode = 409;
+              (err as any).code = 'RESERVATION_ALREADY_EXPIRED';
+              throw err;
+            }
+
+            // Obtener instante exacto del reloj DESPUÉS de haber adquirido los bloqueos
+            const now = await effectiveClock.now(tx);
+
+            // Si la solicitud tiene plazo y ya ha vencido: expirar atómicamente y confirmar transacción
+            if (reserva.venceEn && now.getTime() >= new Date(reserva.venceEn).getTime()) {
+              await expireLockedReservation(tx, id, now, {
+                actor: actorId,
+                motivo: 'Solicitud expirada automáticamente por vencimiento de plazo al intentar confirmar.',
+                requestId: request.id,
+              });
+
+              return {
+                action: 'EXPIRED' as const,
+                id,
+                expiradaEn: now,
+              };
+            }
+
             // Para reservas de origen DIRECTO: evaluación estricta de requisitos verificables (DR-02)
             if (reserva.origen === 'DIRECTO') {
               // Obtener política del lado del servidor (proveedor compartido seguro)
@@ -625,7 +734,8 @@ export function registerReservationsRoutes(
               const evaluation = await evaluateConfirmationRequirements(
                 tx,
                 id,
-                serverPolitica
+                serverPolitica,
+                { now }
               );
 
               if (!evaluation.puedeConfirmar) {
@@ -667,6 +777,21 @@ export function registerReservationsRoutes(
               },
             });
 
+            // Invalidar todos los avisos no entregados al confirmar
+            await tx.$executeRawUnsafe(
+              `UPDATE "avisos_reserva"
+               SET "estado" = 'CANCELADO'::"EstadoAvisoReserva",
+                   "canceladoEn" = $2::timestamptz,
+                   "motivoCancelacion" = 'RESERVA_CONFIRMADA',
+                   "leaseToken" = NULL,
+                   "leaseVenceEn" = NULL,
+                   "actualizadoEn" = $2::timestamptz
+               WHERE "reservaId" = $1
+                 AND "estado" IN ('PROGRAMADO'::"EstadoAvisoReserva", 'PENDIENTE'::"EstadoAvisoReserva", 'FALLIDO'::"EstadoAvisoReserva", 'EN_ENVIO'::"EstadoAvisoReserva")`,
+              id,
+              now
+            );
+
             await recordAuditEvent(tx, {
               entidad: 'Reserva',
               entidadId: resUpdated.id,
@@ -676,25 +801,39 @@ export function registerReservationsRoutes(
               requestId: request.id,
             });
 
-            return resUpdated;
+            return { action: 'CONFIRMED' as const, reserva: resUpdated };
           });
 
+          // Si expiró durante la transacción comprometida, devolver HTTP 409 POST-COMMIT
+          if (updated.action === 'EXPIRED') {
+            return reply.status(409).send({
+              error: {
+                code: 'RESERVATION_EXPIRED',
+                message: 'La solicitud de reserva ha superado el plazo límite establecido y ha sido expirada automáticamente.',
+                reservaId: updated.id,
+                expiradaEn: updated.expiradaEn.toISOString(),
+                requestId: request.id,
+              },
+            });
+          }
+
+          const confirmedRes = updated.reserva;
           return {
-            id: updated.id,
-            propiedadId: updated.propiedadId,
-            propiedadNombre: updated.propiedad.nombre,
-            huespedId: updated.huespedId,
-            huespedNombre: updated.huesped.nombreCompleto,
-            huespedContacto: updated.huesped.telefono || updated.huesped.email || undefined,
-            ingreso: updated.ingreso.toISOString().slice(0, 10),
-            salida: updated.salida.toISOString().slice(0, 10),
-            noches: updated.noches,
-            estado: updated.estado,
-            montoAcordado: Number(updated.montoAcordado),
-            moneda: updated.moneda,
-            origen: updated.origen,
-            creadaEn: updated.creadaEn.toISOString(),
-            actualizadaEn: updated.actualizadaEn.toISOString(),
+            id: confirmedRes.id,
+            propiedadId: confirmedRes.propiedadId,
+            propiedadNombre: confirmedRes.propiedad.nombre,
+            huespedId: confirmedRes.huespedId,
+            huespedNombre: confirmedRes.huesped.nombreCompleto,
+            huespedContacto: confirmedRes.huesped.telefono || confirmedRes.huesped.email || undefined,
+            ingreso: confirmedRes.ingreso.toISOString().slice(0, 10),
+            salida: confirmedRes.salida.toISOString().slice(0, 10),
+            noches: confirmedRes.noches,
+            estado: confirmedRes.estado,
+            montoAcordado: Number(confirmedRes.montoAcordado),
+            moneda: confirmedRes.moneda,
+            origen: confirmedRes.origen,
+            creadaEn: confirmedRes.creadaEn.toISOString(),
+            actualizadaEn: confirmedRes.actualizadaEn.toISOString(),
           };
         } catch (err: any) {
           if (err.statusCode) {
@@ -779,6 +918,9 @@ export function registerReservationsRoutes(
 
         try {
           const updated = await prisma.$transaction(async (tx) => {
+            // Bloquear la reserva pesimistamente antes de leer
+            await tx.$queryRaw`SELECT id FROM "reservas" WHERE id = ${id} FOR UPDATE;`;
+
             const reserva = await tx.reserva.findUnique({ where: { id } });
 
             if (!reserva) {
@@ -788,11 +930,29 @@ export function registerReservationsRoutes(
               throw err;
             }
 
+            if (reserva.estado === 'EXPIRADA') {
+              const err = new Error('No es posible reprogramar una reserva que ya ha expirado.');
+              (err as any).statusCode = 409;
+              (err as any).code = 'RESERVATION_ALREADY_EXPIRED';
+              throw err;
+            }
+
             if (reserva.estado === 'CANCELADA') {
               const err = new Error('No se pueden modificar las fechas de una reserva cancelada.');
               (err as any).statusCode = 409;
               (err as any).code = 'INVALID_STATE_TRANSITION';
               throw err;
+            }
+
+            // Comprobar si la solicitud venció en el reloj del servidor
+            const now = await effectiveClock.now(tx);
+            if (reserva.estado === 'SOLICITADA' && reserva.venceEn && now.getTime() >= new Date(reserva.venceEn).getTime()) {
+              await expireLockedReservation(tx, id, now, {
+                actor: actorId,
+                motivo: 'Solicitud expirada automáticamente al intentar reprogramar.',
+                requestId: request.id,
+              });
+              return { action: 'EXPIRED' as const, id, expiradaEn: now };
             }
 
             // Comprobar conflicto excluyendo la propia reserva
@@ -843,26 +1003,39 @@ export function registerReservationsRoutes(
               requestId: request.id,
             });
 
-            return resUpdated;
+            return { action: 'REPROGRAMMED' as const, reserva: resUpdated };
           });
 
+          if (updated.action === 'EXPIRED') {
+            return reply.status(409).send({
+              error: {
+                code: 'RESERVATION_EXPIRED',
+                message: 'La solicitud de reserva ha superado el plazo límite establecido y ha sido expirada automáticamente.',
+                reservaId: updated.id,
+                expiradaEn: updated.expiradaEn.toISOString(),
+                requestId: request.id,
+              },
+            });
+          }
+
+          const repRes = updated.reserva;
           return {
-            id: updated.id,
-            propiedadId: updated.propiedadId,
-            propiedadNombre: updated.propiedad.nombre,
-            huespedId: updated.huespedId,
-            huespedNombre: updated.huesped.nombreCompleto,
-            huespedContacto: updated.huesped.telefono || updated.huesped.email || undefined,
-            ingreso: updated.ingreso.toISOString().slice(0, 10),
-            salida: updated.salida.toISOString().slice(0, 10),
-            noches: updated.noches,
-            estado: updated.estado,
-            montoAcordado: Number(updated.montoAcordado),
-            moneda: updated.moneda,
-            origen: updated.origen,
-            notas: updated.notas || undefined,
-            creadaEn: updated.creadaEn.toISOString(),
-            actualizadaEn: updated.actualizadaEn.toISOString(),
+            id: repRes.id,
+            propiedadId: repRes.propiedadId,
+            propiedadNombre: repRes.propiedad.nombre,
+            huespedId: repRes.huespedId,
+            huespedNombre: repRes.huesped.nombreCompleto,
+            huespedContacto: repRes.huesped.telefono || repRes.huesped.email || undefined,
+            ingreso: repRes.ingreso.toISOString().slice(0, 10),
+            salida: repRes.salida.toISOString().slice(0, 10),
+            noches: repRes.noches,
+            estado: repRes.estado,
+            montoAcordado: Number(repRes.montoAcordado),
+            moneda: repRes.moneda,
+            origen: repRes.origen,
+            notas: repRes.notas || undefined,
+            creadaEn: repRes.creadaEn.toISOString(),
+            actualizadaEn: repRes.actualizadaEn.toISOString(),
           };
         } catch (err: any) {
           if (
@@ -909,6 +1082,9 @@ export function registerReservationsRoutes(
 
         try {
           const updated = await prisma.$transaction(async (tx) => {
+            // Bloquear la reserva pesimistamente
+            await tx.$queryRaw`SELECT id FROM "reservas" WHERE id = ${id} FOR UPDATE;`;
+
             const reserva = await tx.reserva.findUnique({
               where: { id },
               include: {
@@ -925,8 +1101,41 @@ export function registerReservationsRoutes(
             }
 
             if (reserva.estado === 'CANCELADA') {
-              return reserva;
+              return { action: 'CANCELLED' as const, reserva };
             }
+
+            if (reserva.estado === 'EXPIRADA') {
+              const err = new Error('No es posible cancelar una solicitud de reserva que ya ha expirado.');
+              (err as any).statusCode = 409;
+              (err as any).code = 'RESERVATION_ALREADY_EXPIRED';
+              throw err;
+            }
+
+            // Comprobar si la solicitud venció
+            const now = await effectiveClock.now(tx);
+            if (reserva.estado === 'SOLICITADA' && reserva.venceEn && now.getTime() >= new Date(reserva.venceEn).getTime()) {
+              await expireLockedReservation(tx, id, now, {
+                actor: actorId,
+                motivo: 'Solicitud expirada automáticamente al intentar cancelar.',
+                requestId: request.id,
+              });
+              return { action: 'EXPIRED' as const, id, expiradaEn: now };
+            }
+
+            // Cancelar todos los avisos no entregados al cancelar reserva
+            await tx.$executeRawUnsafe(
+              `UPDATE "avisos_reserva"
+               SET "estado" = 'CANCELADO'::"EstadoAvisoReserva",
+                   "canceladoEn" = $2::timestamptz,
+                   "motivoCancelacion" = 'RESERVA_CANCELADA_MANUALMENTE',
+                   "leaseToken" = NULL,
+                   "leaseVenceEn" = NULL,
+                   "actualizadoEn" = $2::timestamptz
+               WHERE "reservaId" = $1
+                 AND "estado" IN ('PROGRAMADO'::"EstadoAvisoReserva", 'PENDIENTE'::"EstadoAvisoReserva", 'FALLIDO'::"EstadoAvisoReserva", 'EN_ENVIO'::"EstadoAvisoReserva")`,
+              id,
+              now
+            );
 
             const resUpdated = await tx.reserva.update({
               where: { id },
@@ -949,26 +1158,39 @@ export function registerReservationsRoutes(
               requestId: request.id,
             });
 
-            return resUpdated;
+            return { action: 'CANCELLED' as const, reserva: resUpdated };
           });
 
+          if (updated.action === 'EXPIRED') {
+            return reply.status(409).send({
+              error: {
+                code: 'RESERVATION_EXPIRED',
+                message: 'La solicitud de reserva ha superado el plazo límite establecido y ha sido expirada automáticamente.',
+                reservaId: updated.id,
+                expiradaEn: updated.expiradaEn.toISOString(),
+                requestId: request.id,
+              },
+            });
+          }
+
+          const canRes = updated.reserva;
           return {
-            id: updated.id,
-            propiedadId: updated.propiedadId,
-            propiedadNombre: updated.propiedad.nombre,
-            huespedId: updated.huespedId,
-            huespedNombre: updated.huesped.nombreCompleto,
-            huespedContacto: updated.huesped.telefono || updated.huesped.email || undefined,
-            ingreso: updated.ingreso.toISOString().slice(0, 10),
-            salida: updated.salida.toISOString().slice(0, 10),
-            noches: updated.noches,
-            estado: updated.estado,
-            montoAcordado: Number(updated.montoAcordado),
-            moneda: updated.moneda,
-            origen: updated.origen,
-            motivoCancelacion: updated.motivoCancelacion || undefined,
-            creadaEn: updated.creadaEn.toISOString(),
-            actualizadaEn: updated.actualizadaEn.toISOString(),
+            id: canRes.id,
+            propiedadId: canRes.propiedadId,
+            propiedadNombre: canRes.propiedad.nombre,
+            huespedId: canRes.huespedId,
+            huespedNombre: canRes.huesped.nombreCompleto,
+            huespedContacto: canRes.huesped.telefono || canRes.huesped.email || undefined,
+            ingreso: canRes.ingreso.toISOString().slice(0, 10),
+            salida: canRes.salida.toISOString().slice(0, 10),
+            noches: canRes.noches,
+            estado: canRes.estado,
+            montoAcordado: Number(canRes.montoAcordado),
+            moneda: canRes.moneda,
+            origen: canRes.origen,
+            motivoCancelacion: canRes.motivoCancelacion || undefined,
+            creadaEn: canRes.creadaEn.toISOString(),
+            actualizadaEn: canRes.actualizadaEn.toISOString(),
           };
         } catch (err: any) {
           if (err.statusCode) {

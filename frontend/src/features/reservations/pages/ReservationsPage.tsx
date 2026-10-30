@@ -16,6 +16,7 @@ import { ReservationList } from '../components/ReservationList';
 import { ReservationFormModal } from '../components/ReservationFormModal';
 import { ReservationDetailModal } from '../components/ReservationDetailModal';
 import { ReservationDateEditModal } from '../components/ReservationDateEditModal';
+import { createReservationsPageCoordinator } from '../services/reservationPageCoordinator';
 
 export const ReservationsPage: React.FC = () => {
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -52,67 +53,145 @@ export const ReservationsPage: React.FC = () => {
     setTimeout(() => setErrorMessage(null), 7000);
   };
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const [resData, propsData, guestsData] = await Promise.all([
-        reservationService.getReservations(filters),
-        propertyService.getProperties(),
-        guestService.getGuests(),
-      ]);
-      setReservations(resData);
-      setProperties(propsData);
-      setGuests(guestsData);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        showError(err.message);
-      } else {
-        showError('Error al consultar reservas.');
+  const selectedReservationRef = React.useRef<Reservation | null>(null);
+
+  useEffect(() => {
+    selectedReservationRef.current = selectedReservation;
+  }, [selectedReservation]);
+
+  const coordinatorRef = React.useRef(
+    createReservationsPageCoordinator(
+      {
+        getReservations: (f) => reservationService.getReservations(f),
+        getProperties: () => propertyService.getProperties(),
+        getGuests: () => guestService.getGuests(),
+        getReservationById: (id) => reservationService.getReservationById(id),
+      },
+      {
+        setReservations,
+        setProperties,
+        setGuests,
+        setSelectedReservation,
+        setLoading,
+        showError,
+        getSelectedReservation: () => selectedReservationRef.current,
       }
-    } finally {
-      setLoading(false);
-    }
+    )
+  );
+
+  const loadData = useCallback(async (silent = false) => {
+    await coordinatorRef.current.loadData(filters, silent);
   }, [filters]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  // Refresco al recuperar foco y polling técnico configurable (45s) sin solapes ni consumo en segundo plano
+  useEffect(() => {
+    const handleFocus = () => {
+      if (document.visibilityState !== 'hidden') {
+        void loadData(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        void loadData(true);
+      }
+    }, 45000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [loadData]);
+
   // Create
   const handleCreateReservation = async (dto: CreateReservationDto) => {
-    const created = await reservationService.createReservation(dto);
-    showSuccess(`Solicitud de reserva ${created.id} registrada con éxito.`);
-    await loadData();
+    try {
+      const created = await reservationService.createReservation(dto);
+      showSuccess(`Solicitud de reserva ${created.id} registrada con éxito.`);
+      await loadData();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        showError(err.message);
+      } else {
+        showError('Error al registrar la solicitud.');
+      }
+      try {
+        await loadData(true);
+      } catch {
+        // Preservar el error original sin sustituirlo por fallos secundarios de recarga
+      }
+      throw err;
+    }
   };
 
   // Confirm
   const handleConfirmReservation = async (id: string) => {
-    const confirmed = await reservationService.confirmReservation(id);
-    showSuccess(`Reserva ${confirmed.id} confirmada. Inventario bloqueado.`);
-    if (selectedReservation && selectedReservation.id === id) {
-      setSelectedReservation(confirmed);
+    try {
+      const confirmed = await reservationService.confirmReservation(id);
+      showSuccess(`Reserva ${confirmed.id} confirmada. Inventario bloqueado.`);
+      if (selectedReservation && selectedReservation.id === id) {
+        setSelectedReservation(confirmed);
+      }
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al confirmar la reserva.';
+      showError(msg);
+      // Tras 409 temporal o rechazo, recargar información y conservar el error visible
+      try {
+        await loadData(true);
+      } catch {
+        // Preservar el error original
+      }
+      throw err;
     }
-    await loadData();
   };
 
   // Cancel
   const handleCancelReservation = async (id: string, motivo: string) => {
-    const cancelled = await reservationService.cancelReservation(id, motivo);
-    showSuccess(`Reserva ${cancelled.id} cancelada. Disponibilidad liberada.`);
-    if (selectedReservation && selectedReservation.id === id) {
-      setSelectedReservation(cancelled);
+    try {
+      const cancelled = await reservationService.cancelReservation(id, motivo);
+      showSuccess(`Reserva ${cancelled.id} cancelada. Disponibilidad liberada.`);
+      if (selectedReservation && selectedReservation.id === id) {
+        setSelectedReservation(cancelled);
+      }
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al cancelar la reserva.';
+      showError(msg);
+      try {
+        await loadData(true);
+      } catch {
+        // Preservar el error original
+      }
+      throw err;
     }
-    await loadData();
   };
 
   // Update Dates
   const handleUpdateDates = async (id: string, dto: UpdateReservationDatesDto) => {
-    const updated = await reservationService.updateReservationDates(id, dto);
-    showSuccess(`Fechas de reserva ${updated.id} actualizadas a [${updated.ingreso}, ${updated.salida}).`);
-    if (selectedReservation && selectedReservation.id === id) {
-      setSelectedReservation(updated);
+    try {
+      const updated = await reservationService.updateReservationDates(id, dto);
+      showSuccess(`Fechas de reserva ${updated.id} actualizadas a [${updated.ingreso}, ${updated.salida}).`);
+      if (selectedReservation && selectedReservation.id === id) {
+        setSelectedReservation(updated);
+      }
+      await loadData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al actualizar fechas.';
+      showError(msg);
+      try {
+        await loadData(true);
+      } catch {
+        // Preservar el error original
+      }
+      throw err;
     }
-    await loadData();
   };
 
   // Metrics
@@ -121,6 +200,7 @@ export const ReservationsPage: React.FC = () => {
   const confirmadasCount = reservations.filter((r) => r.estado === 'CONFIRMADA').length;
   const completadasCount = reservations.filter((r) => r.estado === 'COMPLETADA').length;
   const canceladasCount = reservations.filter((r) => r.estado === 'CANCELADA').length;
+  const expiradasCount = reservations.filter((r) => r.estado === 'EXPIRADA').length;
 
   return (
     <div className="w-full space-y-4">
@@ -181,7 +261,7 @@ export const ReservationsPage: React.FC = () => {
       )}
 
       {/* Metrics Cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Total Reservas</p>
           <p className="mt-0.5 text-xl font-bold text-stone-900">{totalCount}</p>
@@ -201,6 +281,10 @@ export const ReservationsPage: React.FC = () => {
         <div className="rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Canceladas</p>
           <p className="mt-0.5 text-xl font-bold text-stone-700">{canceladasCount}</p>
+        </div>
+        <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-3 shadow-2xs">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-rose-700">Expiradas</p>
+          <p className="mt-0.5 text-xl font-bold text-rose-800">{expiradasCount}</p>
         </div>
       </div>
 

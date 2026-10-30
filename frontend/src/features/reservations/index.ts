@@ -6,4 +6,5 @@ export * from './components/ReservationList';
 export * from './components/ReservationFormModal';
 export * from './components/ReservationDateEditModal';
 export * from './components/ReservationDetailModal';
+export * from './services/reservationPageCoordinator';
 export * from './pages/ReservationsPage';

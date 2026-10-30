@@ -282,11 +282,13 @@ class MockReservationService implements IReservationService {
     }
 
     // Comprobar solapes contra reservas bloqueantes
+    // Negocio: Únicamente SOLICITADA, CONFIRMADA y COMPLETADA bloquean fechas.
+    // CANCELADA y EXPIRADA no son bloqueantes.
+    const estadosBloqueantes = new Set(['SOLICITADA', 'CONFIRMADA', 'COMPLETADA']);
     const conflictos = this.reservations.filter((r) => {
       if (r.propiedadId !== propiedadId) return false;
       if (excludeReservationId && r.id === excludeReservationId) return false;
-      // Solo estados bloqueantes
-      if (r.estado === 'CANCELADA') return false;
+      if (!estadosBloqueantes.has(r.estado)) return false;
 
       return checkDatesOverlap(ingreso, salida, r.ingreso, r.salida);
     });
@@ -370,6 +372,9 @@ class MockReservationService implements IReservationService {
     if (current.estado === 'CANCELADA') {
       throw new Error('No se pueden modificar las fechas de una reserva cancelada.');
     }
+    if (current.estado === 'EXPIRADA') {
+      throw new ApiError('No se pueden modificar las fechas de una reserva expirada.', 409, 'RESERVATION_EXPIRED');
+    }
 
     const dateCheck = validateReservationDates(dto.ingreso, dto.salida);
     if (!dateCheck.isValid) {
@@ -419,6 +424,10 @@ class MockReservationService implements IReservationService {
 
     if (current.estado === 'CANCELADA') {
       throw new Error('No es posible confirmar una reserva que ha sido cancelada.');
+    }
+
+    if (current.estado === 'EXPIRADA') {
+      throw new ApiError('La reserva ha expirado y no puede confirmarse.', 409, 'RESERVATION_EXPIRED');
     }
 
     // Regla DR-02: Para reservas DIRECTO, evaluar requisitos obligatorios
@@ -568,6 +577,13 @@ class MockReservationService implements IReservationService {
     const reservaApta = res.estado === 'SOLICITADA';
     if (!reservaApta) motivosPendientes.push('RESERVA_NO_APTA');
 
+    // DR-03 / FIX-05: Evaluar vigencia temporal del plazo de solicitud
+    const now = new Date();
+    const plazoVencido = res.venceEn ? new Date(res.venceEn).getTime() <= now.getTime() : false;
+    if (plazoVencido) {
+      motivosPendientes.push('PLAZO_SOLICITUD_VENCIDO');
+    }
+
     // DR02-03 y DR02-05: Resolución estricta de contratos sustituidos
     const allContracts = this.contracts.get(reservaId) || [];
     const replacedIds = new Set(
@@ -650,6 +666,7 @@ class MockReservationService implements IReservationService {
     if (!disponibilidadValida) motivosPendientes.push('DISPONIBILIDAD_NO_VALIDA');
 
     const puedeConfirmar =
+      !plazoVencido &&
       reservaApta &&
       contratoFirmado &&
       pagoRegistrado &&
@@ -701,6 +718,10 @@ class MockReservationService implements IReservationService {
 
     if (current.estado === 'CANCELADA') {
       return JSON.parse(JSON.stringify(current));
+    }
+
+    if (current.estado === 'EXPIRADA') {
+      throw new ApiError('No se puede cancelar una reserva que ya ha expirado.', 409, 'RESERVATION_EXPIRED');
     }
 
     // Cancelar la reserva cambia estado y libera disponibilidad inmediatamente

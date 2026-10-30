@@ -10,6 +10,7 @@ import { CalendarGrid } from '../components/CalendarGrid';
 import { CalendarLegend } from '../components/CalendarLegend';
 import { ReservationDetailModal } from '../../reservations/components/ReservationDetailModal';
 import { ReservationDateEditModal } from '../../reservations/components/ReservationDateEditModal';
+import { createCalendarPageCoordinator } from '../../reservations/services/reservationPageCoordinator';
 
 export const CalendarPage: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
@@ -48,22 +49,33 @@ export const CalendarPage: React.FC = () => {
     }
   }, [selectedPropertyId]);
 
-  const loadCalendar = useCallback(async () => {
+  const selectedReservationRef = React.useRef<Reservation | null>(null);
+
+  useEffect(() => {
+    selectedReservationRef.current = selectedReservation;
+  }, [selectedReservation]);
+
+  // Invalidate late responses on property or month change and sync detail by ID
+  const coordinatorRef = React.useRef(
+    createCalendarPageCoordinator(
+      {
+        getMonthDays: (pid, y, m) => calendarService.getMonthDays(pid, y, m),
+        getMonthSummary: (days) => calendarService.getMonthSummary(days),
+        getReservationById: (id) => reservationService.getReservationById(id),
+      },
+      {
+        setDays,
+        setSummary,
+        setLoading,
+        getSelectedReservation: () => selectedReservationRef.current,
+        setSelectedReservation,
+      }
+    )
+  );
+
+  const loadCalendar = useCallback(async (silent = false) => {
     if (!selectedPropertyId) return;
-    try {
-      setLoading(true);
-      const monthDays = await calendarService.getMonthDays(
-        selectedPropertyId,
-        currentYear,
-        currentMonth
-      );
-      setDays(monthDays);
-      setSummary(calendarService.getMonthSummary(monthDays));
-    } catch {
-      // Error handling
-    } finally {
-      setLoading(false);
-    }
+    await coordinatorRef.current.loadCalendar(selectedPropertyId, currentYear, currentMonth, silent);
   }, [selectedPropertyId, currentYear, currentMonth]);
 
   useEffect(() => {
@@ -72,6 +84,28 @@ export const CalendarPage: React.FC = () => {
 
   useEffect(() => {
     loadCalendar();
+  }, [loadCalendar]);
+
+  // Refresco al recuperar foco y polling técnico configurable (45s) sin solapes ni consumo en segundo plano
+  useEffect(() => {
+    const handleFocus = () => {
+      if (document.visibilityState !== 'hidden') {
+        void loadCalendar(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== 'hidden') {
+        void loadCalendar(true);
+      }
+    }, 45000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
   }, [loadCalendar]);
 
   const handlePrevMonth = () => {
@@ -98,21 +132,45 @@ export const CalendarPage: React.FC = () => {
     setCurrentMonth(now.getMonth() + 1);
   };
 
-  // Actions from modal
+  // Actions from modal con manejo estricto de errores y recarga sin falso éxito
   const handleConfirmReservation = async (id: string) => {
-    const confirmed = await reservationService.confirmReservation(id);
-    setSelectedReservation(confirmed);
-    setNotification(`Reserva ${confirmed.id} confirmada exitosamente.`);
-    setTimeout(() => setNotification(null), 4000);
-    await loadCalendar();
+    try {
+      const confirmed = await reservationService.confirmReservation(id);
+      setSelectedReservation(confirmed);
+      setNotification(`Reserva ${confirmed.id} confirmada exitosamente.`);
+      setTimeout(() => setNotification(null), 4000);
+      await loadCalendar();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al confirmar la reserva.';
+      setNotification(`Error: ${msg}`);
+      setTimeout(() => setNotification(null), 6000);
+      try {
+        await loadCalendar();
+      } catch {
+        // Preservar el error original
+      }
+      throw err;
+    }
   };
 
   const handleCancelReservation = async (id: string, motivo: string) => {
-    const cancelled = await reservationService.cancelReservation(id, motivo);
-    setSelectedReservation(cancelled);
-    setNotification(`Reserva ${cancelled.id} cancelada. Disponibilidad liberada en calendario.`);
-    setTimeout(() => setNotification(null), 4000);
-    await loadCalendar();
+    try {
+      const cancelled = await reservationService.cancelReservation(id, motivo);
+      setSelectedReservation(cancelled);
+      setNotification(`Reserva ${cancelled.id} cancelada. Disponibilidad liberada en calendario.`);
+      setTimeout(() => setNotification(null), 4000);
+      await loadCalendar();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al cancelar la reserva.';
+      setNotification(`Error: ${msg}`);
+      setTimeout(() => setNotification(null), 6000);
+      try {
+        await loadCalendar();
+      } catch {
+        // Preservar el error original
+      }
+      throw err;
+    }
   };
 
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);

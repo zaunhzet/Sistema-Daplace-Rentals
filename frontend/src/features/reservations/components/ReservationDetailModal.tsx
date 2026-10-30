@@ -252,6 +252,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         return <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-800">Completada</span>;
       case 'CANCELADA':
         return <span className="rounded-full bg-stone-200 px-3 py-1 text-xs font-semibold text-stone-700">Cancelada</span>;
+      case 'EXPIRADA':
+        return <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-semibold text-rose-800">Expirada</span>;
       default:
         return <span className="rounded-full bg-stone-100 px-3 py-1 text-xs text-stone-600">{estado}</span>;
     }
@@ -331,7 +333,15 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
       setIsCanceling(false);
       setCancelMotivo('');
     } catch (err: unknown) {
-      if (err instanceof Error) {
+      if (err instanceof ApiError) {
+        const details = err.details as any;
+        const motivos = details?.motivosPendientes || (err as any).motivosPendientes;
+        if (Array.isArray(motivos) && motivos.length > 0) {
+          setActionError(`${err.message} Motivos: ${motivos.map(formatMotivoPendiente).join('; ')}`);
+        } else {
+          setActionError(err.message);
+        }
+      } else if (err instanceof Error) {
         setActionError(err.message);
       } else {
         setActionError('Error al cancelar la reserva.');
@@ -433,6 +443,50 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               * El día de check-out ({reservation.salida}) queda disponible para un nuevo check-in en la tarde (consecutivas permitidas).
             </p>
           </div>
+
+          {/* DR-03: SECCIÓN DE PLAZO DE SOLICITUD Y EXPIRACIÓN */}
+          {(reservation.venceEn || reservation.expiradaEn) && (
+            <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-5">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-stone-500 mb-2">
+                Plazo Límite de Solicitud y Expiración
+              </h3>
+              <div className="space-y-2 text-xs text-stone-700">
+                {reservation.venceEn && (
+                  <div>
+                    <span className="font-semibold text-stone-900">Vencimiento programado:</span>{' '}
+                    <span className="font-mono text-stone-800">
+                      {new Date(reservation.venceEn).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {reservation.politicaPlazoVersion && (
+                  <div>
+                    <span className="font-semibold text-stone-900">Política aplicada:</span>{' '}
+                    <span className="font-mono text-stone-600">{reservation.politicaPlazoVersion}</span>
+                  </div>
+                )}
+                {reservation.expiradaEn && (
+                  <div className="text-rose-700 font-medium">
+                    <span>Expirada formalmente el:</span>{' '}
+                    <span className="font-mono">
+                      {new Date(reservation.expiradaEn).toLocaleString()}
+                    </span>
+                  </div>
+                )}
+                {reservation.estado === 'SOLICITADA' &&
+                  reservation.venceEn &&
+                  new Date(reservation.venceEn).getTime() <= Date.now() && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-medium text-amber-900 flex items-center gap-2 mt-2">
+                      <AlertCircle size={15} className="shrink-0 text-amber-700" aria-hidden="true" />
+                      <span>
+                        El plazo de solicitud ha vencido. La liberación definitiva de disponibilidad se efectuará
+                        al sincronizar la base de datos (actualización pendiente).
+                      </span>
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
 
           {/* DR-02: SECCIÓN DE REQUISITOS DE CONFIRMACIÓN (SOLO DIRECTO) */}
           {reservation.origen === 'DIRECTO' && (
@@ -751,7 +805,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         {/* Footer Actions */}
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200 pt-5">
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            {reservation.estado !== 'CANCELADA' && !isCanceling && (
+            {reservation.estado !== 'CANCELADA' && reservation.estado !== 'EXPIRADA' && !isCanceling && (
               <button
                 type="button"
                 onClick={() => setIsCanceling(true)}
@@ -761,7 +815,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               </button>
             )}
 
-            {reservation.estado !== 'CANCELADA' && (
+            {reservation.estado !== 'CANCELADA' && reservation.estado !== 'EXPIRADA' && (
               <button
                 type="button"
                 onClick={() => {

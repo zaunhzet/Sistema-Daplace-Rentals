@@ -8,6 +8,10 @@ import {
   defaultPoliticaAdelantoProvider,
   type PoliticaAdelantoProvider,
 } from '../modules/reservations/confirmationRequirements.js';
+import {
+  productionExpirationClock,
+  type ExpirationClock,
+} from '../modules/reservations/expirationClock.js';
 
 const FORBIDDEN_POLICY_PARAMS = [
   'politicaAdelanto',
@@ -84,7 +88,8 @@ export function formatContractResponse(contract: any) {
 
 export function registerContractsRoutes(
   prisma: PrismaClient,
-  politicaAdelantoProvider?: PoliticaAdelantoProvider
+  politicaAdelantoProvider?: PoliticaAdelantoProvider,
+  expirationClock?: ExpirationClock
 ): FastifyPluginAsync {
   return async (app) => {
     const adminOrOperatorGuard = requireAuth(['ADMIN', 'OPERADOR']);
@@ -383,7 +388,10 @@ export function registerContractsRoutes(
         const effectiveProvider = politicaAdelantoProvider || defaultPoliticaAdelantoProvider;
         const politica = await effectiveProvider(reservaId, prisma);
 
-        const result = await evaluateConfirmationRequirements(prisma, reservaId, politica);
+        const clock = expirationClock || productionExpirationClock;
+        const now = await clock.now(prisma);
+
+        const result = await evaluateConfirmationRequirements(prisma, reservaId, politica, { now });
         return reply.send({ data: result });
       }
     );

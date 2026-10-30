@@ -12,6 +12,8 @@ import { registerContractsRoutes } from '../routes/contracts.js';
 import { authenticateRequestHook } from '../shared/auth.js';
 
 import type { PoliticaAdelantoProvider } from '../modules/reservations/confirmationRequirements.js';
+import type { ExpirationPolicyProvider } from '../modules/reservations/expirationPolicy.js';
+import type { ExpirationClock } from '../modules/reservations/expirationClock.js';
 
 type ReadinessCheck = () => Promise<void>;
 
@@ -19,6 +21,8 @@ export interface AppOptions {
   prisma?: PrismaClient;
   checkDatabase?: ReadinessCheck;
   politicaAdelantoProvider?: PoliticaAdelantoProvider;
+  expirationPolicyProvider?: ExpirationPolicyProvider;
+  expirationClock?: ExpirationClock;
 }
 
 export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyInstance {
@@ -147,20 +151,20 @@ export function buildApp(optionsOrCheck?: ReadinessCheck | AppOptions): FastifyI
   });
 
   if (prisma) {
-    const politicaProvider =
-      optionsOrCheck && typeof optionsOrCheck === 'object'
-        ? optionsOrCheck.politicaAdelantoProvider
-        : undefined;
+    const isObj = optionsOrCheck && typeof optionsOrCheck === 'object';
+    const politicaProvider = isObj ? optionsOrCheck.politicaAdelantoProvider : undefined;
+    const expirationPolicyProvider = isObj ? optionsOrCheck.expirationPolicyProvider : undefined;
+    const expirationClock = isObj ? optionsOrCheck.expirationClock : undefined;
 
     app.register(registerPropertiesRoutes(prisma));
     app.register(registerGuestsRoutes(prisma));
-    app.register(registerReservationsRoutes(prisma, politicaProvider));
+    app.register(registerReservationsRoutes(prisma, politicaProvider, expirationPolicyProvider, expirationClock));
     app.register(registerCalendarRoutes(prisma));
     app.register(registerPaymentsRoutes(prisma));
     app.register(registerGuaranteesRoutes(prisma));
     app.register(registerExpensesRoutes(prisma));
     app.register(registerPaymentEvidencesRoutes(prisma));
-    app.register(registerContractsRoutes(prisma, politicaProvider));
+    app.register(registerContractsRoutes(prisma, politicaProvider, expirationClock));
   }
 
   return app;

@@ -85,11 +85,11 @@ export function registerCalendarRoutes(prisma: PrismaClient): FastifyPluginAsync
         const startDate = new Date(Date.UTC(year, month - 1, 1));
         const endDate = new Date(Date.UTC(year, month, 1));
 
-        // Consultar reservas activas que toquen el mes
+        // Consultar reservas activas que toquen el mes (estados bloqueantes: SOLICITADA, CONFIRMADA, COMPLETADA)
         const activeReservations = await prisma.reserva.findMany({
           where: {
             propiedadId,
-            estado: { not: 'CANCELADA' },
+            estado: { in: ['SOLICITADA', 'CONFIRMADA', 'COMPLETADA'] },
             ingreso: { lt: endDate },
             salida: { gt: startDate },
           },

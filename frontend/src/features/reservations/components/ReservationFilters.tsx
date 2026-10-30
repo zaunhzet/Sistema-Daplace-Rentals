@@ -97,6 +97,7 @@ export const ReservationFilters: React.FC<ReservationFiltersProps> = ({
             <option value="CONFIRMADA">Confirmada</option>
             <option value="COMPLETADA">Completada</option>
             <option value="CANCELADA">Cancelada</option>
+            <option value="EXPIRADA">Expirada</option>
           </select>
         </div>
 
