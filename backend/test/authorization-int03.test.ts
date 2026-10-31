@@ -516,4 +516,147 @@ describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamien
     const bodyGasto = JSON.parse(resGasto.payload);
     assert.equal(bodyGasto.error.code, 'DOMAIN_IDENTITY_REQUIRED');
   });
+
+  it('14. RED: ADMIN con Usuario vinculado pero activo=false recibe 403 DOMAIN_IDENTITY_REQUIRED en escrituras transaccionales', async () => {
+    // Crear usuario de dominio INACTIVO
+    const usuarioInactivo = await db.prisma.usuario.create({
+      data: {
+        id: 'usr-inactivo-dom',
+        nombre: 'Admin Dominio Inactivo',
+        email: 'admin.inactivo@daplace.pe',
+        rol: 'ADMIN',
+        activo: false,
+      },
+    });
+
+    const passwordHash = await AuthService.hashPassword('AdminInactivo2026!');
+    await repository.createUser({
+      email: 'admin.inactivo@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Dominio Inactivo',
+      rol: 'ADMINISTRADOR',
+      usuarioId: usuarioInactivo.id, // vinculado, pero activo=false
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.inactivo@daplace.pe',
+      password: 'AdminInactivo2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar pago → debe rechazar por activo=false
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-INACTIVO-14',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 403, `Usuario inactivo en pago: esperado 403, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.equal(bodyPago.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de crear reserva → debe rechazar por activo=false
+    const resReserva = await app.inject({
+      method: 'POST',
+      url: '/api/reservas',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        propiedadId: prop1Id,
+        huespedId: 'huesped-int03-1',
+        ingreso: '2026-12-01',
+        salida: '2026-12-05',
+        montoAcordado: '1000',
+        moneda: 'PEN',
+        origen: 'DIRECTO',
+      },
+    });
+    assert.equal(resReserva.statusCode, 403, `Usuario inactivo en reserva: esperado 403, obtuvo ${resReserva.statusCode}: ${resReserva.payload}`);
+    const bodyReserva = JSON.parse(resReserva.payload);
+    assert.equal(bodyReserva.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de crear propiedad → debe rechazar por activo=false
+    const resProp = await app.inject({
+      method: 'POST',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombre: 'Propiedad Rechazada',
+        propietarioId: 'usr-prop1-trans',
+        direccion: 'Av. Inactiva 123',
+      },
+    });
+    assert.equal(resProp.statusCode, 403, `Usuario inactivo en propiedad: esperado 403, obtuvo ${resProp.statusCode}: ${resProp.payload}`);
+    const bodyProp = JSON.parse(resProp.payload);
+    assert.equal(bodyProp.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('15. GREEN: ADMIN con Usuario vinculado y activo=true puede registrar pago y el actorId persiste correctamente', async () => {
+    // Verificar que el admin estándar (vinculado y activo) puede registrar sin problema
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-GREEN-15',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 201, `Admin vinculado en pago: esperado 201, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.ok(bodyPago.data, 'La respuesta debe incluir data del pago');
+    assert.equal(bodyPago.data.estado, 'PENDIENTE_CONCILIACION');
+
+    // Verificar que registradoPorId apunta al Usuario de dominio, no al User de autenticación
+    const pagoPersistido = await db.prisma.pago.findUnique({
+      where: { id: bodyPago.data.id },
+      include: { registradoPor: true },
+    });
+    assert.ok(pagoPersistido, 'El pago debe existir en BD');
+    assert.equal(pagoPersistido!.registradoPorId, 'usr-admin-trans', 'registradoPorId debe ser el ID del Usuario de dominio');
+    assert.ok(pagoPersistido!.registradoPor, 'La relación registradoPor debe resolverse');
+    assert.equal(pagoPersistido!.registradoPor!.email, 'admin@daplace.pe');
+  });
+
+  it('16. GREEN: OPERADOR con Usuario vinculado y activo=true puede crear huésped y el audit usa email como actor', async () => {
+    const resHuesped = await app.inject({
+      method: 'POST',
+      url: '/api/huespedes',
+      headers: { authorization: `Bearer ${operadorToken}` },
+      payload: {
+        nombreCompleto: 'Huésped Verificación Green',
+        telefono: '+51999000001',
+        email: 'green-guest@example.com',
+      },
+    });
+    assert.equal(resHuesped.statusCode, 201, `Operador vinculado en huésped: esperado 201, obtuvo ${resHuesped.statusCode}: ${resHuesped.payload}`);
+    const bodyHuesped = JSON.parse(resHuesped.payload);
+    assert.ok(bodyHuesped.id, 'La respuesta debe incluir ID del huésped creado');
+
+    // Verificar que la auditoría registró el email del operador, no su User.id
+    const auditEvent = await db.prisma.auditoriaEvento.findFirst({
+      where: {
+        entidad: 'Huesped',
+        entidadId: bodyHuesped.id,
+        accion: 'CREAR_HUESPED',
+      },
+    });
+    assert.ok(auditEvent, 'Debe existir un evento de auditoría para la creación del huésped');
+    assert.equal(auditEvent!.actor, 'operador@daplace.pe', 'El actor en auditoría debe ser el email del operador');
+  });
 });

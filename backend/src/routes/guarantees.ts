@@ -6,7 +6,7 @@ import {
   type TipoMovimientoGarantia,
 } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth, resolveDomainActor } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 const ALLOWED_ESTADOS_GARANTIA: EstadoGarantia[] = [
   'EN_CUSTODIA',
@@ -383,7 +383,7 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = resolveDomainActor(request, reply);
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
       if (actorId === null) return;
       const motivoRecepcion = motivo && motivo.trim()
         ? motivo.trim()
@@ -504,7 +504,7 @@ export function registerGuaranteesRoutes(prisma: PrismaClient): FastifyPluginAsy
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = resolveDomainActor(request, reply);
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
       if (actorId === null) return;
       const safeIdempotencyKey = idempotencyKey && idempotencyKey.trim() ? idempotencyKey.trim() : null;
 

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 const ALLOWED_OPERATING_STATUS = ['OPERATIVA', 'EN_MANTENIMIENTO', 'INACTIVA'] as const;
 const ALLOWED_PUBLISHING_STATUS = ['PUBLICADA', 'BORRADOR', 'PAUSADA'] as const;
@@ -462,7 +462,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         // Mutación y auditoría dentro de la misma transacción atómica
         const created = await prisma.$transaction(async (tx) => {
@@ -490,7 +493,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: 'CREAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Alta de propiedad en inventario',
             detalles: { nombre: prop.nombre, propietarioId: prop.propietarioId },
             requestId: request.id,
@@ -633,7 +636,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           }
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const updated = await prisma.$transaction(async (tx) => {
           const prop = await tx.propiedad.update({
@@ -660,7 +666,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: 'ACTUALIZAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Actualización de ficha de propiedad',
             detalles: body as Record<string, unknown>,
             requestId: request.id,
@@ -722,7 +728,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const updated = await prisma.$transaction(async (tx) => {
           const prop = await tx.propiedad.update({
@@ -743,7 +752,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: activa ? 'ACTIVAR_PROPIEDAD' : 'DESACTIVAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: activa ? 'Reactivación operativa' : 'Desactivación lógica para preservar historial',
             requestId: request.id,
           });

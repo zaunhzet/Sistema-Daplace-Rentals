@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { Prisma, type PrismaClient, type EstadoPago, type ConceptoPago, type MetodoPago, type BeneficiarioPago } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth, resolveDomainActor } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 import { formatEvidenciaResponse, validateUrl } from './payment-evidences.js';
 
 const ALLOWED_ESTADOS_PAGO: EstadoPago[] = ['PENDIENTE_CONCILIACION', 'CONCILIADO', 'RECHAZADO'];
@@ -780,7 +780,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = resolveDomainActor(request, reply);
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
       if (actorId === null) return;
 
       try {
@@ -897,7 +897,7 @@ export function registerPaymentsRoutes(prisma: PrismaClient): FastifyPluginAsync
       const { referencia, notas } = request.body || {};
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = resolveDomainActor(request, reply);
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
       if (actorId === null) return;
       const now = new Date();
 

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient, EstadoFirmaContrato } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 import {
   evaluateConfirmationRequirements,
   defaultPoliticaAdelantoProvider,
@@ -157,31 +157,9 @@ export function registerContractsRoutes(
           });
         }
 
-        // Exigir actor transaccional de dominio válido para registrar el contrato y su auditoría
-        const actorUsuarioId = request.user?.usuarioId;
-        if (!actorUsuarioId) {
-          return reply.status(403).send({
-            error: {
-              code: 'DOMAIN_IDENTITY_REQUIRED',
-              message: 'La cuenta no tiene una identidad de dominio vinculada para registrar contratos de reserva.',
-              requestId: request.id,
-            },
-          });
-        }
-
-        const actorDomain = await prisma.usuario.findUnique({
-          where: { id: actorUsuarioId },
-        });
-
-        if (!actorDomain || !actorDomain.activo) {
-          return reply.status(403).send({
-            error: {
-              code: 'DOMAIN_IDENTITY_REQUIRED',
-              message: 'El actor transaccional no existe o no se encuentra activo en el dominio.',
-              requestId: request.id,
-            },
-          });
-        }
+        // Exigir actor transaccional de dominio válido (existente y activo en BD)
+        const actorUsuarioId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorUsuarioId === null) return;
 
         let cleanUrl: string | null = null;
         if (urlReferencia && typeof urlReferencia === 'string' && urlReferencia.trim() !== '') {

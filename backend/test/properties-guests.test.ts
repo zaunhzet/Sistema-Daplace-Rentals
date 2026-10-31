@@ -146,7 +146,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Propiedad', entidadId: 'prop-test-01', accion: 'CREAR_PROPIEDAD' },
       });
       assert.ok(audit, 'Debe existir registro de auditoría');
-      assert.equal(audit.actor, 'usr-admin', 'El actor debe corresponder al usuario autenticado');
+      assert.equal(audit.actor, 'admin@daplace.example.invalid', 'El actor debe corresponder al email del usuario autenticado');
     });
 
     it('5. PATCH /api/propiedades/:id — actualiza propiedad', async () => {
@@ -332,7 +332,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Huesped', entidadId: 'hue-test-01', accion: 'ACTUALIZAR_HUESPED' },
       });
       assert.ok(audit, 'Debe registrarse evento de auditoría');
-      assert.equal(audit.actor, 'usr-admin');
+      assert.equal(audit.actor, 'admin@daplace.example.invalid');
     });
   });
 });
