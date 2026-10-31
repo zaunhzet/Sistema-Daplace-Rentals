@@ -420,4 +420,100 @@ describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamien
     const bodyContract = JSON.parse(resContract.payload);
     assert.equal(bodyContract.error.code, 'DOMAIN_IDENTITY_REQUIRED');
   });
+
+  it('12. ADMIN sin identidad de dominio recibe 403 DOMAIN_IDENTITY_REQUIRED al registrar pago o garantía (módulos financieros)', async () => {
+    const passwordHash = await AuthService.hashPassword('AdminFinHuerfano2026!');
+    await repository.createUser({
+      email: 'admin.fin.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Financiero Sin Dominio',
+      rol: 'ADMINISTRADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.fin.huerfano@daplace.pe',
+      password: 'AdminFinHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar pago: debe fallar con DOMAIN_IDENTITY_REQUIRED
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-TEST-DOMAIN-12',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 403, `POST /api/pagos debería devolver 403, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.equal(bodyPago.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de registrar garantía: debe fallar con DOMAIN_IDENTITY_REQUIRED
+    const resGarantia = await app.inject({
+      method: 'POST',
+      url: '/api/garantias',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '300.00',
+        moneda: 'PEN',
+        metodoCustodia: 'DEPOSITO_BANCARIO',
+      },
+    });
+    assert.equal(resGarantia.statusCode, 403, `POST /api/garantias debería devolver 403, obtuvo ${resGarantia.statusCode}: ${resGarantia.payload}`);
+    const bodyGarantia = JSON.parse(resGarantia.payload);
+    assert.equal(bodyGarantia.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('13. OPERADOR sin identidad de dominio recibe 403 DOMAIN_IDENTITY_REQUIRED al registrar gasto (módulo operativo)', async () => {
+    const passwordHash = await AuthService.hashPassword('OpGastoHuerfano2026!');
+    await repository.createUser({
+      email: 'operador.gasto.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Operador Gastos Sin Dominio',
+      rol: 'OPERADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'operador.gasto.huerfano@daplace.pe',
+      password: 'OpGastoHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Registrar propiedad para poder asociar el gasto
+    const resGasto = await app.inject({
+      method: 'POST',
+      url: '/api/gastos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        propiedadId: prop1Id,
+        fechaGasto: '2026-11-01',
+        periodoMes: 11,
+        periodoAnio: 2026,
+        titulo: 'Limpieza mensual',
+        categoria: 'MANTENIMIENTO',
+        monto: '150.00',
+        moneda: 'PEN',
+        pagadoPor: 'DAPLACE',
+      },
+    });
+    assert.equal(resGasto.statusCode, 403, `POST /api/gastos debería devolver 403, obtuvo ${resGasto.statusCode}: ${resGasto.payload}`);
+    const bodyGasto = JSON.parse(resGasto.payload);
+    assert.equal(bodyGasto.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
 });

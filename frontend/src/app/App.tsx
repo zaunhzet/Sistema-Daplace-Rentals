@@ -14,6 +14,7 @@ import { ExpensesPage } from '../features/expenses';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { ClientPortalPage } from './ClientPortalPage';
+import { ForbiddenPage } from './ForbiddenPage';
 import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
 import { getDefaultAuthorizedPath } from '../shared/auth/permissions';
 import daplaceIcon from '../assets/daplace-icon.png';
@@ -78,13 +79,22 @@ function AppRoutes() {
         </Route>
       )}
 
-      {/* 4. Panel Administrativo Transaccional (Shell Operativo Principal) protegido por sesión y RBAC */}
+      {/* 4. Panel Administrativo Transaccional (Shell Operativo Principal) */}
+      {/* CLIENTE nunca monta el AdminLayout: recibe 403 standalone antes de que el shell se renderice */}
       <Route
         element={
-          session.isAuthenticated ? (
-            <AdminLayout />
-          ) : (
+          !session.isAuthenticated ? (
             <Navigate to="/login" replace />
+          ) : session.user?.rol === 'CLIENTE' ? (
+            // CLIENTE autenticado intentando acceder a rutas administrativas → 403 sin shell
+            <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5] p-6">
+              <ForbiddenPage
+                onBackPath="/cliente"
+                message="El portal administrativo no está disponible para cuentas de cliente. Usa el portal de cliente para ver tu información."
+              />
+            </div>
+          ) : (
+            <AdminLayout />
           )
         }
       >

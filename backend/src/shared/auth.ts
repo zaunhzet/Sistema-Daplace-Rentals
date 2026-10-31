@@ -56,6 +56,34 @@ export async function authenticateRequestHook(request: FastifyRequest): Promise<
 }
 
 /**
+ * Resuelve el `usuarioId` de dominio desde la solicitud autenticada.
+ *
+ * Uso: llamar al inicio de cualquier handler que realice escrituras transaccionales
+ * que requieran una FK a `Usuario` (registradoPorId, conciliadoPorId, actorId, etc.).
+ *
+ * Si el User de autenticación no tiene un `Usuario` de dominio vinculado y activo,
+ * responde 403 con código `DOMAIN_IDENTITY_REQUIRED` antes de ejecutar cualquier write.
+ *
+ * @returns string — el usuarioId de dominio verificado (nunca null)
+ */
+export function resolveDomainActor(request: FastifyRequest, reply: FastifyReply): string | null {
+  const usuarioId = request.user?.usuarioId ?? null;
+  if (!usuarioId) {
+    reply.status(403).send({
+      error: {
+        code: 'DOMAIN_IDENTITY_REQUIRED',
+        message:
+          'El usuario autenticado no tiene una identidad de dominio (Usuario) vinculada y activa. ' +
+          'Se requiere vínculo explícito con un Actor de Dominio para realizar esta operación transaccional.',
+        requestId: request.id,
+      },
+    });
+    return null;
+  }
+  return usuarioId;
+}
+
+/**
  * Middleware / PreHandler que exige una identidad autenticada y opcionalmente valida roles requeridos.
  */
 export function requireAuth(allowedRoles?: UserRole[]) {

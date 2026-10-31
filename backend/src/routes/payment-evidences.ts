@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient, EstadoEvidenciaPago } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActor } from '../shared/auth.js';
 
 export function validateUrl(stringUrl: string): boolean {
   try {
@@ -151,7 +151,8 @@ export function registerPaymentEvidencesRoutes(prisma: PrismaClient): FastifyPlu
 
       const effectiveTipo = tipo && tipo.trim() ? tipo.trim() : 'VOUCHER';
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorId = resolveDomainActor(request, reply);
+      if (actorId === null) return;
 
       // E. Canonicalización y cálculo del hash de evidencia
       const calculatedHash = computeEvidencePayloadHash({

@@ -186,8 +186,11 @@ export function buildApp(
             }
 
             const mappedRole = (liveUser.rol === 'ADMINISTRADOR' ? 'ADMIN' : liveUser.rol) as any;
+            // IDENTIDAD SEPARADA:
+            // - id / sub  = liveUser.id  → identificador del User de autenticación (NUNCA usado como FK de dominio)
+            // - usuarioId = liveUser.usuarioId → FK a Usuario de dominio (puede ser null si no está vinculado)
             (request as any).user = {
-              id: liveUser.usuarioId || liveUser.id,
+              id: liveUser.id,
               sub: liveUser.id,
               usuarioId: liveUser.usuarioId ?? null,
               email: liveUser.email,
