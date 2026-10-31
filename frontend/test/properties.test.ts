@@ -138,5 +138,45 @@ describe('Properties Module — Unit & Mock Tests', () => {
       assert.ok(persisted !== null);
       assert.equal(persisted?.activa, false);
     });
+
+    it('creates a new domain owner and makes it available in catalog', async () => {
+      const created = await propertyService.createPropietario({
+        nombre: 'Nuevo Propietario Test',
+        email: 'nuevo.propietario@daplace.pe',
+        telefono: '+51 987 654 321',
+      });
+
+      assert.ok(created.id);
+      assert.equal(created.nombre, 'Nuevo Propietario Test');
+      assert.equal(created.email, 'nuevo.propietario@daplace.pe');
+
+      const all = await propertyService.getPropietarios();
+      const found = all.find((p) => p.id === created.id);
+      assert.ok(found);
+      assert.equal(found?.nombre, 'Nuevo Propietario Test');
+    });
+
+    it('rejects creating owner with invalid or duplicate email', async () => {
+      await assert.rejects(
+        async () => {
+          await propertyService.createPropietario({
+            nombre: 'Nombre Valido',
+            email: 'correo-sin-arroba',
+          });
+        },
+        /correo electrónico válido/
+      );
+
+      // Duplicado comprobable
+      await assert.rejects(
+        async () => {
+          await propertyService.createPropietario({
+            nombre: 'Carlos Duplicado',
+            email: 'contacto@sanisidro-inversiones.example.invalid', // Ya existe en mock
+          });
+        },
+        /Ya existe un propietario registrado/
+      );
+    });
   });
 });

@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from '../features/auth';
 import { LoginForm } from '../features/auth';
 import { AdminAreaPreview } from '../features/auth';
 import { AdminLayout } from './AdminLayout';
+import { ProtectedRoute } from './ProtectedRoute';
 import { PropertiesPage } from '../features/properties';
 import { GuestsPage } from '../features/guests';
 import { ReservationsPage } from '../features/reservations';
@@ -13,6 +14,7 @@ import { ExpensesPage } from '../features/expenses';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
+import { getDefaultAuthorizedPath } from '../shared/auth/permissions';
 import daplaceIcon from '../assets/daplace-icon.png';
 
 // Feature flag: el portal público de reservas (HU-01 / HU-02) queda pospuesto por decisión
@@ -38,12 +40,14 @@ function AppRoutes() {
     );
   }
 
+  const defaultPath = getDefaultAuthorizedPath(session.user?.rol);
+
   return (
     <Routes>
       {/* 1. Ruta de Login */}
       <Route
         path="/login"
-        element={session.isAuthenticated ? <Navigate to="/propiedades" replace /> : <LoginForm />}
+        element={session.isAuthenticated ? <Navigate to={defaultPath} replace /> : <LoginForm />}
       />
 
       {/* 2. Vista de diagnóstico de sesión de Diego */}
@@ -57,25 +61,110 @@ function AppRoutes() {
         </Route>
       )}
 
-      {/* 4. Panel Administrativo Transaccional (Shell Operativo Principal de André) */}
-      <Route element={<AdminLayout />}>
-        {/* Ruta raíz redirige al módulo operativo disponible */}
-        <Route index element={<Navigate to="/propiedades" replace />} />
+      {/* 4. Panel Administrativo Transaccional (Shell Operativo Principal) protegido por sesión y RBAC */}
+      <Route
+        element={
+          session.isAuthenticated ? (
+            <AdminLayout />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      >
+        {/* Ruta raíz redirige al primer módulo autorizado según el rol */}
+        <Route index element={<Navigate to={defaultPath} replace />} />
 
-        {/* Módulos Operativos (André) */}
-        <Route path="/propiedades" element={<PropertiesPage />} />
-        <Route path="/huespedes" element={<GuestsPage />} />
-        <Route path="/reservas" element={<ReservationsPage />} />
-        <Route path="/calendario" element={<CalendarPage />} />
-        <Route path="/pagos" element={<PaymentsPage />} />
-        <Route path="/garantias" element={<GuaranteesPage />} />
-        <Route path="/gastos" element={<ExpensesPage />} />
+        {/* Módulos Operativos */}
+        <Route
+          path="/propiedades"
+          element={
+            <ProtectedRoute path="/propiedades">
+              <PropertiesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/huespedes"
+          element={
+            <ProtectedRoute path="/huespedes">
+              <GuestsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reservas"
+          element={
+            <ProtectedRoute path="/reservas">
+              <ReservationsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/calendario"
+          element={
+            <ProtectedRoute path="/calendario">
+              <CalendarPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/pagos"
+          element={
+            <ProtectedRoute path="/pagos">
+              <PaymentsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/garantias"
+          element={
+            <ProtectedRoute path="/garantias">
+              <GuaranteesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/gastos"
+          element={
+            <ProtectedRoute path="/gastos">
+              <ExpensesPage />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* Módulos Reservados / Pendientes (Diego y Compartidos) */}
-        <Route path="/dashboard" element={<PendingModuleView path="/dashboard" />} />
-        <Route path="/reportes" element={<PendingModuleView path="/reportes" />} />
-        <Route path="/personal" element={<PendingModuleView path="/personal" />} />
-        <Route path="/mantenimiento" element={<PendingModuleView path="/mantenimiento" />} />
+        {/* Módulos Reservados / Pendientes */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute path="/dashboard">
+              <PendingModuleView path="/dashboard" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/reportes"
+          element={
+            <ProtectedRoute path="/reportes">
+              <PendingModuleView path="/reportes" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/personal"
+          element={
+            <ProtectedRoute path="/personal">
+              <PendingModuleView path="/personal" />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mantenimiento"
+          element={
+            <ProtectedRoute path="/mantenimiento">
+              <PendingModuleView path="/mantenimiento" />
+            </ProtectedRoute>
+          }
+        />
 
         {/* Fallback 404 para rutas desconocidas */}
         <Route path="*" element={<NotFoundPage />} />

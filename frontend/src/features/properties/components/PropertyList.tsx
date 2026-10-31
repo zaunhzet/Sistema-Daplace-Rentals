@@ -8,6 +8,7 @@ interface PropertyListProps {
   onEdit: (property: Property) => void;
   onToggleActive: (id: string, newActive: boolean) => Promise<void>;
   onCreateNew: () => void;
+  canManage?: boolean;
 }
 
 export const PropertyList: React.FC<PropertyListProps> = ({
@@ -16,6 +17,7 @@ export const PropertyList: React.FC<PropertyListProps> = ({
   onEdit,
   onToggleActive,
   onCreateNew,
+  canManage = true,
 }) => {
   if (properties.length === 0) {
     return (
@@ -27,16 +29,18 @@ export const PropertyList: React.FC<PropertyListProps> = ({
         <p className="mt-1 text-xs text-stone-500 max-w-md mx-auto">
           No hay propiedades registradas con los filtros seleccionados o la búsqueda actual.
         </p>
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={onCreateNew}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#122e27] cursor-pointer"
-          >
-            <Plus size={14} aria-hidden="true" />
-            <span>Registrar Primera Propiedad</span>
-          </button>
-        </div>
+        {canManage && (
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={onCreateNew}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs font-semibold text-white hover:bg-[#122e27] cursor-pointer"
+            >
+              <Plus size={14} aria-hidden="true" />
+              <span>Registrar Primera Propiedad</span>
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -140,25 +144,29 @@ export const PropertyList: React.FC<PropertyListProps> = ({
                     >
                       Detalle
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => onEdit(property)}
-                      className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onToggleActive(property.id, !property.activa)}
-                      title={property.activa ? 'Desactivar lógicamente (no borra registro)' : 'Reactivar'}
-                      className={`rounded-lg px-2 py-1 text-xs font-semibold cursor-pointer ${
-                        property.activa
-                          ? 'text-stone-500 hover:text-amber-800 hover:bg-amber-50'
-                          : 'text-emerald-700 hover:bg-emerald-50'
-                      }`}
-                    >
-                      {property.activa ? 'Desactivar' : 'Reactivar'}
-                    </button>
+                    {canManage && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(property)}
+                          className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 cursor-pointer"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onToggleActive(property.id, !property.activa)}
+                          title={property.activa ? 'Desactivar lógicamente (no borra registro)' : 'Reactivar'}
+                          className={`rounded-lg px-2 py-1 text-xs font-semibold cursor-pointer ${
+                            property.activa
+                              ? 'text-stone-500 hover:text-amber-800 hover:bg-amber-50'
+                              : 'text-emerald-700 hover:bg-emerald-50'
+                          }`}
+                        >
+                          {property.activa ? 'Desactivar' : 'Reactivar'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

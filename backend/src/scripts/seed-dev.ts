@@ -61,24 +61,28 @@ const devUsers: Array<{
   nombre: string;
   cargo: string;
   rol: UserRole;
+  syntheticUsuarioId?: string;
 }> = [
   {
     email: 'admin.dev@daplace.pe',
     nombre: 'Valeria Méndez',
     cargo: 'Administradora General',
     rol: 'ADMINISTRADOR',
+    syntheticUsuarioId: 'usr-admin',
   },
   {
     email: 'operador.dev@daplace.pe',
     nombre: 'Diego Navarro',
     cargo: 'Operador de Turno',
     rol: 'OPERADOR',
+    syntheticUsuarioId: 'usr-operador',
   },
   {
     email: 'propietario.dev@daplace.pe',
     nombre: 'Carlos Echevarría',
     cargo: 'Propietario de Inmuebles',
     rol: 'PROPIETARIO',
+    syntheticUsuarioId: 'usr-102', // Propietario sintético de prop-01 y prop-04
   },
   {
     email: 'cliente.dev@daplace.pe',
@@ -96,15 +100,36 @@ async function seed() {
     const passwordHash = await AuthService.hashPassword(devPassword!);
 
     for (const devUser of devUsers) {
+      // Si tiene syntheticUsuarioId, verificar que el Usuario de dominio exista antes de vincular
+      let targetUsuarioId: string | null = null;
+      if (devUser.syntheticUsuarioId) {
+        const domainUser = await database.prisma.usuario.findUnique({
+          where: { id: devUser.syntheticUsuarioId },
+        });
+        if (domainUser) {
+          targetUsuarioId = domainUser.id;
+        }
+      }
+
       const existing = await database.prisma.user.findUnique({
         where: { email: devUser.email },
       });
 
-      // 5. No modificar usuarios existentes (preservar contraseñas, roles y estados)
+      // 5. No sobrescribir usuarios existentes, pero si carecen de vinculación sintética y está disponible, vincular
       if (existing) {
-        console.log(
-          `[Omitido]     ${devUser.rol.padEnd(14)}: ${devUser.email} (usuario ya existente, se conservan sus datos)`
-        );
+        if (!existing.usuarioId && targetUsuarioId) {
+          await database.prisma.user.update({
+            where: { id: existing.id },
+            data: { usuarioId: targetUsuarioId },
+          });
+          console.log(
+            `[Vinculado]   ${devUser.rol.padEnd(14)}: ${devUser.email} -> Usuario(${targetUsuarioId})`
+          );
+        } else {
+          console.log(
+            `[Omitido]     ${devUser.rol.padEnd(14)}: ${devUser.email} (usuario ya existente, se conservan sus datos)`
+          );
+        }
       } else {
         await database.prisma.user.create({
           data: {
@@ -114,6 +139,7 @@ async function seed() {
             rol: devUser.rol as any,
             passwordHash,
             isActive: true,
+            ...(targetUsuarioId ? { usuarioId: targetUsuarioId } : {}),
           },
         });
         console.log(`[Creado]     ${devUser.rol.padEnd(14)}: ${devUser.email}`);

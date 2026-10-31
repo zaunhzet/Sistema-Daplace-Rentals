@@ -29,6 +29,129 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
       }
     );
 
+    // 1b. Registrar nuevo propietario (Actor de Dominio Usuario con rol PROPIETARIO)
+    app.post<{
+      Body: {
+        id?: string;
+        nombre: string;
+        email: string;
+        telefono?: string;
+      };
+    }>(
+      '/api/propietarios',
+      { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
+      async (request, reply) => {
+        const { id, nombre, email, telefono } = request.body || {};
+
+        if (id && (!SAFE_ID_REGEX.test(id) || id.length > 64)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El identificador id contiene caracteres no válidos o longitud excedida.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedNombre = nombre ? nombre.trim() : '';
+        if (trimmedNombre.length < 3 || trimmedNombre.length > 150) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El nombre del propietario es obligatorio (entre 3 y 150 caracteres).',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedEmail = email ? email.trim().toLowerCase() : '';
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Debe ingresar un correo electrónico válido para el propietario.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedTelefono = telefono?.trim() || null;
+        if (trimmedTelefono && trimmedTelefono.length < 6) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El teléfono debe contener al menos 6 dígitos o caracteres si se especifica.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Comprobación de unicidad de email en Usuario
+        const existingUsuario = await prisma.usuario.findUnique({
+          where: { email: trimmedEmail },
+        });
+
+        if (existingUsuario) {
+          return reply.status(409).send({
+            error: {
+              code: 'DUPLICATE_OWNER_EMAIL',
+              message: `Ya existe un usuario o propietario registrado con el correo "${trimmedEmail}".`,
+              requestId: request.id,
+            },
+          });
+        }
+
+        const actorId = request.user!.id;
+
+        const createdPropietario = await prisma.$transaction(async (tx) => {
+          const usuario = await tx.usuario.create({
+            data: {
+              ...(id ? { id } : {}),
+              nombre: trimmedNombre,
+              email: trimmedEmail,
+              telefono: trimmedTelefono,
+              rol: 'PROPIETARIO',
+              activo: true,
+            },
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+              telefono: true,
+              rol: true,
+              activo: true,
+              creadoEn: true,
+            },
+          });
+
+          await recordAuditEvent(tx, {
+            entidad: 'Usuario',
+            entidadId: usuario.id,
+            accion: 'CREAR_PROPIETARIO',
+            actor: actorId,
+            motivo: 'Registro de nuevo propietario de dominio',
+            detalles: {
+              nombre: usuario.nombre,
+              email: usuario.email,
+              hasTelefono: Boolean(usuario.telefono),
+              rol: usuario.rol,
+            },
+            requestId: request.id,
+          });
+
+          return usuario;
+        });
+
+        return reply.status(201).send({
+          id: createdPropietario.id,
+          nombre: createdPropietario.nombre,
+          email: createdPropietario.email,
+          telefono: createdPropietario.telefono,
+        });
+      }
+    );
+
     // 2. Listar propiedades con filtros
     app.get<{
       Querystring: {

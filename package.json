@@ -14,6 +14,8 @@
     "build": "npm run build --workspace @daplace/backend && npm run build --workspace @daplace/frontend",
     "typecheck": "npm run typecheck --workspace @daplace/backend && npm run typecheck --workspace @daplace/frontend",
     "test": "npm run test --workspace @daplace/backend",
+    "test:web": "npm run test --workspace @daplace/frontend",
+    "test:all": "npm run test --workspace @daplace/backend && npm run test --workspace @daplace/frontend",
     "db:generate": "npm run db:generate --workspace @daplace/backend",
     "db:validate": "npm run db:validate --workspace @daplace/backend",
     "db:migrate:dev": "npm run db:migrate:dev --workspace @daplace/backend",

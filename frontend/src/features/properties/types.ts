@@ -13,6 +13,12 @@ export interface Propietario {
   telefono?: string;
 }
 
+export interface CreatePropietarioDto {
+  nombre: string;
+  email: string;
+  telefono?: string;
+}
+
 export interface Property {
   id: string;
   nombre: string;

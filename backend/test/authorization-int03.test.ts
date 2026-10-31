@@ -300,4 +300,54 @@ describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamien
     const bodyCal = JSON.parse(resCal.payload);
     assert.equal(bodyCal.error.code, 'DOMAIN_IDENTITY_REQUIRED');
   });
+
+  it('8. Propietario no puede registrar, editar ni desactivar propiedades (HTTP 403)', async () => {
+    // Intentar crear propiedad
+    const resCreate = await app.inject({
+      method: 'POST',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: {
+        nombre: 'Intento Propietario',
+        direccion: 'Av. Ilegal 123',
+        propietarioId: 'usr-prop1-trans',
+      },
+    });
+    assert.equal(resCreate.statusCode, 403);
+
+    // Intentar editar propiedad
+    const resUpdate = await app.inject({
+      method: 'PATCH',
+      url: `/api/propiedades/${prop1Id}`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { nombre: 'Nombre Hackeado' },
+    });
+    assert.equal(resUpdate.statusCode, 403);
+
+    // Intentar cambiar estado activo
+    const resToggle = await app.inject({
+      method: 'PATCH',
+      url: `/api/propiedades/${prop1Id}/activa`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { activa: false },
+    });
+    assert.equal(resToggle.statusCode, 403);
+  });
+
+  it('9. Propietario no puede consultar ni registrar en el catálogo /api/propietarios (HTTP 403)', async () => {
+    const resGet = await app.inject({
+      method: 'GET',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resGet.statusCode, 403);
+
+    const resPost = await app.inject({
+      method: 'POST',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { nombre: 'Otro', email: 'otro@daplace.pe' },
+    });
+    assert.equal(resPost.statusCode, 403);
+  });
 });

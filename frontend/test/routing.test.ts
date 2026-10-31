@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { NAVIGATION_ITEMS } from '../src/shared/navigation';
+import { canAccessPath, getDefaultAuthorizedPath, hasPermission } from '../src/shared/auth/permissions';
 
 describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', () => {
   const OPERATIONAL_ROUTES = [
@@ -73,5 +74,71 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
         `Path ${unknown} should not match known application routes`,
       );
     }
+  });
+
+  describe('RBAC Navigation and Access Control (RBAC-UI-01)', () => {
+    it('ADMINISTRADOR has access to all operational and pending modules', () => {
+      for (const route of OPERATIONAL_ROUTES) {
+        assert.equal(canAccessPath('ADMINISTRADOR', route), true, `Admin must access ${route}`);
+      }
+      assert.equal(canAccessPath('ADMINISTRADOR', '/dashboard'), true);
+      assert.equal(canAccessPath('ADMINISTRADOR', '/personal'), true);
+      assert.equal(hasPermission('ADMINISTRADOR', 'manage:properties'), true);
+      assert.equal(hasPermission('ADMINISTRADOR', 'manage:owners'), true);
+    });
+
+    it('OPERADOR has access to operations and finance, but not executive modules', () => {
+      for (const route of OPERATIONAL_ROUTES) {
+        assert.equal(canAccessPath('OPERADOR', route), true, `Operador must access ${route}`);
+      }
+      assert.equal(canAccessPath('OPERADOR', '/dashboard'), false);
+      assert.equal(canAccessPath('OPERADOR', '/reportes'), false);
+      assert.equal(canAccessPath('OPERADOR', '/personal'), false);
+      assert.equal(hasPermission('OPERADOR', 'manage:properties'), true);
+      assert.equal(hasPermission('OPERADOR', 'manage:owners'), true);
+    });
+
+    it('PROPIETARIO is strictly restricted to /propiedades and /calendario', () => {
+      assert.equal(canAccessPath('PROPIETARIO', '/propiedades'), true);
+      assert.equal(canAccessPath('PROPIETARIO', '/calendario'), true);
+
+      // Denegados
+      assert.equal(canAccessPath('PROPIETARIO', '/huespedes'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/reservas'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/pagos'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/garantias'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/gastos'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/dashboard'), false);
+
+      // Sin permisos de gestión/escritura sobre propiedades ni catálogo de propietarios
+      assert.equal(hasPermission('PROPIETARIO', 'manage:properties'), false);
+      assert.equal(hasPermission('PROPIETARIO', 'manage:owners'), false);
+    });
+
+    it('CLIENTE is rejected from all admin layout routes', () => {
+      for (const route of [...OPERATIONAL_ROUTES, '/dashboard', '/reportes']) {
+        assert.equal(canAccessPath('CLIENTE', route), false, `Cliente must be denied from ${route}`);
+      }
+      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/login');
+    });
+
+    it('resolves default authorized redirect path correctly per role', () => {
+      assert.equal(getDefaultAuthorizedPath('ADMINISTRADOR'), '/propiedades');
+      assert.equal(getDefaultAuthorizedPath('OPERADOR'), '/propiedades');
+      assert.equal(getDefaultAuthorizedPath('PROPIETARIO'), '/propiedades');
+      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/login');
+      assert.equal(getDefaultAuthorizedPath(null), '/login');
+    });
+
+    it('filters sidebar navigation items strictly for PROPIETARIO', () => {
+      const ownerItems = NAVIGATION_ITEMS.filter((item) =>
+        canAccessPath('PROPIETARIO', item.path)
+      );
+      assert.equal(ownerItems.length, 2);
+      assert.deepEqual(
+        ownerItems.map((i) => i.path).sort(),
+        ['/calendario', '/propiedades'].sort()
+      );
+    });
   });
 });

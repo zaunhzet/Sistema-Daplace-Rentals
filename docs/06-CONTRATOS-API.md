@@ -27,6 +27,7 @@
 | `PATCH` | `/api/propiedades/:id` | `ADMIN`, `OPERADOR` | Campos modificables de la propiedad | `200 Property` |
 | `PATCH` | `/api/propiedades/:id/activa` | `ADMIN`, `OPERADOR` | `{ activa: boolean }` (Baja lógica) | `200 Property` |
 | `GET` | `/api/propietarios` | `ADMIN`, `OPERADOR` | Ninguna | `200 Usuario[]` (Usuarios con rol `PROPIETARIO`). |
+| `POST` | `/api/propietarios` | `ADMIN`, `OPERADOR` | `{ nombre, email, telefono? }` | `201 Usuario` (Alta de actor de dominio `PROPIETARIO` con auditoría). |
 
 ---
 

@@ -1,7 +1,7 @@
 # 08 — Estrategia y Ejecución de Pruebas
 
-**Estado:** APROBADO Y VERIFICADO (Refleja la suite de pruebas automatizadas ejecutadas y aprobadas al 30 de octubre de 2026).
-**Cobertura Verificada:** 234 pruebas Backend (PostgreSQL real) + 140 pruebas Frontend (Vitest).
+**Estado:** APROBADO Y VERIFICADO (Refleja la suite de pruebas automatizadas ejecutadas y aprobadas al 30 de octubre de 2026 tras RBAC-UI-01).
+**Cobertura Verificada:** 239 pruebas Backend (PostgreSQL real) + 148 pruebas Frontend (Vitest).
 **Tasa de Éxito:** 100% PASS (0 fallos, 0 errores de TypeScript, builds de producción limpios).
 
 ---
@@ -42,10 +42,18 @@ Todas las pruebas backend se ejecutan contra una base de datos local aislada (`d
    * **Logout Concurrente — Orden 2:** Refresh completa rotación + Logout posterior; toda la familia queda revocada con timestamp; el access token recién emitido queda revocado de inmediato.
    * **Aislamiento Multisesión:** Una sesión en otro dispositivo del mismo usuario permanece 100% válida tras el logout en el primer dispositivo.
    * **Trazabilidad:** Preservación de registros con `revokedAt IS NOT NULL` (cero borrado destructivo).
-3. **Autorización y Aislamiento de Dominio (`authorization-int03.test.ts` — 7 PASS):**
+3. **Autorización y Aislamiento de Dominio (`authorization-int03.test.ts` — 9 PASS):**
    * Matriz de roles RBAC (`ADMIN`, `OPERADOR`, `PROPIETARIO`, `CLIENTE`).
    * Validación negativa: Propietario activo sin `usuarioId` vinculado es rechazado de inmediato con HTTP 403 `DOMAIN_IDENTITY_REQUIRED`.
    * Propiedad ajena no visible ni modificable por propietario no autorizado.
+   * Rechazo de endpoints de escritura para rol `PROPIETARIO` en creación, edición y cambio de estado de inmuebles (HTTP 403 `ROLE_NOT_AUTHORIZED`).
+   * Rechazo de endpoints `/api/propietarios` (GET y POST) para rol `PROPIETARIO` (HTTP 403 `ROLE_NOT_AUTHORIZED`).
+4. **Propiedades, Huéspedes y Propietarios (`properties-guests.test.ts` — 15 PASS):**
+   * Creación y asignación de propiedades con validación de modelo y tipos de alojamiento.
+   * Registro y verificación de unicidad de huéspedes (`Guest`).
+   * Registro directo de propietarios vía `POST /api/propietarios` (`Usuario` con rol `PROPIETARIO`), validación de formato de email y longitud de teléfono.
+   * Prevención de duplicados de correo electrónico en registro de propietarios (HTTP 409 `DUPLICATE_OWNER_EMAIL`).
+   * Registro de evento de auditoría de seguridad `CREAR_PROPIETARIO` en PostgreSQL tras la creación exitosa.
 
 ### B. Suites del Núcleo de Dominio y Transacciones
 * **Reservas y Solapes (`reservations.test.ts`):** Exclusión de fechas con `btree_gist`, intervalo semiabierto `[ingreso, salida)`, transiciones de estado y cálculo de noches.
@@ -57,7 +65,7 @@ Todas las pruebas backend se ejecutan contra una base de datos local aislada (`d
 
 ---
 
-## 3. Suites de Pruebas Frontend (140 Tests PASS)
+## 3. Suites de Pruebas Frontend (148 Tests PASS)
 
 Ejecutadas con Vitest y Testing Library sobre componentes y coordinadores de página:
 
@@ -65,7 +73,17 @@ Ejecutadas con Vitest y Testing Library sobre componentes y coordinadores de pá
    * Descarte de peticiones lentas en vuelo tras logout mediante `authEpoch` (`STALE_SESSION_RESPONSE`, 499).
    * Preservación del encabezado `Idempotency-Key` en reintentos transparentes de 401 tras renovación de token.
    * Propagación automática del Bearer token en memoria.
-2. **Coordinadores de Página y Formularios:**
+2. **Control de Rutas y Matriz RBAC (`routing.test.ts` — 5 PASS):**
+   * Redirección a `/login` para accesos no autenticados en rutas privadas.
+   * Redirección post-login al módulo inicial según rol (`/dashboard` para ADMIN/OPERADOR, `/propiedades` para PROPIETARIO).
+   * Bloqueo y renderizado de pantalla 403 `ForbiddenPage` en navegación directa a rutas no autorizadas.
+   * Denegación completa de acceso al layout administrativo para rol `CLIENTE`.
+   * Filtrado dinámico de navegación en `Sidebar` según catálogo de permisos `AppPermission`.
+3. **Propiedades y Propietarios (`properties.test.ts` — 6 PASS):**
+   * Registro reactivo de propietarios con validación de campos obligatorios.
+   * Rechazo de correos electrónicos duplicados en registro de propietarios.
+   * Desacoplamiento de carga de propietarios para roles sin permiso `manage:owners` (evita 403 en `PROPIETARIO`).
+4. **Coordinadores de Página y Formularios:**
    * `reservationPageCoordinator.test.ts`: Actualización por ID de la reserva seleccionada tras refresco del calendario.
    * Componentes de grilla de calendario, badges de transición (check-in / check-out) y leyenda de estados.
    * Modales de pago, subida de vouchers y cálculo reactivo de saldos.

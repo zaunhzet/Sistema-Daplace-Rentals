@@ -6,6 +6,7 @@ export interface User {
   nombre: string;
   cargo: string | null;
   rol: UserRole;
+  usuarioId?: string | null;
 }
 
 export interface AuthSession {

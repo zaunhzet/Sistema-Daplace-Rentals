@@ -11,8 +11,15 @@ import { PropertyFilters } from '../components/PropertyFilters';
 import { PropertyList } from '../components/PropertyList';
 import { PropertyFormModal } from '../components/PropertyFormModal';
 import { PropertyDetailModal } from '../components/PropertyDetailModal';
+import { useAuth } from '../../auth/AuthContext';
+import { hasPermission } from '../../../shared/auth/permissions';
 
 export const PropertiesPage: React.FC = () => {
+  const { session } = useAuth();
+  const userRole = session.user?.rol;
+  const canManageProperties = hasPermission(userRole, 'manage:properties');
+  const canManageOwners = hasPermission(userRole, 'manage:owners');
+
   const [properties, setProperties] = useState<Property[]>([]);
   const [propietarios, setPropietarios] = useState<Propietario[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -50,9 +57,14 @@ export const PropertiesPage: React.FC = () => {
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      // Desacoplamiento crítico: PROPIETARIO no consulta /api/propietarios (evita 403)
+      const fetchOwnersPromise = canManageOwners
+        ? propertyService.getPropietarios().catch(() => [] as Propietario[])
+        : Promise.resolve([] as Propietario[]);
+
       const [propsData, propsPropietarios] = await Promise.all([
         propertyService.getProperties(filters),
-        propertyService.getPropietarios(),
+        fetchOwnersPromise,
       ]);
       setProperties(propsData);
       setPropietarios(propsPropietarios);
@@ -65,7 +77,7 @@ export const PropertiesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, canManageOwners]);
 
   useEffect(() => {
     loadData();
@@ -73,6 +85,10 @@ export const PropertiesPage: React.FC = () => {
 
   // Handle Form Submit (Create or Edit)
   const handleFormSubmit = async (dto: CreatePropertyDto, propertyId?: string) => {
+    if (!canManageProperties) {
+      showError('No dispone de permisos para registrar o modificar propiedades.');
+      return;
+    }
     if (propertyId) {
       await propertyService.updateProperty(propertyId, dto);
       showSuccess(`Propiedad "${dto.nombre}" actualizada con éxito.`);
@@ -124,19 +140,21 @@ export const PropertiesPage: React.FC = () => {
           </p>
         </div>
 
-        <div>
-          <button
-            type="button"
-            onClick={() => {
-              setPropertyToEdit(null);
-              setIsFormOpen(true);
-            }}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#122e27] transition-colors cursor-pointer"
-          >
-            <Plus size={16} aria-hidden="true" />
-            <span>Registrar Propiedad</span>
-          </button>
-        </div>
+        {canManageProperties && (
+          <div>
+            <button
+              type="button"
+              onClick={() => {
+                setPropertyToEdit(null);
+                setIsFormOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#183b32] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#122e27] transition-colors cursor-pointer"
+            >
+              <Plus size={16} aria-hidden="true" />
+              <span>Registrar Propiedad</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Notifications */}
@@ -214,16 +232,19 @@ export const PropertiesPage: React.FC = () => {
       ) : (
         <PropertyList
           properties={properties}
+          canManage={canManageProperties}
           onViewDetail={(property) => {
             setSelectedProperty(property);
             setIsDetailOpen(true);
           }}
           onEdit={(property) => {
+            if (!canManageProperties) return;
             setPropertyToEdit(property);
             setIsFormOpen(true);
           }}
           onToggleActive={handleToggleActive}
           onCreateNew={() => {
+            if (!canManageProperties) return;
             setPropertyToEdit(null);
             setIsFormOpen(true);
           }}
@@ -231,19 +252,32 @@ export const PropertiesPage: React.FC = () => {
       )}
 
       {/* Modals */}
-      <PropertyFormModal
-        isOpen={isFormOpen}
-        propertyToEdit={propertyToEdit}
-        propietarios={propietarios}
-        onClose={() => {
-          setIsFormOpen(false);
-          setPropertyToEdit(null);
-        }}
-        onSubmit={handleFormSubmit}
-      />
+      {canManageProperties && (
+        <PropertyFormModal
+          isOpen={isFormOpen}
+          propertyToEdit={propertyToEdit}
+          propietarios={propietarios}
+          onClose={() => {
+            setIsFormOpen(false);
+            setPropertyToEdit(null);
+          }}
+          onSubmit={handleFormSubmit}
+          onOwnerCreated={async (newOwner) => {
+            // Recargar catálogo de propietarios y seleccionar el nuevo
+            try {
+              const updatedOwners = await propertyService.getPropietarios();
+              setPropietarios(updatedOwners);
+              showSuccess(`Propietario "${newOwner.nombre}" registrado exitosamente.`);
+            } catch {
+              setPropietarios((prev) => [...prev, newOwner]);
+            }
+          }}
+        />
+      )}
 
       <PropertyDetailModal
         property={selectedProperty}
+        canManage={canManageProperties}
         propietario={
           selectedProperty
             ? propietarios.find((p) => p.id === selectedProperty.propietarioId)
@@ -255,6 +289,7 @@ export const PropertiesPage: React.FC = () => {
           setSelectedProperty(null);
         }}
         onEdit={(prop) => {
+          if (!canManageProperties) return;
           setPropertyToEdit(prop);
           setIsFormOpen(true);
         }}

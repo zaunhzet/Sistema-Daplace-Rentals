@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { UserPlus } from 'lucide-react';
 import type {
   CreatePropertyDto,
   EstadoOperativo,
@@ -7,6 +8,7 @@ import type {
   Propietario,
 } from '../types';
 import { validateProperty } from '../services/propertyService';
+import { PropietarioFormModal } from './PropietarioFormModal';
 
 interface PropertyFormModalProps {
   isOpen: boolean;
@@ -14,6 +16,7 @@ interface PropertyFormModalProps {
   propietarios: Propietario[];
   onClose: () => void;
   onSubmit: (dto: CreatePropertyDto, propertyId?: string) => Promise<void>;
+  onOwnerCreated?: (propietario: Propietario) => void;
 }
 
 export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
@@ -22,6 +25,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
   propietarios,
   onClose,
   onSubmit,
+  onOwnerCreated,
 }) => {
   const [nombre, setNombre] = useState('');
   const [propietarioId, setPropietarioId] = useState('');
@@ -35,6 +39,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [isOwnerModalOpen, setIsOwnerModalOpen] = useState(false);
 
   const isEditing = !!propertyToEdit;
 
@@ -158,9 +163,19 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
 
           {/* Propietario */}
           <div>
-            <label htmlFor="prop-propietario" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-              Propietario Asociado <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label htmlFor="prop-propietario" className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
+                Propietario Asociado <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsOwnerModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#183b32] hover:text-[#122e27] hover:underline cursor-pointer"
+              >
+                <UserPlus size={13} aria-hidden="true" />
+                <span>+ Agregar Propietario</span>
+              </button>
+            </div>
             <select
               id="prop-propietario"
               value={propietarioId}
@@ -314,6 +329,19 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
           </div>
         </form>
       </div>
+
+      {/* Modal secundario para registro rápido de propietario */}
+      <PropietarioFormModal
+        isOpen={isOwnerModalOpen}
+        onClose={() => setIsOwnerModalOpen(false)}
+        onOwnerCreated={(newOwner) => {
+          setPropietarioId(newOwner.id);
+          if (errors.propietarioId) {
+            setErrors({ ...errors, propietarioId: '' });
+          }
+          onOwnerCreated?.(newOwner);
+        }}
+      />
     </div>
   );
 };
