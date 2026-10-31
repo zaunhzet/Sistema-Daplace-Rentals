@@ -11,6 +11,7 @@ import { CalendarPage } from '../features/calendar';
 import { PaymentsPage } from '../features/payments';
 import { GuaranteesPage } from '../features/guarantees';
 import { ExpensesPage } from '../features/expenses';
+import { ReportsPage } from '../features/reports';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { ClientPortalPage } from './ClientPortalPage';
@@ -172,7 +173,7 @@ function AppRoutes() {
           path="/reportes"
           element={
             <ProtectedRoute path="/reportes">
-              <PendingModuleView path="/reportes" />
+              <ReportsPage />
             </ProtectedRoute>
           }
         />

@@ -14,6 +14,7 @@ import { registerGuaranteesRoutes } from '../routes/guarantees.js';
 import { registerExpensesRoutes } from '../routes/expenses.js';
 import { registerPaymentEvidencesRoutes } from '../routes/payment-evidences.js';
 import { registerContractsRoutes } from '../routes/contracts.js';
+import { registerReportsRoutes } from '../routes/reports.js';
 import { authenticateRequestHook } from '../shared/auth.js';
 
 import type { PoliticaAdelantoProvider } from '../modules/reservations/confirmationRequirements.js';
@@ -355,6 +356,7 @@ export function buildApp(
     app.register(registerExpensesRoutes(prisma));
     app.register(registerPaymentEvidencesRoutes(prisma));
     app.register(registerContractsRoutes(prisma, politicaProvider, expirationClock));
+    app.register(registerReportsRoutes(prisma));
   }
 
   return app;
