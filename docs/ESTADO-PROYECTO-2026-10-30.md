@@ -160,10 +160,54 @@ Los 11 pasos documentados en [docs/12-DEMO-MVP.md](12-DEMO-MVP.md) se clasifican
 
 ---
 
-## 8. Estado Git y Control de Fuentes
+## 8. Estado Git y Control de Fuentes (Histórico al 30 de Octubre)
 
 * **Rama Activa:** `feat/integration-andre-diego-auth`
-* **Commit Local (HEAD):** `8c6c661c7f494b75f5eb3a08f2fdc2184d01c0a2`
-* **Padre 1:** `81eab929838f08671f74d25d95cfd9d3947d6f79` (André)
-* **Padre 2:** `4b4e0eb9a97f688c6e1d7395acdadcd76883ba87` (Diego)
-* **Estado de Publicación:** Local. No se ha ejecutado `git push` ni creado Pull Request formal a `origin/integration/andre-diego-20261029`.
+* **Commit de Integración:** `8c6c661c7f494b75f5eb3a08f2fdc2184d01c0a2`
+
+---
+
+## 9. Adenda de Consolidación — 31 de octubre de 2026 (HU-CLOSE-01: Cierre de Backlog y Consolidación MVP)
+
+**Fecha de Actualización:** 31 de octubre de 2026, 04:00 America/Lima
+**Rama de Trabajo:** `feat/hu-final-closure`
+**Base de Integración:** Merge de PR #7 (`f725c1cdc6e50754aa7c81b1eb00203794abb420`) sobre `integration/andre-diego-20261029`.
+
+### 9.1. Hitos Alcanzados y Cierres Funcionales
+
+1. **HU-11 — Alerta interna de nueva reserva:**
+   - Creación transaccional e idempotente de `NotificacionInterna` de tipo `NUEVA_RESERVA` en `POST /api/reservas`.
+   - Clave única de idempotencia: `notif-reserva-creada-${id}`.
+   - Visibilidad compartida para todo el personal autorizado (`ADMIN` y `OPERADOR`) en `GET /api/alertas` y en la campana `NotificationBell.tsx`.
+   - Navegación al detalle de reserva e inspección de huésped y fechas.
+   - Acción para marcar como atendida persistida en PostgreSQL.
+2. **HU-17 — Aviso real al trabajador asignado:**
+   - Creación persistente de `NotificacionInterna` de tipo `ORDEN_TRABAJO_ASIGNADA` en `POST /api/mantenimiento/ordenes`, `POST /api/mantenimiento/check-out` y `PATCH /api/mantenimiento/ordenes/:id/asignar`.
+   - Vinculación explícita con `usuarioId` del colaborador de campo.
+   - Aislamiento estricto RBAC: los colaboradores solo consultan avisos propios o globales; se prohíbe la exposición de notificaciones ajenas (403 FORBIDDEN ante intento de modificación cruzada).
+   - Soporte para marcar como leída (`POST /api/alertas/:id/leer`) y marcar como atendida (`POST /api/alertas/:id/atender`).
+3. **Mantenimiento y Salidas (HU-10, HU-14, HU-16):**
+   - Migración relacional `20261031000000_dr04_ordenes_trabajo_mantenimiento` consolidada.
+   - Tablero operativo completo en `/mantenimiento` con estados `PENDIENTE`, `EN_PROGRESO`, `COMPLETADA` y `CANCELADA`.
+   - Check-out de inspección con paso automático de propiedad a `EN_MANTENIMIENTO` ante anomalías.
+4. **Reportes y Liquidaciones (HU-07, HU-12):**
+   - Módulo `/reportes` operativo con agregaciones contables determinísticas.
+   - Protección multi-moneda con rechazo 409 `MIXED_CURRENCY_REPORT`.
+   - Permiso `view:reports` asignado a `PROPIETARIO` con aislamiento estricto de liquidaciones propias y descarga CSV.
+5. **Personal y Cuentas Internas (HU-19):**
+   - Módulo `/personal` operativo con gestión interactiva de operadores internos y sincronización `User` / `Usuario`.
+6. **Etiquetas de Navegación del Catálogo:**
+   - Reportes, Mantenimiento y Personal marcados como `DISPONIBLE` (`Listo`).
+   - Dashboard permanece como `PENDIENTE` mientras continúe mostrando `PendingModuleView`.
+   - Filtrado RBAC del sidebar rigurosamente conservado.
+7. **HU-15 — Dependencia Externa Bloqueada (Cerraduras Inteligentes Nuki):**
+   - Mantenida formalmente como `BLOQUEADA_DECISION` (DEC-09) a la espera de credenciales y especificación de API oficial del fabricante. Sin llamadas simuladas ficticias.
+
+### 9.2. Estado Métrico de Validación Automatizada
+
+* **Backend:** 276 / 276 pruebas PASS (incluye 7 tests focales de HU-11 y HU-17).
+* **Frontend:** 167 / 167 pruebas PASS.
+* **Total Global:** 443 pruebas PASS (100% verde).
+* **Typecheck:** 0 errores (`tsc --noEmit` en backend y frontend).
+* **Build de Producción:** Exitoso tanto en Fastify backend como en Vite frontend.
+* **Git diff check:** Limpio sin advertencias de formato ni espacios sobrantes.

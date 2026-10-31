@@ -1,7 +1,7 @@
 # 03 — Backlog Técnico y Estado de Tareas
 
-**Fecha de Actualización:** 30 de octubre de 2026
-**Estado:** VIGENTE TRAS INTEGRACIÓN ANDRÉ–DIEGO
+**Fecha de Actualización:** 31 de octubre de 2026
+**Estado:** VIGENTE TRAS EJECUCIÓN HU-CLOSE-01
 
 ---
 
@@ -24,8 +24,9 @@
 |---|---|---|:---:|---|:---:|---|
 | **BASE-01** | RF04 / HU-04 «Registrar y consultar huéspedes» | Registrar y consultar datos de huésped con validación de al menos un contacto. | P0 | `backend/src/routes/guests.ts`, `frontend/src/features/guests` | **COMPLETO_VERIFICADO** | CRUD completo de huéspedes, búsqueda reactiva y trazabilidad de estancias. |
 | **BASE-02** | — / HU-18 «Mantener propiedades y propietarios» | Registrar y mantener la relación propiedad-propietario con baja lógica. | P0 | `backend/src/routes/properties.ts`, `frontend/src/features/properties` | **COMPLETO_VERIFICADO** | CRUD de inmuebles, `activa = false` para preservación financiera y ownership estricto. |
-| **AUTH-01** | RF09, RF12 / HU-08 «Iniciar sesión y aplicar permisos»; HU-19 | Autenticar usuarios con JWT/cookies, rotación atómica y RBAC en servidor. | P0 | `backend/src/modules/auth/`, `frontend/src/features/auth` | **COMPLETO_VERIFICADO** | 8 tests concurrentes en PostgreSQL; login real, logout por familia y rechazo 403. |
-| **AUD-01** | RF09 / HU-20 «Consultar trazabilidad»; HU-22 «Corregir sin perder historial» | Registrar eventos operativos append-only en `auditoria_eventos`. | P0 | `backend/prisma/schema.prisma` (`AuditoriaEvento`) | **COMPLETO_VERIFICADO** | Mutaciones financieras dejan rastro de actor, entidad, acción y motivo. |
+| **AUTH-01** | RF09, RF12 / HU-08 «Iniciar sesión y aplicar permisos»; HU-19 | Autenticar usuarios con JWT/cookies, rotación atómica y RBAC en servidor. | P0 | `backend/src/modules/auth/`, `frontend/src/features/auth` | **COMPLETO_VERIFICADO** | Tests concurrentes en PostgreSQL; login real, logout por familia y rechazo 403. |
+| **AUTH-02** | — / HU-19 «Administrar personal y cuentas internas» | Gestión interactiva de operadores internos y sincronización User/Usuario. | P1 | `backend/src/routes/staff.ts`, `frontend/src/features/staff` | **COMPLETO_VERIFICADO** | CRUD de cuentas de staff con hashing seguro, RBAC y protección contra auto-desactivación. |
+| **AUD-01** | RF09 / HU-20 «Consultar trazabilidad»; HU-22 «Corregir sin perder historial» | Registrar eventos operativos append-only en `auditoria_eventos`. | P0 | `backend/prisma/schema.prisma` (`AuditoriaEvento`), `audit.ts` | **COMPLETO_VERIFICADO** | Mutaciones financieras dejan rastro de actor, entidad, acción y motivo. |
 | **AUD-02** | — / HU-23 «Consultar estados y errores del proceso» | Manejo centralizado de errores con códigos legibles y sin filtrar secretos. | P1 | `backend/src/app/app.ts` (`setErrorHandler`) | **COMPLETO_VERIFICADO** | Respuestas JSON con `code`, `message`, `requestId` y captura de validaciones. |
 
 ---
@@ -40,8 +41,8 @@
 | **GAR-01** | RF06 / HU-06 «Controlar la garantía» | Registrar depósito de garantía separado de los ingresos por alquiler. | P0 | `backend/src/routes/guarantees.ts`, `frontend/src/features/guarantees` | **COMPLETO_VERIFICADO** | Fondo en custodia independiente de la suma de alquiler del inmueble. |
 | **GAR-02** | RF06 / HU-06 «Controlar la garantía» | Registrar retenciones y devoluciones limitadas estrictamente al saldo disponible. | P0 | `backend/src/routes/guarantees.ts` (`/movimientos`) | **COMPLETO_VERIFICADO** | Libro mayor inmutable; movimientos que superen saldo disponible son rechazados. |
 | **FIN-04** | — / HU-21 «Registrar gastos asociados a propiedad» | Registrar gastos por inmueble con comprobante digital y estado de aprobación. | P1 | `backend/src/routes/expenses.ts`, `frontend/src/features/expenses` | **COMPLETO_VERIFICADO** | Clasificación por categoría y mes; soporte de comprobantes y anulación formal. |
-| **REP-01** | RF08 / HU-07 «Generar reporte por propiedad y periodo» | Generar liquidación mensual para propietarios con total reproducible. | P0 | `PendingModuleView` (`/reportes`) | **PENDIENTE (P0-02)** | Programado para desarrollo en jornada J4 (Sábado 31 de Octubre). |
-| **REP-02** | RF12 / HU-12 «Descargar reporte propio» | Exportar liquidación en archivo estructurado (CSV descargable). | P1 | `PendingModuleView` (`/reportes`) | **PENDIENTE (P1-01)** | Programado para desarrollo en jornada J5 (Domingo 1 de Noviembre). |
+| **REP-01** | RF08 / HU-07 «Generar reporte por propiedad y periodo» | Generar liquidación mensual para propietarios con total reproducible y control multi-moneda. | P0 | `backend/src/routes/reports.ts`, `frontend/src/features/reports` | **COMPLETO_VERIFICADO** | Liquidación por propiedad y período; rechazo 409 `MIXED_CURRENCY_REPORT` ante divisas dispares. |
+| **REP-02** | RF12 / HU-12 «Descargar reporte propio» | Exportar liquidación en archivo estructurado (CSV descargable) con aislamiento de propietario. | P1 | `backend/src/routes/reports.ts`, `frontend/src/features/reports` | **COMPLETO_VERIFICADO** | Descarga CSV con detalle de ingresos y egresos; PROPIETARIO restringido a inmuebles propios. |
 
 ---
 
@@ -49,11 +50,11 @@
 
 | ID | Requisito / HU Auténtica | Descripción Exacta | Pri. | Módulos Reales | Estado | Evidencia y Verificación |
 |---|---|---|:---:|---|:---:|---|
-| **OPS-01** | RF07 / HU-10 «Registrar salida y necesidad de mantenimiento» | Registro de check-out y necesidad de mantenimiento vinculada. | P1 | `PendingModuleView` (`/mantenimiento`) | **PENDIENTE** | Fuera de la ruta crítica mínima de la demo del 2 de noviembre. |
-| **OPS-02** | RF13, RF15 / HU-14 «Asignar trabajos»; HU-16 «Consultar trabajos» | Asignar y actualizar órdenes de trabajo de campo por operario. | P1 | `PendingModuleView` (`/mantenimiento`) | **PENDIENTE** | Fuera de la ruta crítica mínima de la demo del 2 de noviembre. |
-| **OPS-03** | RF14 / HU-15 «Consultar autorizaciones de ingreso» | Consultar autorizaciones de ingreso desde fuente externa oficial. | P2 | Inexistente | **BLOQUEADO_DECISION** | Fuente externa de datos no definida por negocio (DEC-09). |
-| **OPS-04** | RF11 / HU-11 «Ver alerta interna de nueva reserva» | Mostrar alertas internas de vencimiento y confirmación. | P1 | `avisos_reserva` (Outbox) | **IMPLEMENTADO_NO_VALIDADO_E2E** | Avisos se programan en PostgreSQL; falta componente de campana en UI. |
-| **OPS-05** | RF16 / HU-17 «Recibir aviso de asignación» | Notificación al personal de campo tras asignación de trabajo. | P1 | Inexistente | **PENDIENTE** | Depende de OPS-02. |
+| **OPS-01** | RF07 / HU-10 «Registrar salida y necesidad de mantenimiento» | Registro de check-out e inspección con generación atómica de orden de trabajo. | P1 | `backend/src/routes/maintenance.ts`, `frontend/src/features/maintenance` | **COMPLETO_VERIFICADO** | Check-out pasa reserva a `COMPLETADA`; si no es conforme pasa propiedad a `EN_MANTENIMIENTO`. |
+| **OPS-02** | RF13, RF15 / HU-14 «Asignar trabajos»; HU-16 «Consultar trabajos» | Asignar y actualizar órdenes de trabajo de campo con control de costos y estados. | P1 | `backend/src/routes/maintenance.ts`, `frontend/src/features/maintenance` | **COMPLETO_VERIFICADO** | Tablero operativo con estados `PENDIENTE`, `EN_PROGRESO`, `COMPLETADA`, `CANCELADA` y costos. |
+| **OPS-03** | RF14 / HU-15 «Consultar autorizaciones de ingreso» | Consultar autorizaciones de ingreso desde cerraduras inteligentes / fuente externa oficial. | P2 | Inexistente (bloqueo formal de proveedor) | **BLOQUEADA_DECISION** | Requiere credenciales y API oficial del proveedor (Nuki). Pospuesto sin inventar reglas (DEC-09). |
+| **OPS-04** | RF11 / HU-11 «Ver alerta interna de nueva reserva» | Notificación interna persistente transaccional e idempotente al crear reserva. | P1 | `backend/src/routes/reservations.ts`, `alerts.ts`, `NotificationBell.tsx` | **COMPLETO_VERIFICADO** | Notificación almacenada en `notificaciones_internas` con visibilidad en campana para staff. |
+| **OPS-05** | RF16 / HU-17 «Recibir aviso de asignación» | Notificación interna persistente e individualizada para el colaborador asignado. | P1 | `backend/src/routes/maintenance.ts`, `alerts.ts`, `NotificationBell.tsx` | **COMPLETO_VERIFICADO** | Aislamiento estricto por `usuarioId`; acción de marcar leída/atendida; visible en campana. |
 | **OPS-06** | RF10 / HU-13 «Generar / registrar contrato» | Registro de contrato firmado y validación previa a confirmación. | P2 | `backend/src/routes/contracts.ts` | **COMPLETO_VERIFICADO** | Modelo `ContratoReserva` con versionamiento inmutable y validación. |
 | **OPS-07** | RF17 / HU-09 «Registrar reservas procedentes de Airbnb» | Registrar reservas manuales con procedencia Airbnb y control de solape. | P1 | `backend/src/routes/reservations.ts` | **COMPLETO_VERIFICADO** | Selector de origen `AIRBNB` sujeto a las mismas barreras de integridad. |
-| **OPS-08** | RF09 / HU-20 «Consultar trazabilidad operativa» | Vista de bitácora de eventos con filtros por fecha y entidad. | P1 | Tabla `auditoria_eventos` | **IMPLEMENTADO_NO_VALIDADO_E2E** | Eventos persistidos en base de datos; falta consola gráfica consolidada. |
+| **OPS-08** | RF09 / HU-20 «Consultar trazabilidad operativa» | Vista de bitácora de eventos con filtros por fecha y entidad. | P1 | `backend/src/routes/audit.ts`, `frontend/src/features/audit` | **COMPLETO_VERIFICADO** | Bitácora paginada con filtros por entidad, actor y texto; eventos append-only verificados. |

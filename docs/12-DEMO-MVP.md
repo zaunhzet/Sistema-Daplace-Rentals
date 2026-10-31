@@ -1,9 +1,9 @@
 # 12 — Guion de Demostración del MVP (Demostrable y Reproducible)
 
-**Fecha de Actualización:** 30 de octubre de 2026 (Corte RBAC-UI-01 Final Gate)
+**Fecha de Actualización:** 31 de octubre de 2026 (Consolidación HU-CLOSE-01)
 **Fecha de Demostración:** Lunes 2 de noviembre de 2026, 18:30 (America/Lima)
 **Entorno:** Local de Demostración (`http://127.0.0.1:5173`) conectado a PostgreSQL local (`daplace_rentals` / `daplace_test`).
-**Estado:** VALIDADO TÉCNICAMENTE CON SUITES AUTOMATIZADAS (239 Backend + 148 Frontend PASS) Y SIMULACIÓN TRANSACCIONAL DE PUNTA A PUNTA.
+**Estado:** VALIDADO TÉCNICAMENTE CON SUITES AUTOMATIZADAS (276 Backend + 167 Frontend = 443 PASS) Y SIMULACIÓN TRANSACCIONAL DE PUNTA A PUNTA.
 
 ---
 
@@ -54,8 +54,8 @@ Para garantizar la integridad relacional de claves foráneas y la vinculación d
 | Rol | Correo Demo | Nombre en Pantalla | Identidad Dominio Vinculada | Módulos Autorizados en UI |
 | :--- | :--- | :--- | :--- | :--- |
 | **ADMINISTRADOR** | `admin.dev@daplace.pe` | Valeria Méndez | `usr-admin` | Todos los módulos operativos y placeholders. |
-| **OPERADOR** | `operador.dev@daplace.pe` | Diego Navarro | `usr-operador` | Operaciones (`/propiedades`, `/calendario`, `/huespedes`, `/reservas`) y Finanzas (`/pagos`, `/garantias`, `/gastos`). |
-| **PROPIETARIO** | `propietario.dev@daplace.pe` | Carlos Echevarría | `usr-102` ("Carlos Eduardo Méndez") | **Únicamente** `/propiedades` y `/calendario` de sus inmuebles (`prop-01`, `prop-04`). |
+| **OPERADOR** | `operador.dev@daplace.pe` | Diego Navarro | `usr-operador` | Operaciones (`/propiedades`, `/calendario`, `/huespedes`, `/reservas`, `/mantenimiento`) y Finanzas (`/pagos`, `/garantias`, `/gastos`). Alertas propias en campana. |
+| **PROPIETARIO** | `propietario.dev@daplace.pe` | Carlos Echevarría | `usr-102` ("Carlos Eduardo Méndez") | **Únicamente** `/propiedades`, `/calendario` y `/reportes` de sus inmuebles (`prop-01`, `prop-04`). |
 | **CLIENTE** | `cliente.dev@daplace.pe` | Ana Sofía Rivas | *Sin vínculo (null)* | **Sin acceso** al panel administrativo. |
 
 ---
@@ -147,8 +147,6 @@ Para ejecutar la verificación manual en navegador Chrome:
 ## 6. Elementos Excluidos de la Presentación (No Intentar en Vivo)
 
 * **Rutas Placeholder (`PendingModuleView`):**
-  * `/dashboard`: Pendiente de agregación de métricas analíticas.
-  * `/reportes`: Pendiente de finalización de endpoint (P0-02).
-  * `/personal`: Gestión de usuarios administrativos se realiza vía CLI/Seed (HU-19 pendiente).
-  * `/mantenimiento`: Órdenes de trabajo de campo fuera del alcance del MVP transaccional.
-* **Envío real de correos electrónicos:** Los avisos de outbox se inspeccionan directamente en base de datos (`avisos_reserva`), sin despachar correos por SMTP para evitar alertas espurias.
+  * `/dashboard`: Pendiente de agregación de métricas analíticas ejecutivas consolidadas.
+* **Integración Externa Bloqueada (HU-15):** Cerraduras inteligentes Nuki (se requiere provisión de API oficial y credenciales para no simular llamadas ficticias).
+* **Envío real de correos electrónicos:** Los avisos de outbox se inspeccionan directamente en base de datos (`avisos_reserva` / `notificaciones_internas`), sin despachar correos por SMTP para evitar alertas espurias.
