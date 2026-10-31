@@ -73,6 +73,13 @@ El sistema desacopla explícitamente las credenciales de acceso de las entidades
    * Los registros revocados se preservan para trazabilidad y auditoría forense (cero `DELETE` destructivos).
 5. **Coordinación en el Cliente Frontend:**
    * Se utiliza un contador monotónico `authEpoch`. Toda respuesta de red recibida tras un cambio de epoch (como un logout en paralelo) es descartada con `ApiError('STALE_SESSION_RESPONSE', 499)` para prevenir polución de estado.
+6. **Capa de Presentación RBAC en Frontend (RBAC-UI-01):**
+   * Catálogo central de capacidades (`shared/auth/permissions.ts`) evaluado contra la sesión del usuario.
+   * El sidebar filtra ítems dinámicamente según los permisos del rol autenticado.
+   * Rutas de primer nivel protegidas mediante componente `ProtectedRoute`, redirigiendo no autenticados a `/login` y denegando accesos no autorizados mediante la vista `ForbiddenPage` (HTTP 403 de presentación).
+   * Cuentas con rol `CLIENTE` no tienen acceso al layout administrativo y son redirigidas a una vista informativa o de login.
+   * Desacoplamiento de catálogos: vistas de consulta para `PROPIETARIO` no solicitan endpoints administrativos como `/api/propietarios`.
+   * La autoridad de seguridad definitiva permanece en los preHandlers del backend.
 
 ---
 

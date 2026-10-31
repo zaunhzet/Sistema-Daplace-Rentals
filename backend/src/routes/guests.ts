@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 const ALLOWED_DOC_TYPES = ['DNI', 'PASAPORTE', 'CARNET_EXTRANJERIA', 'OTRO'] as const;
 const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{2,64}$/;
@@ -201,7 +201,10 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const created = await prisma.$transaction(async (tx) => {
           const guest = await tx.huesped.create({
@@ -221,7 +224,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
             entidad: 'Huesped',
             entidadId: guest.id,
             accion: 'CREAR_HUESPED',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Alta de nuevo huésped en directorio',
             detalles: {
               nombreCompleto: guest.nombreCompleto,
@@ -325,7 +328,10 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const updated = await prisma.$transaction(async (tx) => {
           const guest = await tx.huesped.update({
@@ -345,7 +351,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
             entidad: 'Huesped',
             entidadId: guest.id,
             accion: 'ACTUALIZAR_HUESPED',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Actualización de datos de huésped',
             detalles: {
               actualizado: Object.keys(body),

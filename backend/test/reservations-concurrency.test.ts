@@ -133,7 +133,7 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
         where: { entidad: 'Reserva', entidadId: 'res-test-lifecycle', accion: 'CREAR_SOLICITUD_RESERVA' },
       });
       assert.ok(audit, 'Debe registrarse auditoría de creación');
-      assert.equal(audit.actor, 'usr-admin');
+      assert.equal(audit.actor, 'admin@daplace.example.invalid');
     });
 
     it('rechaza creación si las fechas se solapan con reserva activa existente (409)', async () => {

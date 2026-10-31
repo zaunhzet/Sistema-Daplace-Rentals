@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient, EstadoFirmaContrato } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 import {
   evaluateConfirmationRequirements,
   defaultPoliticaAdelantoProvider,
@@ -112,7 +112,6 @@ export function registerContractsRoutes(
       { preHandler: adminOrOperatorGuard },
       async (request, reply) => {
         const { id: reservaId } = request.params;
-        const actorId = request.user!.id;
         const body = request.body || ({} as any);
 
         const {
@@ -157,6 +156,10 @@ export function registerContractsRoutes(
             },
           });
         }
+
+        // Exigir actor transaccional de dominio válido (existente y activo en BD)
+        const actorUsuarioId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorUsuarioId === null) return;
 
         let cleanUrl: string | null = null;
         if (urlReferencia && typeof urlReferencia === 'string' && urlReferencia.trim() !== '') {
@@ -249,7 +252,7 @@ export function registerContractsRoutes(
                 nombreOriginal: nombreOriginal.trim(),
                 urlReferencia: cleanUrl,
                 estadoFirma: 'REFERENCIADA',
-                registradoPorId: actorId,
+                registradoPorId: actorUsuarioId,
                 reemplazaContratoId: reemplazaContratoId ? reemplazaContratoId.trim() : null,
                 idempotencyKey: effectiveIdempotencyKey,
                 payloadHash: calculatedHash,
@@ -262,7 +265,7 @@ export function registerContractsRoutes(
               entidad: 'Reserva',
               entidadId: reservaId,
               accion: 'CONTRATO_RESERVA_REGISTRADO',
-              actor: actorId,
+              actor: actorUsuarioId,
               motivo: `Alta de contrato v${nextVersion}: ${nuevoContrato.nombreOriginal} (REFERENCIADA)`,
               detalles: {
                 contratoId: nuevoContrato.id,

@@ -1,33 +1,42 @@
 # 13 — Mapa de Rutas, Navegación y Componentes Frontend
 
 **Proyecto:** Daplace Rentals — MVP Transaccional  
-**Corte:** 28 de octubre de 2026  
-**Responsables:** André (Módulos de Gestión Inmobiliaria, Huéspedes, Reservas, Pagos, Garantías y Sidebar) y Diego (Autenticación, Layout, Enrutador Principal, Dashboard y Reportes).
+**Corte:** 30 de octubre de 2026 (Actualización RBAC-UI-01)
+**Responsables:** André (Módulos de Gestión Inmobiliaria, Huéspedes, Reservas, Pagos, Garantías, Sidebar y RBAC de interfaz) y Diego (Autenticación, Layout, Enrutador Principal, Dashboard y Reportes).
 
 ---
 
-## 1. Mapa de Rutas Previsto y Asignación de Responsabilidades
+## 1. Mapa de Rutas Previsto, Permisos de Acceso y Responsabilidad
 
-| Ruta | Nombre del Módulo | Responsable | Estado Actual | HU / RF Relacionada | Descripción |
-|---|---|---|---|---|---|
-| `/login` | Acceso al Sistema | **Diego** | **COMPLETO_VERIFICADO** | RF09 / HU-08 | Pantalla de inicio de sesión real, cookies seguras, JWT en memoria y selector de cuentas demo. |
-| `/propiedades` | Gestión de Propiedades | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-18 | Catálogo, alta, edición, filtros, vinculación de propietario y filtrado estricto por `usuarioId`. |
-| `/huespedes` | Directorio de Huéspedes | **André** | **COMPLETO_VERIFICADO** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas. Validación obligatoria de contacto. |
-| `/reservas` | Gestión de Reservas | **André** | **COMPLETO_VERIFICADO** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes en PostgreSQL, cancelación con motivo y contratos. |
-| `/calendario` | Calendario Operativo | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-01 | Vista mensual de disponibilidad, días ocupados, días de transición (check-out/check-in) y sincronización API. |
-| `/pagos` | Pagos y Conciliación | **André** | **COMPLETO_VERIFICADO** | RF05 / HU-05 | Registro de adelantos con idempotencia, conciliación explícita, rechazo, saldo exacto y vouchers. |
-| `/garantias` | Control de Garantías | **André** | **COMPLETO_VERIFICADO** | RF06 / HU-06 | Custodia separada, libro inmutable de movimientos, devoluciones y retenciones limitadas al saldo. |
-| `/gastos` | Gastos Operativos | **André** | **COMPLETO_VERIFICADO** | — / HU-21 | Egresos por propiedad y categoría contable, sustentos digitales, aprobación y anulación controlada. |
-| `/catalogo` | Catálogo Público de Propiedades | **André** | **FEATURE_FLAG** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
-| `/solicitar-reserva` | Solicitud Pública de Reserva | **André** | **FEATURE_FLAG** | RF01, RF02 / HU-01, HU-02 | Formulario público de reserva. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
-| `/dashboard` | Dashboard Principal | **Diego** | *PENDIENTE (Placeholder)* | RF09 / HU-08 | Resumen general y KPIs operativos (muestra `PendingModuleView`). |
-| `/reportes` | Reportes de Liquidación | **Diego / André** | *PENDIENTE (P0 Demo)* | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible (muestra `PendingModuleView`). |
-| `/personal` | Personal y Cuentas | **Diego** | *PARCIAL (P1)* | RF09 / HU-19 | Cuentas gestionadas vía script `seed-dev.ts` (pantalla muestra `PendingModuleView`). |
-| `/mantenimiento` | Mantenimiento y Salidas | **Compartido** | *PENDIENTE (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out y trabajos de campo (muestra `PendingModuleView`). |
+| Ruta | Nombre del Módulo | Roles Autorizados | Responsable | Estado Actual | HU / RF Relacionada | Descripción |
+|---|---|---|---|---|---|---|
+| `/login` | Acceso al Sistema | Público (no autenticado) | **Diego** | **COMPLETO_VERIFICADO** | RF09 / HU-08 | Pantalla de inicio de sesión real, cookies seguras, JWT en memoria y selector de cuentas demo. Redirige a ruta autorizada. |
+| `/propiedades` | Gestión de Propiedades | `ADMINISTRADOR`, `OPERADOR`, `PROPIETARIO` | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-18 | Catálogo y control operativo. Propietario consulta inmuebles propios sin consultar catálogo general. Alta de nuevo propietario inline. |
+| `/huespedes` | Directorio de Huéspedes | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF04 / HU-04 | Registro, edición, búsqueda y visualización de reservas. Validación obligatoria de contacto. |
+| `/reservas` | Gestión de Reservas | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF02, RF03 / HU-02, HU-03 | Solicitudes, confirmación, prevención de solapes en PostgreSQL, cancelación con motivo y contratos. |
+| `/calendario` | Calendario Operativo | `ADMINISTRADOR`, `OPERADOR`, `PROPIETARIO` | **André** | **COMPLETO_VERIFICADO** | RF01 / HU-01 | Vista mensual de disponibilidad. Propietario restringido a disponibilidad de propiedades propias. |
+| `/pagos` | Pagos y Conciliación | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF05 / HU-05 | Registro de adelantos con idempotencia, conciliación explícita, rechazo, saldo exacto y vouchers. |
+| `/garantias` | Control de Garantías | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF06 / HU-06 | Custodia separada, libro inmutable de movimientos, devoluciones y retenciones limitadas al saldo. |
+| `/gastos` | Gastos Operativos | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | — / HU-21 | Egresos por propiedad y categoría contable, sustentos digitales, aprobación y anulación controlada. |
+| `/catalogo` | Catálogo Público de Propiedades | Público | **André** | **FEATURE_FLAG** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
+| `/solicitar-reserva` | Solicitud Pública de Reserva | Público | **André** | **FEATURE_FLAG** | RF01, RF02 / HU-01, HU-02 | Formulario público de reserva. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
+| `/dashboard` | Dashboard Principal | `ADMINISTRADOR` | **Diego** | *PENDIENTE (Placeholder)* | RF09 / HU-08 | Resumen general y KPIs operativos (muestra `PendingModuleView`). |
+| `/reportes` | Reportes de Liquidación | `ADMINISTRADOR` | **Diego / André** | *PENDIENTE (P0 Demo)* | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible (muestra `PendingModuleView`). |
+| `/personal` | Personal y Cuentas | `ADMINISTRADOR` | **Diego** | *PARCIAL (P1)* | RF09 / HU-19 | Cuentas gestionadas vía script `seed-dev.ts` (pantalla muestra `PendingModuleView`). |
+| `/mantenimiento` | Mantenimiento y Salidas | `ADMINISTRADOR` | **Compartido** | *PENDIENTE (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out y trabajos de campo (muestra `PendingModuleView`). |
 
 ---
 
 ## 2. Componentes Existentes y Rutas de Importación
+
+### Capa de Permisos y Protección RBAC
+* **Ubicación:** `frontend/src/shared/auth/permissions.ts`, `frontend/src/app/ProtectedRoute.tsx`, `frontend/src/app/ForbiddenPage.tsx`
+* **Importación:**
+  ```tsx
+  import { canAccessPath, hasPermission, getDefaultAuthorizedPath } from '../shared/auth/permissions';
+  import { ProtectedRoute } from './ProtectedRoute';
+  import { ForbiddenPage } from './ForbiddenPage';
+  ```
 
 ### Módulo de Navegación y Sidebar
 * **Ubicación:** `frontend/src/shared/navigation/`
@@ -37,19 +46,20 @@
   import type { NavigationItem, SidebarProps } from '../shared/navigation';
   ```
 
-### Módulo de Propiedades (UI-ANDRE-001)
+### Módulo de Propiedades (UI-ANDRE-001 / RBAC-UI-01)
 * **Ubicación:** `frontend/src/features/properties/`
 * **Importación:**
   ```tsx
   import { PropertiesPage } from '../features/properties';
-  import type { Property, Propietario, CreatePropertyDto } from '../features/properties';
+  import type { Property, Propietario, CreatePropertyDto, CreatePropietarioDto } from '../features/properties';
   ```
 * **Componentes internos reutilizables:**
-  * `PropertiesPage`: Vista completa con filtros, métricas, tabla y modales.
-  * `PropertyList`: Tabla responsiva con badges y acciones.
+  * `PropertiesPage`: Vista completa con filtros, métricas, tabla y modales adaptada a permisos del rol.
+  * `PropertyList`: Tabla responsiva con badges y acciones condicionadas por `canManage`.
   * `PropertyFiltersBar`: Barra de filtros por texto, estado operativo, estado publicación y activas.
-  * `PropertyFormModal`: Modal para creación y edición con validación.
-  * `PropertyDetailModal`: Ficha completa del inmueble y su propietario.
+  * `PropertyFormModal`: Modal para creación y edición de propiedad con botón integrado de alta de propietario.
+  * `PropietarioFormModal`: Modal secundario para registro rápido de propietario de dominio (`POST /api/propietarios`).
+  * `PropertyDetailModal`: Ficha completa del inmueble y su propietario, con botones de edición y desactivación condicionados por rol.
 
 ### Módulo de Huéspedes (UI-ANDRE-001)
 * **Ubicación:** `frontend/src/features/guests/`

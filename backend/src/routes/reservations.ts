@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 import {
   evaluateConfirmationRequirements,
   defaultPoliticaAdelantoProvider,
@@ -449,7 +449,10 @@ export function registerReservationsRoutes(
         const ingresoDate = new Date(Date.UTC(y1, m1 - 1, d1));
         const salidaDate = new Date(Date.UTC(y2, m2 - 1, d2));
         const noches = calculateNights(ingreso, salida);
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorId = request.user!.email;
 
         try {
           const result = await prisma.$transaction(async (tx) => {
@@ -646,7 +649,10 @@ export function registerReservationsRoutes(
       { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
       async (request, reply) => {
         const { id } = request.params;
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorId = request.user!.email;
 
         // DR02-01: Rechazo terminante de autoridad comercial del cliente
         if (hasClientCommercialAuthority(request)) {
@@ -914,7 +920,10 @@ export function registerReservationsRoutes(
         const ingresoDate = new Date(Date.UTC(y1, m1 - 1, d1));
         const salidaDate = new Date(Date.UTC(y2, m2 - 1, d2));
         const noches = calculateNights(ingreso, salida);
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorId = request.user!.email;
 
         try {
           const updated = await prisma.$transaction(async (tx) => {
@@ -1078,7 +1087,10 @@ export function registerReservationsRoutes(
       async (request, reply) => {
         const { id } = request.params;
         const { motivo } = request.body || {};
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorId = request.user!.email;
 
         try {
           const updated = await prisma.$transaction(async (tx) => {

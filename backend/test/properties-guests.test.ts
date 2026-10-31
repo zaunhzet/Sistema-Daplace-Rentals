@@ -146,7 +146,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Propiedad', entidadId: 'prop-test-01', accion: 'CREAR_PROPIEDAD' },
       });
       assert.ok(audit, 'Debe existir registro de auditoría');
-      assert.equal(audit.actor, 'usr-admin', 'El actor debe corresponder al usuario autenticado');
+      assert.equal(audit.actor, 'admin@daplace.example.invalid', 'El actor debe corresponder al email del usuario autenticado');
     });
 
     it('5. PATCH /api/propiedades/:id — actualiza propiedad', async () => {
@@ -189,6 +189,73 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
       const propietarios = res.json();
       assert.ok(propietarios.length >= 4);
       assert.ok(propietarios.find((p: any) => p.id === 'usr-102'));
+    });
+
+    it('7b. POST /api/propietarios — valida datos obligatorios y formato de email', async () => {
+      // Nombre muy corto
+      const resShortName = await app.inject({
+        method: 'POST',
+        url: '/api/propietarios',
+        payload: { nombre: 'Al', email: 'alberto@example.com' },
+      });
+      assert.equal(resShortName.statusCode, 400);
+
+      // Email inválido
+      const resBadEmail = await app.inject({
+        method: 'POST',
+        url: '/api/propietarios',
+        payload: { nombre: 'Alberto Flores', email: 'no-es-correo' },
+      });
+      assert.equal(resBadEmail.statusCode, 400);
+    });
+
+    it('7c. POST /api/propietarios — crea propietario de dominio y audita', async () => {
+      const payload = {
+        nombre: 'Raúl Montenegro García',
+        email: 'raul.montenegro@propietarios.example.invalid',
+        telefono: '+51 988 777 666',
+      };
+
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/propietarios',
+        payload,
+      });
+
+      assert.equal(res.statusCode, 201);
+      const data = res.json();
+      assert.ok(data.id);
+      assert.equal(data.nombre, payload.nombre);
+      assert.equal(data.email, payload.email);
+
+      // Verificar persistencia en base de datos
+      const inDb = await db.prisma.usuario.findUnique({
+        where: { id: data.id },
+      });
+      assert.ok(inDb);
+      assert.equal(inDb.rol, 'PROPIETARIO');
+      assert.equal(inDb.activo, true);
+
+      // Verificar auditoría
+      const audit = await db.prisma.auditoriaEvento.findFirst({
+        where: { entidadId: data.id, accion: 'CREAR_PROPIETARIO' },
+      });
+      assert.ok(audit);
+    });
+
+    it('7d. POST /api/propietarios — rechaza email duplicado con 409 DUPLICATE_OWNER_EMAIL', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/propietarios',
+        payload: {
+          nombre: 'Carlos Clon',
+          email: 'carlos.mendez@propietarios.example.invalid', // Ya existe en seed
+        },
+      });
+
+      assert.equal(res.statusCode, 409);
+      const data = res.json();
+      assert.equal(data.error.code, 'DUPLICATE_OWNER_EMAIL');
     });
   });
 
@@ -265,7 +332,7 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         where: { entidad: 'Huesped', entidadId: 'hue-test-01', accion: 'ACTUALIZAR_HUESPED' },
       });
       assert.ok(audit, 'Debe registrarse evento de auditoría');
-      assert.equal(audit.actor, 'usr-admin');
+      assert.equal(audit.actor, 'admin@daplace.example.invalid');
     });
   });
 });

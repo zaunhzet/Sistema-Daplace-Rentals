@@ -9,6 +9,7 @@ interface PropertyDetailModalProps {
   onClose: () => void;
   onEdit: (property: Property) => void;
   onToggleActive: (id: string, newActive: boolean) => Promise<void>;
+  canManage?: boolean;
 }
 
 export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
@@ -18,6 +19,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   onClose,
   onEdit,
   onToggleActive,
+  canManage = true,
 }) => {
   if (!isOpen || !property) return null;
 
@@ -157,19 +159,23 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
         {/* Footer Actions */}
         <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-stone-200 pt-5">
-          <button
-            type="button"
-            onClick={async () => {
-              await onToggleActive(property.id, !property.activa);
-            }}
-            className={`w-full sm:w-auto rounded-xl px-4 py-2 text-sm font-semibold transition-colors cursor-pointer ${
-              property.activa
-                ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
-                : 'border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
-            }`}
-          >
-            {property.activa ? 'Desactivar Propiedad' : 'Reactivar Propiedad'}
-          </button>
+          {canManage ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await onToggleActive(property.id, !property.activa);
+              }}
+              className={`w-full sm:w-auto rounded-xl px-4 py-2 text-sm font-semibold transition-colors cursor-pointer ${
+                property.activa
+                  ? 'border border-amber-300 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                  : 'border border-emerald-300 bg-emerald-50 text-emerald-900 hover:bg-emerald-100'
+              }`}
+            >
+              {property.activa ? 'Desactivar Propiedad' : 'Reactivar Propiedad'}
+            </button>
+          ) : (
+            <div />
+          )}
 
           <div className="flex w-full sm:w-auto items-center justify-end gap-3">
             <button
@@ -179,16 +185,18 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             >
               Cerrar
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onEdit(property);
-              }}
-              className="rounded-xl bg-[#183b32] px-5 py-2 text-sm font-semibold text-white hover:bg-[#122e27] cursor-pointer"
-            >
-              Editar Datos
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onEdit(property);
+                }}
+                className="rounded-xl bg-[#183b32] px-5 py-2 text-sm font-semibold text-white hover:bg-[#122e27] cursor-pointer"
+              >
+                Editar Datos
+              </button>
+            )}
           </div>
         </div>
       </div>

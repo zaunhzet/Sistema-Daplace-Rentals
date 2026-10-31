@@ -1,15 +1,24 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router';
-import { Menu, ChevronRight } from 'lucide-react';
+import { Menu, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
 import { Sidebar, NAVIGATION_ITEMS } from '../shared/navigation';
 import { useAuth } from '../features/auth';
+import { canAccessPath } from '../shared/auth/permissions';
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { session, logoutDemo } = useAuth();
+  const { session, logout } = useAuth();
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  // Filtrar ítems de navegación según el rol del usuario autenticado
+  const userRole = session.user?.rol;
+  const filteredNavItems = NAVIGATION_ITEMS.filter((item) =>
+    canAccessPath(userRole, item.path)
+  );
 
   // Match current route in navigation catalog
   const currentItem = NAVIGATION_ITEMS.find((it) => it.path === location.pathname);
@@ -22,11 +31,30 @@ export const AdminLayout: React.FC = () => {
     ? 'Inicio'
     : 'Página no encontrada';
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    try {
+      setIsLoggingOut(true);
+      setLogoutError(null);
+      await logout();
+      navigate('/login', { replace: true });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setLogoutError(err.message);
+      } else {
+        setLogoutError('Error al cerrar la sesión en el servidor. Intente nuevamente.');
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className="h-dvh w-full overflow-hidden bg-[#f7f7f5] flex text-stone-900 antialiased selection:bg-[#5E6C5B] selection:text-white">
       {/* 1. Anchored Sidebar (Desktop flex column + Mobile overlay drawer) */}
       <Sidebar
         currentPath={location.pathname}
+        items={filteredNavItems}
         onNavigate={(path) => {
           navigate(path);
           setMobileOpen(false);
@@ -39,6 +67,22 @@ export const AdminLayout: React.FC = () => {
 
       {/* 2. Right Column: Fixed Header + Scrollable Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        {/* Banner de error de logout si ocurre */}
+        {logoutError && (
+          <div className="bg-red-50 border-b border-red-200 px-4 py-2 text-xs font-medium text-red-800 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={15} className="shrink-0 text-red-600" />
+              <span>{logoutError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-xs font-bold text-red-900 underline hover:text-red-950 cursor-pointer ml-3"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
         {/* Fixed Header */}
         <header className="h-14 shrink-0 border-b border-stone-200/90 bg-white/95 px-4 sm:px-6 backdrop-blur-xs flex items-center justify-between z-20">
           <div className="flex min-w-0 items-center gap-3">
@@ -77,11 +121,19 @@ export const AdminLayout: React.FC = () => {
                 </span>
                 <button
                   type="button"
-                  onClick={logoutDemo}
-                  className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 cursor-pointer"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 disabled:opacity-50 cursor-pointer"
                   title="Cerrar la sesión activa"
                 >
-                  Cerrar sesión
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" aria-hidden="true" />
+                      <span>Cerrando...</span>
+                    </>
+                  ) : (
+                    <span>Cerrar sesión</span>
+                  )}
                 </button>
               </div>
             ) : (

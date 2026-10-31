@@ -3,6 +3,7 @@
 **Estado:** APROBADO E IMPLEMENTADO (Refleja las rutas registradas en Fastify al 30 de octubre de 2026).
 **Formato de Comunicación:** JSON (`application/json`) con UTF-8.
 **Autenticación:** Encabezado `Authorization: Bearer <access_token>` para peticiones de API; Cookie `HttpOnly` para refresh tokens en `/auth`.
+**Identidad Transaccional:** Todas las operaciones de mutación/escritura (`POST`, `PATCH`) en los módulos operativos requieren que el usuario autenticado cuente con un vínculo a una identidad de dominio (`Usuario`) activa (`activo: true`). En caso de no existir vínculo o estar inactivo, se devuelve `403 Forbidden` con código `DOMAIN_IDENTITY_REQUIRED`.
 
 ---
 
@@ -27,6 +28,7 @@
 | `PATCH` | `/api/propiedades/:id` | `ADMIN`, `OPERADOR` | Campos modificables de la propiedad | `200 Property` |
 | `PATCH` | `/api/propiedades/:id/activa` | `ADMIN`, `OPERADOR` | `{ activa: boolean }` (Baja lógica) | `200 Property` |
 | `GET` | `/api/propietarios` | `ADMIN`, `OPERADOR` | Ninguna | `200 Usuario[]` (Usuarios con rol `PROPIETARIO`). |
+| `POST` | `/api/propietarios` | `ADMIN`, `OPERADOR` | `{ nombre, email, telefono? }` | `201 Usuario` (Alta de actor de dominio `PROPIETARIO` con auditoría). |
 
 ---
 

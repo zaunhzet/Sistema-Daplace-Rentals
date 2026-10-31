@@ -300,4 +300,363 @@ describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamien
     const bodyCal = JSON.parse(resCal.payload);
     assert.equal(bodyCal.error.code, 'DOMAIN_IDENTITY_REQUIRED');
   });
+
+  it('8. Propietario no puede registrar, editar ni desactivar propiedades (HTTP 403)', async () => {
+    // Intentar crear propiedad
+    const resCreate = await app.inject({
+      method: 'POST',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: {
+        nombre: 'Intento Propietario',
+        direccion: 'Av. Ilegal 123',
+        propietarioId: 'usr-prop1-trans',
+      },
+    });
+    assert.equal(resCreate.statusCode, 403);
+
+    // Intentar editar propiedad
+    const resUpdate = await app.inject({
+      method: 'PATCH',
+      url: `/api/propiedades/${prop1Id}`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { nombre: 'Nombre Hackeado' },
+    });
+    assert.equal(resUpdate.statusCode, 403);
+
+    // Intentar cambiar estado activo
+    const resToggle = await app.inject({
+      method: 'PATCH',
+      url: `/api/propiedades/${prop1Id}/activa`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { activa: false },
+    });
+    assert.equal(resToggle.statusCode, 403);
+  });
+
+  it('9. Propietario no puede consultar ni registrar en el catálogo /api/propietarios (HTTP 403)', async () => {
+    const resGet = await app.inject({
+      method: 'GET',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resGet.statusCode, 403);
+
+    const resPost = await app.inject({
+      method: 'POST',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${propietario1Token}` },
+      payload: { nombre: 'Otro', email: 'otro@daplace.pe' },
+    });
+    assert.equal(resPost.statusCode, 403);
+  });
+
+  it('10. Usuario con rol ADMINISTRADOR u OPERADOR pero sin identidad de dominio recibe HTTP 403 DOMAIN_IDENTITY_REQUIRED en POST /api/propietarios', async () => {
+    // Crear usuario admin de autenticación huérfano (sin usuarioId en dominio)
+    const passwordHash = await AuthService.hashPassword('AdminHuerfano2026!');
+    await repository.createUser({
+      email: 'admin.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Sin Dominio',
+      rol: 'ADMINISTRADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.huerfano@daplace.pe',
+      password: 'AdminHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar nuevo propietario de dominio sin actor transaccional válido
+    const resPost = await app.inject({
+      method: 'POST',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombre: 'Nuevo Propietario Rechazado',
+        email: 'rechazado@daplace.pe',
+      },
+    });
+
+    assert.equal(resPost.statusCode, 403);
+    const bodyPost = JSON.parse(resPost.payload);
+    assert.equal(bodyPost.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('11. Usuario sin identidad de dominio no puede registrar contratos de reserva (HTTP 403 DOMAIN_IDENTITY_REQUIRED)', async () => {
+    const passwordHash = await AuthService.hashPassword('OpHuerfano2026!');
+    await repository.createUser({
+      email: 'operador.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Operador Sin Dominio',
+      rol: 'OPERADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'operador.huerfano@daplace.pe',
+      password: 'OpHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    const resContract = await app.inject({
+      method: 'POST',
+      url: `/api/reservas/${reservaId}/contratos`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombreOriginal: 'contrato_arrendamiento_v1.pdf',
+        urlReferencia: 'https://docs.daplace.pe/contrato-v1.pdf',
+      },
+    });
+
+    assert.equal(resContract.statusCode, 403);
+    const bodyContract = JSON.parse(resContract.payload);
+    assert.equal(bodyContract.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('12. ADMIN sin identidad de dominio recibe 403 DOMAIN_IDENTITY_REQUIRED al registrar pago o garantía (módulos financieros)', async () => {
+    const passwordHash = await AuthService.hashPassword('AdminFinHuerfano2026!');
+    await repository.createUser({
+      email: 'admin.fin.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Financiero Sin Dominio',
+      rol: 'ADMINISTRADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.fin.huerfano@daplace.pe',
+      password: 'AdminFinHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar pago: debe fallar con DOMAIN_IDENTITY_REQUIRED
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-TEST-DOMAIN-12',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 403, `POST /api/pagos debería devolver 403, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.equal(bodyPago.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de registrar garantía: debe fallar con DOMAIN_IDENTITY_REQUIRED
+    const resGarantia = await app.inject({
+      method: 'POST',
+      url: '/api/garantias',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '300.00',
+        moneda: 'PEN',
+        metodoCustodia: 'DEPOSITO_BANCARIO',
+      },
+    });
+    assert.equal(resGarantia.statusCode, 403, `POST /api/garantias debería devolver 403, obtuvo ${resGarantia.statusCode}: ${resGarantia.payload}`);
+    const bodyGarantia = JSON.parse(resGarantia.payload);
+    assert.equal(bodyGarantia.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('13. OPERADOR sin identidad de dominio recibe 403 DOMAIN_IDENTITY_REQUIRED al registrar gasto (módulo operativo)', async () => {
+    const passwordHash = await AuthService.hashPassword('OpGastoHuerfano2026!');
+    await repository.createUser({
+      email: 'operador.gasto.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Operador Gastos Sin Dominio',
+      rol: 'OPERADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'operador.gasto.huerfano@daplace.pe',
+      password: 'OpGastoHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Registrar propiedad para poder asociar el gasto
+    const resGasto = await app.inject({
+      method: 'POST',
+      url: '/api/gastos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        propiedadId: prop1Id,
+        fechaGasto: '2026-11-01',
+        periodoMes: 11,
+        periodoAnio: 2026,
+        titulo: 'Limpieza mensual',
+        categoria: 'MANTENIMIENTO',
+        monto: '150.00',
+        moneda: 'PEN',
+        pagadoPor: 'DAPLACE',
+      },
+    });
+    assert.equal(resGasto.statusCode, 403, `POST /api/gastos debería devolver 403, obtuvo ${resGasto.statusCode}: ${resGasto.payload}`);
+    const bodyGasto = JSON.parse(resGasto.payload);
+    assert.equal(bodyGasto.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('14. RED: ADMIN con Usuario vinculado pero activo=false recibe 403 DOMAIN_IDENTITY_REQUIRED en escrituras transaccionales', async () => {
+    // Crear usuario de dominio INACTIVO
+    const usuarioInactivo = await db.prisma.usuario.create({
+      data: {
+        id: 'usr-inactivo-dom',
+        nombre: 'Admin Dominio Inactivo',
+        email: 'admin.inactivo@daplace.pe',
+        rol: 'ADMIN',
+        activo: false,
+      },
+    });
+
+    const passwordHash = await AuthService.hashPassword('AdminInactivo2026!');
+    await repository.createUser({
+      email: 'admin.inactivo@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Dominio Inactivo',
+      rol: 'ADMINISTRADOR',
+      usuarioId: usuarioInactivo.id, // vinculado, pero activo=false
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.inactivo@daplace.pe',
+      password: 'AdminInactivo2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar pago → debe rechazar por activo=false
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-INACTIVO-14',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 403, `Usuario inactivo en pago: esperado 403, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.equal(bodyPago.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de crear reserva → debe rechazar por activo=false
+    const resReserva = await app.inject({
+      method: 'POST',
+      url: '/api/reservas',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        propiedadId: prop1Id,
+        huespedId: 'huesped-int03-1',
+        ingreso: '2026-12-01',
+        salida: '2026-12-05',
+        montoAcordado: '1000',
+        moneda: 'PEN',
+        origen: 'DIRECTO',
+      },
+    });
+    assert.equal(resReserva.statusCode, 403, `Usuario inactivo en reserva: esperado 403, obtuvo ${resReserva.statusCode}: ${resReserva.payload}`);
+    const bodyReserva = JSON.parse(resReserva.payload);
+    assert.equal(bodyReserva.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+    // Intento de crear propiedad → debe rechazar por activo=false
+    const resProp = await app.inject({
+      method: 'POST',
+      url: '/api/propiedades',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombre: 'Propiedad Rechazada',
+        propietarioId: 'usr-prop1-trans',
+        direccion: 'Av. Inactiva 123',
+      },
+    });
+    assert.equal(resProp.statusCode, 403, `Usuario inactivo en propiedad: esperado 403, obtuvo ${resProp.statusCode}: ${resProp.payload}`);
+    const bodyProp = JSON.parse(resProp.payload);
+    assert.equal(bodyProp.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('15. GREEN: ADMIN con Usuario vinculado y activo=true puede registrar pago y el actorId persiste correctamente', async () => {
+    // Verificar que el admin estándar (vinculado y activo) puede registrar sin problema
+    const resPago = await app.inject({
+      method: 'POST',
+      url: '/api/pagos',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        reservaId,
+        importe: '500.00',
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referencia: 'REF-GREEN-15',
+        fechaPago: '2026-11-01',
+      },
+    });
+    assert.equal(resPago.statusCode, 201, `Admin vinculado en pago: esperado 201, obtuvo ${resPago.statusCode}: ${resPago.payload}`);
+    const bodyPago = JSON.parse(resPago.payload);
+    assert.ok(bodyPago.data, 'La respuesta debe incluir data del pago');
+    assert.equal(bodyPago.data.estado, 'PENDIENTE_CONCILIACION');
+
+    // Verificar que registradoPorId apunta al Usuario de dominio, no al User de autenticación
+    const pagoPersistido = await db.prisma.pago.findUnique({
+      where: { id: bodyPago.data.id },
+      include: { registradoPor: true },
+    });
+    assert.ok(pagoPersistido, 'El pago debe existir en BD');
+    assert.equal(pagoPersistido!.registradoPorId, 'usr-admin-trans', 'registradoPorId debe ser el ID del Usuario de dominio');
+    assert.ok(pagoPersistido!.registradoPor, 'La relación registradoPor debe resolverse');
+    assert.equal(pagoPersistido!.registradoPor!.email, 'admin@daplace.pe');
+  });
+
+  it('16. GREEN: OPERADOR con Usuario vinculado y activo=true puede crear huésped y el audit usa email como actor', async () => {
+    const resHuesped = await app.inject({
+      method: 'POST',
+      url: '/api/huespedes',
+      headers: { authorization: `Bearer ${operadorToken}` },
+      payload: {
+        nombreCompleto: 'Huésped Verificación Green',
+        telefono: '+51999000001',
+        email: 'green-guest@example.com',
+      },
+    });
+    assert.equal(resHuesped.statusCode, 201, `Operador vinculado en huésped: esperado 201, obtuvo ${resHuesped.statusCode}: ${resHuesped.payload}`);
+    const bodyHuesped = JSON.parse(resHuesped.payload);
+    assert.ok(bodyHuesped.id, 'La respuesta debe incluir ID del huésped creado');
+
+    // Verificar que la auditoría registró el email del operador, no su User.id
+    const auditEvent = await db.prisma.auditoriaEvento.findFirst({
+      where: {
+        entidad: 'Huesped',
+        entidadId: bodyHuesped.id,
+        accion: 'CREAR_HUESPED',
+      },
+    });
+    assert.ok(auditEvent, 'Debe existir un evento de auditoría para la creación del huésped');
+    assert.equal(auditEvent!.actor, 'operador@daplace.pe', 'El actor en auditoría debe ser el email del operador');
+  });
 });

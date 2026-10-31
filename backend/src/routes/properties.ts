@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 const ALLOWED_OPERATING_STATUS = ['OPERATIVA', 'EN_MANTENIMIENTO', 'INACTIVA'] as const;
 const ALLOWED_PUBLISHING_STATUS = ['PUBLICADA', 'BORRADOR', 'PAUSADA'] as const;
@@ -26,6 +26,154 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           orderBy: { nombre: 'asc' },
         });
         return propietarios;
+      }
+    );
+
+    // 1b. Registrar nuevo propietario (Actor de Dominio Usuario con rol PROPIETARIO)
+    app.post<{
+      Body: {
+        id?: string;
+        nombre: string;
+        email: string;
+        telefono?: string;
+      };
+    }>(
+      '/api/propietarios',
+      { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
+      async (request, reply) => {
+        const { id, nombre, email, telefono } = request.body || {};
+
+        if (id && (!SAFE_ID_REGEX.test(id) || id.length > 64)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El identificador id contiene caracteres no válidos o longitud excedida.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedNombre = nombre ? nombre.trim() : '';
+        if (trimmedNombre.length < 3 || trimmedNombre.length > 150) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El nombre del propietario es obligatorio (entre 3 y 150 caracteres).',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedEmail = email ? email.trim().toLowerCase() : '';
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!trimmedEmail || !emailRegex.test(trimmedEmail)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'Debe ingresar un correo electrónico válido para el propietario.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const trimmedTelefono = telefono?.trim() || null;
+        if (trimmedTelefono && trimmedTelefono.length < 6) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El teléfono debe contener al menos 6 dígitos o caracteres si se especifica.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Comprobación de unicidad de email en Usuario
+        const existingUsuario = await prisma.usuario.findUnique({
+          where: { email: trimmedEmail },
+        });
+
+        if (existingUsuario) {
+          return reply.status(409).send({
+            error: {
+              code: 'DUPLICATE_OWNER_EMAIL',
+              message: `Ya existe un usuario o propietario registrado con el correo "${trimmedEmail}".`,
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Exigir actor transaccional válido antes de registrar auditoría de dominio
+        const actorUsuarioId = request.user?.usuarioId;
+        if (!actorUsuarioId) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'La cuenta no tiene una identidad de dominio vinculada para realizar acciones auditables de propietarios.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Verificar que el actor exista efectivamente como Usuario en la base de datos de dominio
+        const actorDomain = await prisma.usuario.findUnique({
+          where: { id: actorUsuarioId },
+        });
+
+        if (!actorDomain || !actorDomain.activo) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'El actor transaccional no existe o no se encuentra activo en el dominio.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const createdPropietario = await prisma.$transaction(async (tx) => {
+          const usuario = await tx.usuario.create({
+            data: {
+              ...(id ? { id } : {}),
+              nombre: trimmedNombre,
+              email: trimmedEmail,
+              telefono: trimmedTelefono,
+              rol: 'PROPIETARIO',
+              activo: true,
+            },
+            select: {
+              id: true,
+              nombre: true,
+              email: true,
+              telefono: true,
+              rol: true,
+              activo: true,
+              creadoEn: true,
+            },
+          });
+
+          await recordAuditEvent(tx, {
+            entidad: 'Usuario',
+            entidadId: usuario.id,
+            accion: 'CREAR_PROPIETARIO',
+            actor: actorUsuarioId,
+            motivo: 'Registro de nuevo propietario de dominio',
+            detalles: {
+              nombre: usuario.nombre,
+              email: usuario.email,
+              hasTelefono: Boolean(usuario.telefono),
+              rol: usuario.rol,
+            },
+            requestId: request.id,
+          });
+
+          return usuario;
+        });
+
+        return reply.status(201).send({
+          id: createdPropietario.id,
+          nombre: createdPropietario.nombre,
+          email: createdPropietario.email,
+          telefono: createdPropietario.telefono,
+        });
       }
     );
 
@@ -314,7 +462,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         // Mutación y auditoría dentro de la misma transacción atómica
         const created = await prisma.$transaction(async (tx) => {
@@ -342,7 +493,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: 'CREAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Alta de propiedad en inventario',
             detalles: { nombre: prop.nombre, propietarioId: prop.propietarioId },
             requestId: request.id,
@@ -485,7 +636,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           }
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const updated = await prisma.$transaction(async (tx) => {
           const prop = await tx.propiedad.update({
@@ -512,7 +666,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: 'ACTUALIZAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: 'Actualización de ficha de propiedad',
             detalles: body as Record<string, unknown>,
             requestId: request.id,
@@ -574,7 +728,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        const actorId = request.user!.id;
+        // Verificar identidad de dominio activa antes de la escritura transaccional
+        const actorDomainId = await resolveDomainActorFromDb(prisma, request, reply);
+        if (actorDomainId === null) return;
+        const actorLabel = request.user!.email;
 
         const updated = await prisma.$transaction(async (tx) => {
           const prop = await tx.propiedad.update({
@@ -595,7 +752,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Propiedad',
             entidadId: prop.id,
             accion: activa ? 'ACTIVAR_PROPIEDAD' : 'DESACTIVAR_PROPIEDAD',
-            actor: actorId,
+            actor: actorLabel,
             motivo: activa ? 'Reactivación operativa' : 'Desactivación lógica para preservar historial',
             requestId: request.id,
           });

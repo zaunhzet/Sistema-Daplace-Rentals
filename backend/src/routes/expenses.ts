@@ -6,7 +6,7 @@ import {
   type EstadoGasto,
 } from '../generated/prisma/client.js';
 import { recordAuditEvent } from '../shared/audit.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 const ALLOWED_ESTADOS_GASTO: EstadoGasto[] = ['REGISTRADO', 'APROBADO', 'ANULADO'];
 const DECIMAL_REGEX = /^\d+(\.\d{1,2})?$/;
@@ -580,7 +580,8 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
+      if (actorId === null) return;
 
       try {
         const nuevoGasto = await prisma.$transaction(async (tx) => {
@@ -972,7 +973,8 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
+      if (actorId === null) return;
       const now = new Date();
 
       try {
@@ -1086,7 +1088,8 @@ export function registerExpensesRoutes(prisma: PrismaClient): FastifyPluginAsync
       }
 
       const actorEmail = request.user?.email || 'SYSTEM_OPERATOR';
-      const actorId = request.user?.id || null;
+      const actorId = await resolveDomainActorFromDb(prisma, request, reply);
+      if (actorId === null) return;
 
       try {
         const sustentoCreado = await prisma.$transaction(async (tx) => {

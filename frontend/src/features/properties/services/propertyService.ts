@@ -1,5 +1,6 @@
 import type {
   CreatePropertyDto,
+  CreatePropietarioDto,
   Property,
   PropertyFilterParams,
   PropertyValidationResult,
@@ -48,6 +49,7 @@ export interface IPropertyService {
   updateProperty(id: string, dto: UpdatePropertyDto): Promise<Property>;
   togglePropertyActive(id: string, activa: boolean): Promise<Property>;
   getPropietarios(): Promise<Propietario[]>;
+  createPropietario(dto: CreatePropietarioDto): Promise<Propietario>;
   reset(): void;
 }
 
@@ -67,6 +69,29 @@ class MockPropertyService implements IPropertyService {
 
   public async getPropietarios(): Promise<Propietario[]> {
     return [...this.propietarios];
+  }
+
+  public async createPropietario(dto: CreatePropietarioDto): Promise<Propietario> {
+    if (!dto.nombre || dto.nombre.trim().length < 3) {
+      throw new Error('El nombre del propietario es obligatorio (mínimo 3 caracteres).');
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!dto.email || !emailRegex.test(dto.email.trim())) {
+      throw new Error('Debe ingresar un correo electrónico válido para el propietario.');
+    }
+    const cleanEmail = dto.email.trim().toLowerCase();
+    if (this.propietarios.some((p) => p.email.toLowerCase() === cleanEmail)) {
+      throw new Error(`Ya existe un propietario registrado con el correo "${cleanEmail}".`);
+    }
+
+    const nuevo: Propietario = {
+      id: `usr-mock-${Date.now()}`,
+      nombre: dto.nombre.trim(),
+      email: cleanEmail,
+      telefono: dto.telefono?.trim() || undefined,
+    };
+    this.propietarios.push(nuevo);
+    return nuevo;
   }
 
   public async getProperties(filters?: PropertyFilterParams): Promise<Property[]> {
@@ -269,6 +294,13 @@ export class ApiPropertyService implements IPropertyService {
 
   public async getPropietarios(): Promise<Propietario[]> {
     return apiClient<Propietario[]>('/api/propietarios');
+  }
+
+  public async createPropietario(dto: CreatePropietarioDto): Promise<Propietario> {
+    return apiClient<Propietario>('/api/propietarios', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
   }
 
   public reset(): void {
