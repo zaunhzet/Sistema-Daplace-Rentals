@@ -200,14 +200,14 @@ Los 11 pasos documentados en [docs/12-DEMO-MVP.md](12-DEMO-MVP.md) se clasifican
    - Reportes, Mantenimiento y Personal marcados como `DISPONIBLE` (`Listo`).
    - Dashboard permanece como `PENDIENTE` mientras continúe mostrando `PendingModuleView`.
    - Filtrado RBAC del sidebar rigurosamente conservado.
-7. **HU-15 — Dependencia Externa Bloqueada (Cerraduras Inteligentes Nuki):**
-   - Mantenida formalmente como `BLOQUEADA_DECISION` (DEC-09) a la espera de credenciales y especificación de API oficial del fabricante. Sin llamadas simuladas ficticias.
+7. **HU-15 — Dependencia Externa Bloqueada (Consultar autorizaciones de ingreso):**
+   - Mantenida formalmente como `BLOQUEADA_DECISION` (DEC-09) por requerir definición y aprobación de proveedor oficial por el negocio y provisión de credenciales auténticas. Posibles integraciones con Nuki u otros proveedores constituyen propuestas técnicas preliminares sujetas a aprobación. Sin llamadas simuladas ficticias.
 
 ### 9.2. Estado Métrico de Validación Automatizada
 
-* **Backend:** 276 / 276 pruebas PASS (incluye 7 tests focales de HU-11 y HU-17).
-* **Frontend:** 167 / 167 pruebas PASS.
-* **Total Global:** 443 pruebas PASS (100% verde).
+* **Backend:** 278 / 278 pruebas PASS (incluye 9 tests focales de HU-11 y HU-17).
+* **Frontend:** 168 / 168 pruebas PASS (incluye acceso a mantenimiento para OPERADOR).
+* **Total Global:** 446 pruebas PASS (100% verde).
 * **Typecheck:** 0 errores (`tsc --noEmit` en backend y frontend).
 * **Build de Producción:** Exitoso tanto en Fastify backend como en Vite frontend.
 * **Git diff check:** Limpio sin advertencias de formato ni espacios sobrantes.

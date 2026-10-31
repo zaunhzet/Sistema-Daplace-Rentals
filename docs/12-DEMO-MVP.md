@@ -148,5 +148,5 @@ Para ejecutar la verificación manual en navegador Chrome:
 
 * **Rutas Placeholder (`PendingModuleView`):**
   * `/dashboard`: Pendiente de agregación de métricas analíticas ejecutivas consolidadas.
-* **Integración Externa Bloqueada (HU-15):** Cerraduras inteligentes Nuki (se requiere provisión de API oficial y credenciales para no simular llamadas ficticias).
+* **Integración Externa Bloqueada (HU-15 - Consultar autorizaciones de ingreso):** Requiere definición de proveedor oficial de control de acceso por el negocio y provisión de credenciales reales (bloqueo por DEC-09 sin llamadas simuladas).
 * **Envío real de correos electrónicos:** Los avisos de outbox se inspeccionan directamente en base de datos (`avisos_reserva` / `notificaciones_internas`), sin despachar correos por SMTP para evitar alertas espurias.

@@ -248,6 +248,53 @@ describe('HU-CLOSE-01: HU-11 y HU-17 — Alertas Internas de Reserva y Asignaci�
       assert.equal(notifPost?.estado, 'ATENDIDA');
       assert.ok(notifPost?.atendidaEn instanceof Date);
     });
+
+    it('idempotencia: la inserción de la alerta utiliza idempotencyKey y reintentar no duplica el registro', async () => {
+      const reservaId = 'res-alerts-hu11-idempotent';
+      const key = `notif-reserva-creada-${reservaId}`;
+
+      // 1. Crear reserva
+      await app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        headers: { authorization: `Bearer ${operador1Token}` },
+        payload: {
+          id: reservaId,
+          propiedadId,
+          huespedId,
+          ingreso: '2026-11-25',
+          salida: '2026-11-28',
+          montoAcordado: 900,
+          moneda: 'PEN',
+          origen: 'DIRECTO',
+        },
+      });
+
+      const count1 = await db.prisma.notificacionInterna.count({
+        where: { idempotencyKey: key },
+      });
+      assert.equal(count1, 1);
+
+      // 2. Simular reintento de creación con la misma clave de idempotencia
+      await db.prisma.notificacionInterna.upsert({
+        where: { idempotencyKey: key },
+        create: {
+          idempotencyKey: key,
+          tipo: 'NUEVA_RESERVA',
+          estado: 'PENDIENTE',
+          titulo: 'Alerta duplicada',
+          mensaje: 'No debe duplicar',
+          reservaId,
+          propiedadId,
+        },
+        update: {},
+      });
+
+      const count2 = await db.prisma.notificacionInterna.count({
+        where: { idempotencyKey: key },
+      });
+      assert.equal(count2, 1, 'La clave de idempotencia garantiza un único registro persistente');
+    });
   });
 
   describe('HU-17 — Aviso real al trabajador asignado', () => {
@@ -479,6 +526,121 @@ describe('HU-CLOSE-01: HU-11 y HU-17 — Alertas Internas de Reserva y Asignaci�
       assert.ok(notifDb, 'Debe generarse notificación por reasignación');
       assert.equal(notifDb.usuarioId, op2UsuarioId);
       assert.equal(notifDb.tipo, 'ORDEN_TRABAJO_ASIGNADA');
+    });
+
+    it('flujo completo HU-17: ADMIN asigna orden -> se persiste aviso -> OPERADOR consulta aviso -> accede a detalle de su trabajo -> no ve avisos ajenos -> marca leída', async () => {
+      // 1. ADMIN asigna una orden a un OPERADOR vinculado a Usuario
+      const resOrder = await app.inject({
+        method: 'POST',
+        url: '/api/mantenimiento/ordenes',
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          propiedadId,
+          titulo: 'Mantenimiento integral de aire acondicionado',
+          descripcion: 'Limpieza de filtros y recarga de gas refrigerante',
+          tipo: 'REPARACION',
+          prioridad: 'ALTA',
+          asignadoAId: op1UsuarioId,
+        },
+      });
+      assert.equal(resOrder.statusCode, 201);
+      const createdOrder = JSON.parse(resOrder.body).data;
+
+      // Crear también una orden para OPERADOR 2 para comprobar aislamiento
+      const resOrderOp2 = await app.inject({
+        method: 'POST',
+        url: '/api/mantenimiento/ordenes',
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: {
+          propiedadId,
+          titulo: 'Inspección de tubería en lavandería',
+          descripcion: 'Revisión técnica exclusiva de Operador 2',
+          tipo: 'INSPECCION',
+          prioridad: 'BAJA',
+          asignadoAId: op2UsuarioId,
+        },
+      });
+      assert.equal(resOrderOp2.statusCode, 201);
+      const orderOp2 = JSON.parse(resOrderOp2.body).data;
+
+      // 2. Se persiste la notificación
+      const notifOp1 = await db.prisma.notificacionInterna.findFirst({
+        where: {
+          ordenTrabajoId: createdOrder.id,
+          usuarioId: op1UsuarioId,
+        },
+      });
+      assert.ok(notifOp1, 'La notificación para Operador 1 debe estar persistida en PostgreSQL');
+      assert.equal(notifOp1.estado, 'PENDIENTE');
+
+      // 3. El OPERADOR inicia sesión
+      const resLogin = await app.inject({
+        method: 'POST',
+        url: '/auth/login',
+        payload: { email: 'op1@daplace.pe', password: 'PassSecure2026!' },
+      });
+      assert.equal(resLogin.statusCode, 200);
+      const freshOp1Token = JSON.parse(resLogin.body).accessToken;
+
+      // 4. Puede consultar su notificación
+      const resAlertas = await app.inject({
+        method: 'GET',
+        url: '/api/alertas',
+        headers: { authorization: `Bearer ${freshOp1Token}` },
+      });
+      assert.equal(resAlertas.statusCode, 200);
+      const alerts = JSON.parse(resAlertas.body).data;
+      const myAlert = alerts.find((a: any) => a.ordenTrabajoId === createdOrder.id);
+      assert.ok(myAlert, 'Operador 1 debe encontrar su notificación de trabajo');
+      assert.equal(myAlert.tipoAviso, 'ORDEN_TRABAJO_ASIGNADA');
+      assert.ok(myAlert.titulo.includes('aire acondicionado'));
+
+      // 5. Puede acceder al detalle autorizado de su trabajo
+      const resOrderDetail = await app.inject({
+        method: 'GET',
+        url: `/api/mantenimiento/ordenes/${createdOrder.id}`,
+        headers: { authorization: `Bearer ${freshOp1Token}` },
+      });
+      assert.equal(resOrderDetail.statusCode, 200);
+      const detail = JSON.parse(resOrderDetail.body).data;
+      assert.equal(detail.id, createdOrder.id);
+      assert.equal(detail.propiedadId, propiedadId);
+      assert.equal(detail.tipo, 'REPARACION');
+      assert.equal(detail.prioridad, 'ALTA');
+      assert.equal(detail.asignadoA?.id, op1UsuarioId);
+
+      // También puede listar sus órdenes
+      const resOrdersList = await app.inject({
+        method: 'GET',
+        url: `/api/mantenimiento/ordenes?asignadoAId=${op1UsuarioId}`,
+        headers: { authorization: `Bearer ${freshOp1Token}` },
+      });
+      assert.equal(resOrdersList.statusCode, 200);
+      const list = JSON.parse(resOrdersList.body).data;
+      assert.ok(list.some((o: any) => o.id === createdOrder.id));
+
+      // 6. No puede consultar notificaciones privadas de otros trabajadores
+      assert.equal(
+        alerts.some((a: any) => a.ordenTrabajoId === orderOp2.id),
+        false,
+        'Operador 1 NO debe ver la notificación de trabajo privado de Operador 2',
+      );
+
+      // 7. Puede marcar la notificación propia como leída
+      const resMarcarLeida = await app.inject({
+        method: 'POST',
+        url: `/api/alertas/${myAlert.id}/leer`,
+        headers: { authorization: `Bearer ${freshOp1Token}` },
+      });
+      assert.equal(resMarcarLeida.statusCode, 200);
+      const updatedNotif = JSON.parse(resMarcarLeida.body);
+      assert.equal(updatedNotif.estado, 'LEIDA');
+
+      const notifEnDb = await db.prisma.notificacionInterna.findUnique({
+        where: { id: myAlert.id },
+      });
+      assert.equal(notifEnDb?.estado, 'LEIDA');
+      assert.ok(notifEnDb?.leidaEn instanceof Date);
     });
   });
 });

@@ -23,7 +23,7 @@
 | `/dashboard` | Dashboard Principal | `ADMINISTRADOR` | **Diego** | *PENDIENTE (Placeholder)* | RF09 / HU-08 | Resumen general y KPIs operativos (muestra `PendingModuleView`). |
 | `/reportes` | Reportes de Liquidación | `ADMINISTRADOR`, `PROPIETARIO` | **André** | **COMPLETO_VERIFICADO** | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible, protección multi-moneda y exportación CSV. |
 | `/personal` | Personal y Cuentas | `ADMINISTRADOR` | **André** | **COMPLETO_VERIFICADO** | RF09 / HU-19 | Gestión de operadores internos, alta, baja y cambio de rol con sincronización User/Usuario. |
-| `/mantenimiento` | Mantenimiento y Salidas | `ADMINISTRADOR` | **André** | **COMPLETO_VERIFICADO** | RF07, RF13, RF15, RF16 / HU-10, HU-14, HU-16, HU-17 | Tablero operativo de órdenes de trabajo, check-out de inspección y avisos a colaboradores. |
+| `/mantenimiento` | Mantenimiento y Salidas | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF07, RF13, RF15, RF16 / HU-10, HU-14, HU-16, HU-17 | Tablero operativo de órdenes de trabajo, check-out de inspección y avisos a colaboradores. |
 
 
 ---

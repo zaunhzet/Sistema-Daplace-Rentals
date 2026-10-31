@@ -97,6 +97,7 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
         '/pagos',
         '/garantias',
         '/gastos',
+        '/mantenimiento',
       ];
       for (const route of operatorAllowed) {
         assert.equal(canAccessPath('OPERADOR', route), true, `Operador must access ${route}`);
@@ -104,7 +105,7 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       assert.equal(canAccessPath('OPERADOR', '/dashboard'), false);
       assert.equal(canAccessPath('OPERADOR', '/reportes'), false);
       assert.equal(canAccessPath('OPERADOR', '/personal'), false);
-      assert.equal(canAccessPath('OPERADOR', '/mantenimiento'), false);
+      assert.equal(hasPermission('OPERADOR', 'view:maintenance'), true);
       assert.equal(hasPermission('OPERADOR', 'manage:properties'), true);
       assert.equal(hasPermission('OPERADOR', 'manage:owners'), true);
     });
