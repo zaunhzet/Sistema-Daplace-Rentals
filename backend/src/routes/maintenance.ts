@@ -469,6 +469,39 @@ export function registerMaintenanceRoutes(prisma: PrismaClient) {
           });
         }
 
+        // HU-16: Impedir restauración prematura de la propiedad a OPERATIVA
+        // No se puede restablecer la propiedad si la orden actual sigue PENDIENTE o EN_PROGRESO
+        if (restablecerPropiedadOperativa && ['PENDIENTE', 'EN_PROGRESO'].includes(estado)) {
+          return reply.status(400).send({
+            error: {
+              code: 'PREMATURE_PROPERTY_RESTORATION',
+              message: 'No se puede restablecer la propiedad a OPERATIVA mientras la orden de trabajo continúe PENDIENTE o EN_PROGRESO.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Si se solicita restablecer explícitamente, validar que no existan otros trabajos activos en la propiedad
+        if (restablecerPropiedadOperativa) {
+          const otherActiveOrders = await prisma.ordenTrabajo.count({
+            where: {
+              propiedadId: orden.propiedadId,
+              id: { not: id },
+              estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+            },
+          });
+
+          if (otherActiveOrders > 0) {
+            return reply.status(400).send({
+              error: {
+                code: 'ACTIVE_WORK_ORDERS_EXIST',
+                message: `No se puede restablecer la propiedad a OPERATIVA porque aún existen ${otherActiveOrders} orden(es) de trabajo activa(s) en la misma propiedad.`,
+                requestId: request.id,
+              },
+            });
+          }
+        }
+
         const updated = await prisma.$transaction(async (tx) => {
           const isCompleting = estado === 'COMPLETADA';
           const updatedOrder = await tx.ordenTrabajo.update({

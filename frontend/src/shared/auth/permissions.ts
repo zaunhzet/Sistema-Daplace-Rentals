@@ -72,6 +72,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly AppPermission[]> = {
   PROPIETARIO: [
     'view:properties', // Solo consulta de propiedades propias
     'view:calendar',   // Solo disponibilidad de propiedades propias
+    'view:reports',    // Consulta de liquidaciones y reportes de propiedades propias
     // Excluido terminantemente: manage:properties, manage:owners, view:guests, view:payments, view:guarantees, view:expenses
   ],
   CLIENTE: [

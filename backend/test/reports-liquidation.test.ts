@@ -319,4 +319,161 @@ describe('HU-07 & HU-12 — Reportes de Liquidación y Exportación para Propiet
     assert.ok(csv.includes('Balance Neto a Transferir'));
     assert.ok(csv.includes('Garantias en Custodia (Fondos no computables como ingreso)'));
   });
+
+  it('6. PROPIETARIO 1 puede descargar CSV de su propia propiedad pero recibe 403 al intentar descargar CSV ajeno', async () => {
+    // 1. Descarga propia exitosa
+    const resPropia = await app.inject({
+      method: 'GET',
+      url: `/api/reportes/propietario?propiedadId=${prop1Id}&mes=10&anio=2026&format=csv`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resPropia.statusCode, 200);
+    assert.match(resPropia.headers['content-type'] || '', /text\/csv/);
+
+    // 2. Intento de descarga sobre propiedad de PROPIETARIO 2 rechazado con 403
+    const resAjena = await app.inject({
+      method: 'GET',
+      url: `/api/reportes/propietario?propiedadId=${prop2Id}&mes=10&anio=2026&format=csv`,
+      headers: { authorization: `Bearer ${propietario1Token}` },
+    });
+    assert.equal(resAjena.statusCode, 403);
+    const bodyAjena = JSON.parse(resAjena.body);
+    assert.equal(bodyAjena.error.code, 'FORBIDDEN');
+  });
+
+  it('7. HU-07 Integridad monetaria: Calcula correctamente un reporte válido exclusivamente en USD', async () => {
+    // Crear propiedad en USD
+    const propUsd = await db.prisma.propiedad.create({
+      data: {
+        id: 'prop-usd-test',
+        nombre: 'Luxury Suite San Isidro USD',
+        propietarioId: 'usr-prop-1',
+        direccion: 'Calle Los Robles 500',
+        estadoOperativo: 'OPERATIVA',
+        estadoPublicacion: 'PUBLICADA',
+        precioBaseNoche: 120,
+        moneda: 'USD',
+      },
+    });
+
+    const resUsd = await db.prisma.reserva.create({
+      data: {
+        id: 'res-usd-1',
+        propiedadId: propUsd.id,
+        huespedId,
+        ingreso: new Date('2026-10-01'),
+        salida: new Date('2026-10-06'),
+        noches: 5,
+        estado: 'CONFIRMADA',
+        montoAcordado: 600,
+        moneda: 'USD',
+      },
+    });
+
+    // Pago en USD
+    await db.prisma.pago.create({
+      data: {
+        reservaId: resUsd.id,
+        monto: 600,
+        moneda: 'USD',
+        concepto: 'PAGO_TOTAL',
+        metodoPago: 'TARJETA',
+        referenciaOperacion: 'OP-USD-CONC-1',
+        fechaPago: new Date('2026-10-02'),
+        estado: 'CONCILIADO',
+      },
+    });
+
+    // Gasto en USD
+    await db.prisma.gasto.create({
+      data: {
+        propiedadId: propUsd.id,
+        fechaGasto: new Date('2026-10-03'),
+        periodoMes: 10,
+        periodoAnio: 2026,
+        titulo: 'Mantenimiento filtro aire USD',
+        categoria: 'MANTENIMIENTO',
+        monto: 75.5,
+        moneda: 'USD',
+        pagadoPor: 'DAPLACE',
+        estado: 'APROBADO',
+      },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/reportes/propietario?propiedadId=${propUsd.id}&mes=10&anio=2026`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body);
+    assert.equal(body.moneda, 'USD');
+    assert.equal(body.propiedad.moneda, 'USD');
+    assert.equal(body.resumen.totalIngresos, 600);
+    assert.equal(body.resumen.totalGastos, 75.5);
+    assert.equal(body.resumen.balanceNeto, 524.5);
+    assert.equal(body.ingresos[0].moneda, 'USD');
+    assert.equal(body.gastos[0].moneda, 'USD');
+  });
+
+  it('8. HU-07 Integridad monetaria: Rechaza reporte con 409 MIXED_CURRENCY_REPORT si existen transacciones incompatibles (ej. PEN y USD)', async () => {
+    // Propiedad en PEN
+    const reservaPen = await db.prisma.reserva.create({
+      data: {
+        id: 'res-mix-1',
+        propiedadId: prop1Id,
+        huespedId,
+        ingreso: new Date('2026-10-20'),
+        salida: new Date('2026-10-25'),
+        noches: 5,
+        estado: 'CONFIRMADA',
+        montoAcordado: 1000,
+        moneda: 'PEN',
+      },
+    });
+
+    // Pago conciliado en PEN
+    await db.prisma.pago.create({
+      data: {
+        reservaId: reservaPen.id,
+        monto: 1000,
+        moneda: 'PEN',
+        concepto: 'ADELANTO',
+        metodoPago: 'TRANSFERENCIA',
+        referenciaOperacion: 'OP-PEN-1',
+        fechaPago: new Date('2026-10-21'),
+        estado: 'CONCILIADO',
+      },
+    });
+
+    // Gasto aprobado registrado en USD en la misma propiedad (incompatible sin tipo de cambio oficial)
+    await db.prisma.gasto.create({
+      data: {
+        propiedadId: prop1Id,
+        fechaGasto: new Date('2026-10-22'),
+        periodoMes: 10,
+        periodoAnio: 2026,
+        titulo: 'Suscripción servicio internacional cerradura',
+        categoria: 'SERVICIOS',
+        monto: 30,
+        moneda: 'USD',
+        pagadoPor: 'DAPLACE',
+        estado: 'APROBADO',
+      },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/reportes/propietario?propiedadId=${prop1Id}&mes=10&anio=2026`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+
+    assert.equal(response.statusCode, 409);
+    const body = JSON.parse(response.body);
+    assert.equal(body.error.code, 'MIXED_CURRENCY_REPORT');
+    assert.ok(body.error.message.includes('monedas incompatibles'));
+    assert.ok(body.error.detalles.monedasDetectadas.includes('PEN'));
+    assert.ok(body.error.detalles.monedasDetectadas.includes('USD'));
+  });
 });

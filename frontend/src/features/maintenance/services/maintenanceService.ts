@@ -127,7 +127,7 @@ class MaintenanceService {
   public async createOrder(dto: CreateOrderDto): Promise<MaintenanceOrder> {
     if (isMockMode()) {
       const newOrder: MaintenanceOrder = {
-        id: `ord-mock-${Date.now()}`,
+        id: `ord-mock-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         propiedadId: dto.propiedadId,
         propiedadNombre: dto.propiedadId === 'prop-01' ? 'Departamento Miraflores' : 'Inmueble Seleccionado',
         reservaId: dto.reservaId || null,

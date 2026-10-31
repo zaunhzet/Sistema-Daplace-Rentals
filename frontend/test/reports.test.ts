@@ -64,4 +64,14 @@ describe('Reports & Liquidations Module (HU-07 & HU-12) — Frontend Tests', () 
     assert.ok(text.includes('Balance Neto a Transferir'));
     assert.ok(text.includes('Garantias en Custodia (Fondos no computables como ingreso)'));
   });
+
+  it('4. HU-07/HU-12: PROPIETARIO tiene permiso view:reports para acceder al módulo y visualizar reportes', async () => {
+    const { hasPermission, canAccessPath } = await import('../src/shared/auth/permissions');
+    assert.equal(hasPermission('PROPIETARIO', 'view:reports'), true);
+    assert.equal(canAccessPath('PROPIETARIO', '/reportes'), true);
+
+    // PROPIETARIO no tiene permisos de administración de gastos ni finanzas ajenas
+    assert.equal(hasPermission('PROPIETARIO', 'manage:expenses'), false);
+    assert.equal(hasPermission('PROPIETARIO', 'manage:payments'), false);
+  });
 });

@@ -33,6 +33,7 @@ export interface LiquidationReportResponse {
     metodoPago: string;
     referenciaOperacion: string;
     monto: number;
+    moneda?: string;
   }>;
   gastos: Array<{
     gastoId: string;
@@ -41,12 +42,14 @@ export interface LiquidationReportResponse {
     categoria: string;
     pagadoPor: string;
     monto: number;
+    moneda?: string;
   }>;
   garantias: Array<{
     garantiaId: string;
     reservaId: string;
     estado: string;
     monto: number;
+    moneda?: string;
   }>;
 }
 
@@ -158,6 +161,7 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             metodoPago: true,
             referenciaOperacion: true,
             monto: true,
+            moneda: true,
           },
           orderBy: { fechaPago: 'asc' },
         });
@@ -177,6 +181,7 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             categoria: true,
             pagadoPor: true,
             monto: true,
+            moneda: true,
           },
           orderBy: { fechaGasto: 'asc' },
         });
@@ -196,10 +201,41 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             reservaId: true,
             estado: true,
             montoTotal: true,
+            moneda: true,
           },
         });
 
-        // 7. Cálculos contables con precisión exacta
+        // 7. Validación estricta de integridad monetaria (HU-07):
+        // No se permite consolidar PEN y USD en un balance único sin tasa de conversión oficial.
+        const baseMoneda = (propiedad.moneda || 'PEN').toUpperCase().trim();
+        const detectedCurrencies = new Set<string>();
+        detectedCurrencies.add(baseMoneda);
+
+        for (const p of pagosConciliados) {
+          if (p.moneda) detectedCurrencies.add(p.moneda.toUpperCase().trim());
+        }
+        for (const g of gastosAprobados) {
+          if (g.moneda) detectedCurrencies.add(g.moneda.toUpperCase().trim());
+        }
+        for (const gar of garantiasCustodia) {
+          if (gar.moneda) detectedCurrencies.add(gar.moneda.toUpperCase().trim());
+        }
+
+        if (detectedCurrencies.size > 1) {
+          return reply.status(409).send({
+            error: {
+              code: 'MIXED_CURRENCY_REPORT',
+              message: `No es posible generar el reporte contable debido a transacciones con monedas incompatibles (${Array.from(detectedCurrencies).join(', ')}). No se permite consolidar PEN y USD sin una política de conversión oficial.`,
+              detalles: {
+                monedaPropiedad: baseMoneda,
+                monedasDetectadas: Array.from(detectedCurrencies),
+              },
+              requestId: request.id,
+            },
+          });
+        }
+
+        // 8. Cálculos contables con precisión exacta
         let totalIngresosDecimal = new Prisma.Decimal(0);
         for (const p of pagosConciliados) {
           totalIngresosDecimal = totalIngresosDecimal.add(p.monto);
@@ -227,14 +263,14 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             direccion: propiedad.direccion,
             propietarioId: propiedad.propietarioId,
             propietarioNombre: propiedad.propietario?.nombre || 'Propietario no asignado',
-            moneda: propiedad.moneda || 'PEN',
+            moneda: baseMoneda,
           },
           periodo: {
             mes,
             anio,
             etiqueta: etiquetaPeriodo,
           },
-          moneda: propiedad.moneda || 'PEN',
+          moneda: baseMoneda,
           resumen: {
             totalIngresos: Number(totalIngresosDecimal.toFixed(2)),
             totalGastos: Number(totalGastosDecimal.toFixed(2)),
@@ -251,6 +287,7 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             metodoPago: p.metodoPago,
             referenciaOperacion: p.referenciaOperacion,
             monto: Number(p.monto.toFixed(2)),
+            moneda: p.moneda || baseMoneda,
           })),
           gastos: gastosAprobados.map((g) => ({
             gastoId: g.id,
@@ -259,12 +296,14 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
             categoria: g.categoria,
             pagadoPor: g.pagadoPor,
             monto: Number(g.monto.toFixed(2)),
+            moneda: g.moneda || baseMoneda,
           })),
           garantias: garantiasCustodia.map((gar) => ({
             garantiaId: gar.id,
             reservaId: gar.reservaId,
             estado: gar.estado,
             monto: Number(gar.montoTotal.toFixed(2)),
+            moneda: gar.moneda || baseMoneda,
           })),
         };
 
@@ -275,7 +314,7 @@ export function registerReportsRoutes(prisma: PrismaClient): FastifyPluginAsync 
           csvLines.push(`Inmueble,"${propiedad.nombre.replace(/"/g, '""')}" (${propiedad.id})`);
           csvLines.push(`Propietario,"${(propiedad.propietario?.nombre || '').replace(/"/g, '""')}"`);
           csvLines.push(`Periodo,${mes}/${anio} (${etiquetaPeriodo})`);
-          csvLines.push(`Moneda,${propiedad.moneda || 'PEN'}`);
+          csvLines.push(`Moneda,${baseMoneda}`);
           csvLines.push('');
           csvLines.push('RESUMEN FINANCIERO');
           csvLines.push(`Total Ingresos Conciliados,${reportData.resumen.totalIngresos.toFixed(2)}`);

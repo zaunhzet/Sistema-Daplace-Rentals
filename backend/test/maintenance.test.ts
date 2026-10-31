@@ -272,4 +272,136 @@ describe('Fase 4 — HU-10, HU-14, HU-16 y HU-17: Mantenimiento, Salidas y Órde
     prop = await db.prisma.propiedad.findUnique({ where: { id: propiedadId } });
     assert.equal(prop?.estadoOperativo, 'OPERATIVA');
   });
+
+  it('5. HU-16: Rechaza con 400 PREMATURE_PROPERTY_RESTORATION si se solicita restablecer propiedad mientras la orden sigue PENDIENTE o EN_PROGRESO', async () => {
+    // 1. Crear orden que coloca la propiedad en mantenimiento
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/mantenimiento/ordenes',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        propiedadId,
+        titulo: 'Fuga de agua en lavabo',
+        descripcion: 'Reparación de cañería con goteo constante.',
+        tipo: 'REPARACION',
+        prioridad: 'ALTA',
+        cambiarEstadoPropiedad: true,
+      },
+    });
+    const orderId = createRes.json().data.id;
+
+    // 2. Intentar avanzar a EN_PROGRESO solicitando restablecerPropiedadOperativa prematuramente
+    const prematureRes1 = await app.inject({
+      method: 'PATCH',
+      url: `/api/mantenimiento/ordenes/${orderId}/estado`,
+      headers: { authorization: `Bearer ${operadorToken}` },
+      payload: {
+        estado: 'EN_PROGRESO',
+        restablecerPropiedadOperativa: true,
+      },
+    });
+
+    assert.equal(prematureRes1.statusCode, 400);
+    const body1 = prematureRes1.json();
+    assert.equal(body1.error.code, 'PREMATURE_PROPERTY_RESTORATION');
+
+    // 3. Intentar mantener PENDIENTE solicitando restablecerPropiedadOperativa
+    const prematureRes2 = await app.inject({
+      method: 'PATCH',
+      url: `/api/mantenimiento/ordenes/${orderId}/estado`,
+      headers: { authorization: `Bearer ${operadorToken}` },
+      payload: {
+        estado: 'PENDIENTE',
+        restablecerPropiedadOperativa: true,
+      },
+    });
+
+    assert.equal(prematureRes2.statusCode, 400);
+    const body2 = prematureRes2.json();
+    assert.equal(body2.error.code, 'PREMATURE_PROPERTY_RESTORATION');
+
+    // 4. Confirmar que la propiedad permanece estrictamente en EN_MANTENIMIENTO
+    const prop = await db.prisma.propiedad.findUnique({ where: { id: propiedadId } });
+    assert.equal(prop?.estadoOperativo, 'EN_MANTENIMIENTO');
+  });
+
+  it('6. HU-16: Rechaza restablecimiento a OPERATIVA con 400 ACTIVE_WORK_ORDERS_EXIST si aún existen otros trabajos activos en la propiedad', async () => {
+    // 1. Crear Orden A y Orden B en la misma propiedad
+    const resA = await app.inject({
+      method: 'POST',
+      url: '/api/mantenimiento/ordenes',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        propiedadId,
+        titulo: 'Trabajo A: Reparar cerradura',
+        descripcion: 'Reparación de cerradura principal con perno de seguridad',
+        tipo: 'REPARACION',
+        prioridad: 'ALTA',
+        cambiarEstadoPropiedad: true,
+      },
+    });
+    const orderAId = resA.json().data.id;
+
+    const resB = await app.inject({
+      method: 'POST',
+      url: '/api/mantenimiento/ordenes',
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        propiedadId,
+        titulo: 'Trabajo B: Pintura de cielo raso',
+        descripcion: 'Pintura y acabado de cielo raso en sala principal',
+        tipo: 'PINTURA',
+        prioridad: 'MEDIA',
+      },
+    });
+    const orderBId = resB.json().data.id;
+
+    // 2. Intentar completar la Orden A solicitando restablecer la propiedad, pero Orden B sigue PENDIENTE
+    const attemptRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/mantenimiento/ordenes/${orderAId}/estado`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        estado: 'COMPLETADA',
+        costoReal: 100,
+        notasResolucion: 'Cerradura cambiada',
+        restablecerPropiedadOperativa: true,
+      },
+    });
+
+    assert.equal(attemptRes.statusCode, 400);
+    const body = attemptRes.json();
+    assert.equal(body.error.code, 'ACTIVE_WORK_ORDERS_EXIST');
+
+    // 3. Verificar que la propiedad NO fue restaurada a OPERATIVA
+    let prop = await db.prisma.propiedad.findUnique({ where: { id: propiedadId } });
+    assert.equal(prop?.estadoOperativo, 'EN_MANTENIMIENTO');
+
+    // 4. Completar la Orden B sin restablecer aún
+    await app.inject({
+      method: 'PATCH',
+      url: `/api/mantenimiento/ordenes/${orderBId}/estado`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        estado: 'COMPLETADA',
+        costoReal: 80,
+      },
+    });
+
+    // 5. Ahora que no hay órdenes pendientes, completar la Orden A y restablecer tiene éxito
+    const successRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/mantenimiento/ordenes/${orderAId}/estado`,
+      headers: { authorization: `Bearer ${adminToken}` },
+      payload: {
+        estado: 'COMPLETADA',
+        costoReal: 100,
+        restablecerPropiedadOperativa: true,
+      },
+    });
+
+    assert.equal(successRes.statusCode, 200);
+    prop = await db.prisma.propiedad.findUnique({ where: { id: propiedadId } });
+    assert.equal(prop?.estadoOperativo, 'OPERATIVA');
+  });
 });

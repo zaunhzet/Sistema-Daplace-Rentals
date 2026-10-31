@@ -98,9 +98,10 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       assert.equal(hasPermission('OPERADOR', 'manage:owners'), true);
     });
 
-    it('PROPIETARIO is strictly restricted to /propiedades and /calendario', () => {
+    it('PROPIETARIO is strictly restricted to /propiedades, /calendario and /reportes', () => {
       assert.equal(canAccessPath('PROPIETARIO', '/propiedades'), true);
       assert.equal(canAccessPath('PROPIETARIO', '/calendario'), true);
+      assert.equal(canAccessPath('PROPIETARIO', '/reportes'), true);
 
       // Denegados
       assert.equal(canAccessPath('PROPIETARIO', '/huespedes'), false);
@@ -109,6 +110,8 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       assert.equal(canAccessPath('PROPIETARIO', '/garantias'), false);
       assert.equal(canAccessPath('PROPIETARIO', '/gastos'), false);
       assert.equal(canAccessPath('PROPIETARIO', '/dashboard'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/personal'), false);
+      assert.equal(canAccessPath('PROPIETARIO', '/mantenimiento'), false);
 
       // Sin permisos de gestión/escritura sobre propiedades ni catálogo de propietarios
       assert.equal(hasPermission('PROPIETARIO', 'manage:properties'), false);
@@ -134,10 +137,10 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       const ownerItems = NAVIGATION_ITEMS.filter((item) =>
         canAccessPath('PROPIETARIO', item.path)
       );
-      assert.equal(ownerItems.length, 2);
+      assert.equal(ownerItems.length, 3);
       assert.deepEqual(
         ownerItems.map((i) => i.path).sort(),
-        ['/calendario', '/propiedades'].sort()
+        ['/calendario', '/propiedades', '/reportes'].sort()
       );
     });
 
