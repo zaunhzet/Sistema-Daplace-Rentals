@@ -42,6 +42,7 @@ export async function authenticateRequestHook(request: FastifyRequest): Promise<
     request.user = {
       id: 'usr-admin',
       sub: 'usr-admin',
+      usuarioId: 'usr-admin',
       nombre: 'Administrador Demo Local',
       email: 'admin@daplace.example.invalid',
       rol: 'ADMIN',

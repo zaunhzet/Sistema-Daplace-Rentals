@@ -13,6 +13,7 @@ import { GuaranteesPage } from '../features/guarantees';
 import { ExpensesPage } from '../features/expenses';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
+import { ClientPortalPage } from './ClientPortalPage';
 import { PublicLayout, PublicCatalogPage, PublicBookingRequestPage } from '../features/public-booking';
 import { getDefaultAuthorizedPath } from '../shared/auth/permissions';
 import daplaceIcon from '../assets/daplace-icon.png';
@@ -50,10 +51,26 @@ function AppRoutes() {
         element={session.isAuthenticated ? <Navigate to={defaultPath} replace /> : <LoginForm />}
       />
 
-      {/* 2. Vista de diagnóstico de sesión de Diego */}
+      {/* 2. Portal Informativo Seguro para CLIENTE (fuera del AdminLayout) */}
+      <Route
+        path="/cliente"
+        element={
+          session.isAuthenticated ? (
+            session.user?.rol === 'CLIENTE' ? (
+              <ClientPortalPage />
+            ) : (
+              <Navigate to={defaultPath} replace />
+            )
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+
+      {/* 3. Vista de diagnóstico de sesión de Diego */}
       <Route path="/auth-preview" element={<AdminAreaPreview />} />
 
-      {/* 3. Portal Público de Reservas (activo solo con feature flag) */}
+      {/* 4. Portal Público de Reservas (activo solo con feature flag) */}
       {ENABLE_PUBLIC_BOOKING && (
         <Route element={<PublicLayout />}>
           <Route path="/catalogo" element={<PublicCatalogPage />} />

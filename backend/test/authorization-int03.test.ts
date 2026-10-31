@@ -350,4 +350,74 @@ describe('Gate INT-03 — Matriz de Autorización, Control de Acceso y Aislamien
     });
     assert.equal(resPost.statusCode, 403);
   });
+
+  it('10. Usuario con rol ADMINISTRADOR u OPERADOR pero sin identidad de dominio recibe HTTP 403 DOMAIN_IDENTITY_REQUIRED en POST /api/propietarios', async () => {
+    // Crear usuario admin de autenticación huérfano (sin usuarioId en dominio)
+    const passwordHash = await AuthService.hashPassword('AdminHuerfano2026!');
+    await repository.createUser({
+      email: 'admin.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Admin Sin Dominio',
+      rol: 'ADMINISTRADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'admin.huerfano@daplace.pe',
+      password: 'AdminHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    // Intento de registrar nuevo propietario de dominio sin actor transaccional válido
+    const resPost = await app.inject({
+      method: 'POST',
+      url: '/api/propietarios',
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombre: 'Nuevo Propietario Rechazado',
+        email: 'rechazado@daplace.pe',
+      },
+    });
+
+    assert.equal(resPost.statusCode, 403);
+    const bodyPost = JSON.parse(resPost.payload);
+    assert.equal(bodyPost.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
+
+  it('11. Usuario sin identidad de dominio no puede registrar contratos de reserva (HTTP 403 DOMAIN_IDENTITY_REQUIRED)', async () => {
+    const passwordHash = await AuthService.hashPassword('OpHuerfano2026!');
+    await repository.createUser({
+      email: 'operador.huerfano@daplace.pe',
+      passwordHash,
+      nombre: 'Operador Sin Dominio',
+      rol: 'OPERADOR',
+      usuarioId: undefined,
+    });
+
+    const authService = new AuthService(repository, {
+      signAccessToken: (payload) => app.jwt.sign(payload),
+    });
+    const loginRes = await authService.login({
+      email: 'operador.huerfano@daplace.pe',
+      password: 'OpHuerfano2026!',
+    });
+    const accessToken = loginRes.accessToken;
+
+    const resContract = await app.inject({
+      method: 'POST',
+      url: `/api/reservas/${reservaId}/contratos`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: {
+        nombreOriginal: 'contrato_arrendamiento_v1.pdf',
+        urlReferencia: 'https://docs.daplace.pe/contrato-v1.pdf',
+      },
+    });
+
+    assert.equal(resContract.statusCode, 403);
+    const bodyContract = JSON.parse(resContract.payload);
+    assert.equal(bodyContract.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+  });
 });

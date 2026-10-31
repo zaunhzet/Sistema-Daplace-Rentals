@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, NavLink } from 'react-router';
 import { useAuth } from './AuthContext';
+import { getDefaultAuthorizedPath } from '../../shared/auth/permissions';
 import daplaceIcon from '../../assets/daplace-icon.png';
 
 export function LoginForm() {
@@ -55,8 +56,9 @@ export function LoginForm() {
 
     try {
       // No recortamos ni alteramos la contraseña antes de verificarla
-      await login(email.trim(), password);
-      navigate('/propiedades');
+      const user = await login(email.trim(), password);
+      const targetPath = getDefaultAuthorizedPath(user.rol);
+      navigate(targetPath, { replace: true });
     } catch (err: any) {
       setApiError(err?.message || 'Credenciales inválidas. Por favor verifique sus datos.');
     } finally {

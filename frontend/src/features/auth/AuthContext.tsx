@@ -18,7 +18,7 @@ import type { AuthSession, User } from './types';
 interface AuthContextType {
   session: AuthSession;
   isRestoringSession: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   logout: () => Promise<void>;
   logoutDemo: () => Promise<void>;
 }
@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void restoreSession();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User> => {
     const result = await loginApi(email, password);
     const timestamp = new Date().toLocaleTimeString('es-PE', {
       hour: '2-digit',
@@ -104,6 +104,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: result.user,
       ingresoEn: timestamp,
     });
+
+    return result.user;
   };
 
   // Fix 5: Comprueba el resultado de /auth/logout. Si falla, no limpia la sesión ni oculta el fallo.

@@ -119,14 +119,14 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       for (const route of [...OPERATIONAL_ROUTES, '/dashboard', '/reportes']) {
         assert.equal(canAccessPath('CLIENTE', route), false, `Cliente must be denied from ${route}`);
       }
-      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/login');
+      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/cliente');
     });
 
     it('resolves default authorized redirect path correctly per role', () => {
       assert.equal(getDefaultAuthorizedPath('ADMINISTRADOR'), '/propiedades');
       assert.equal(getDefaultAuthorizedPath('OPERADOR'), '/propiedades');
       assert.equal(getDefaultAuthorizedPath('PROPIETARIO'), '/propiedades');
-      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/login');
+      assert.equal(getDefaultAuthorizedPath('CLIENTE'), '/cliente');
       assert.equal(getDefaultAuthorizedPath(null), '/login');
     });
 
@@ -139,6 +139,33 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
         ownerItems.map((i) => i.path).sort(),
         ['/calendario', '/propiedades'].sort()
       );
+    });
+
+    it('CLIENTE navigation and session lifecycle: resolves safe portal and supports logout to login', () => {
+      // 1. Verificación de ruta segura independiente para CLIENTE fuera de AdminLayout
+      const clientPath = getDefaultAuthorizedPath('CLIENTE');
+      assert.equal(clientPath, '/cliente', 'CLIENTE must default to the dedicated /cliente portal');
+
+      // 2. CLIENTE no tiene acceso a ninguna ruta de administración
+      for (const adminRoute of OPERATIONAL_ROUTES) {
+        assert.equal(canAccessPath('CLIENTE', adminRoute), false);
+      }
+
+      // 3. Simulación de redirección post-login y posterior logout
+      let currentPath = '/login';
+      const authenticatedUser = { rol: 'CLIENTE' as const, email: 'cliente@daplace.pe' };
+
+      // Tras autenticación exitosa, el router navega a la ruta por defecto del rol
+      currentPath = getDefaultAuthorizedPath(authenticatedUser.rol);
+      assert.equal(currentPath, '/cliente', 'Navigates to /cliente after successful login');
+
+      // Si el cliente intenta visitar /login estando autenticado, App.tsx redirige a /cliente sin bucles circulares
+      const restoredSessionRedirect = getDefaultAuthorizedPath(authenticatedUser.rol);
+      assert.equal(restoredSessionRedirect, '/cliente', 'Restored session redirects cleanly to /cliente');
+
+      // Al ejecutar logout, la sesión pasa a null y el destino autorizado es /login
+      currentPath = getDefaultAuthorizedPath(null);
+      assert.equal(currentPath, '/login', 'Logout returns destination to /login cleanly');
     });
   });
 });

@@ -127,7 +127,8 @@ export function canAccessPath(role: UserRole | undefined | null, path: string): 
  * Devuelve la primera ruta autorizada para redirigir tras inicio de sesión o acceso a '/'.
  */
 export function getDefaultAuthorizedPath(role: UserRole | undefined | null): string {
-  if (!role || role === 'CLIENTE') return '/login';
+  if (!role) return '/login';
+  if (role === 'CLIENTE') return '/cliente';
 
   const orderedPaths = [
     '/propiedades',

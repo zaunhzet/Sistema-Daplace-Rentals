@@ -112,7 +112,6 @@ export function registerContractsRoutes(
       { preHandler: adminOrOperatorGuard },
       async (request, reply) => {
         const { id: reservaId } = request.params;
-        const actorId = request.user!.id;
         const body = request.body || ({} as any);
 
         const {
@@ -153,6 +152,32 @@ export function registerContractsRoutes(
               code: 'VALIDATION_ERROR',
               message:
                 'El nombre original del contrato es obligatorio y debe tener al menos 3 caracteres.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Exigir actor transaccional de dominio válido para registrar el contrato y su auditoría
+        const actorUsuarioId = request.user?.usuarioId;
+        if (!actorUsuarioId) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'La cuenta no tiene una identidad de dominio vinculada para registrar contratos de reserva.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const actorDomain = await prisma.usuario.findUnique({
+          where: { id: actorUsuarioId },
+        });
+
+        if (!actorDomain || !actorDomain.activo) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'El actor transaccional no existe o no se encuentra activo en el dominio.',
               requestId: request.id,
             },
           });
@@ -249,7 +274,7 @@ export function registerContractsRoutes(
                 nombreOriginal: nombreOriginal.trim(),
                 urlReferencia: cleanUrl,
                 estadoFirma: 'REFERENCIADA',
-                registradoPorId: actorId,
+                registradoPorId: actorUsuarioId,
                 reemplazaContratoId: reemplazaContratoId ? reemplazaContratoId.trim() : null,
                 idempotencyKey: effectiveIdempotencyKey,
                 payloadHash: calculatedHash,
@@ -262,7 +287,7 @@ export function registerContractsRoutes(
               entidad: 'Reserva',
               entidadId: reservaId,
               accion: 'CONTRATO_RESERVA_REGISTRADO',
-              actor: actorId,
+              actor: actorUsuarioId,
               motivo: `Alta de contrato v${nextVersion}: ${nuevoContrato.nombreOriginal} (REFERENCIADA)`,
               detalles: {
                 contratoId: nuevoContrato.id,

@@ -20,7 +20,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, path }
 
   // Si el rol es CLIENTE, no tiene acceso alguno al panel administrativo
   if (userRole === 'CLIENTE') {
-    return <ForbiddenPage onBackPath="/login" message="Las cuentas de tipo CLIENTE no tienen acceso a la consola administrativa de Daplace." />;
+    return <ForbiddenPage onBackPath="/cliente" message="Las cuentas de tipo CLIENTE no tienen acceso a la consola administrativa de Daplace." />;
   }
 
   // Verificar si el rol tiene permiso para la ruta actual

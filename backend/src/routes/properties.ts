@@ -102,7 +102,32 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
-        const actorId = request.user!.id;
+        // Exigir actor transaccional válido antes de registrar auditoría de dominio
+        const actorUsuarioId = request.user?.usuarioId;
+        if (!actorUsuarioId) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'La cuenta no tiene una identidad de dominio vinculada para realizar acciones auditables de propietarios.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        // Verificar que el actor exista efectivamente como Usuario en la base de datos de dominio
+        const actorDomain = await prisma.usuario.findUnique({
+          where: { id: actorUsuarioId },
+        });
+
+        if (!actorDomain || !actorDomain.activo) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'El actor transaccional no existe o no se encuentra activo en el dominio.',
+              requestId: request.id,
+            },
+          });
+        }
 
         const createdPropietario = await prisma.$transaction(async (tx) => {
           const usuario = await tx.usuario.create({
@@ -129,7 +154,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             entidad: 'Usuario',
             entidadId: usuario.id,
             accion: 'CREAR_PROPIETARIO',
-            actor: actorId,
+            actor: actorUsuarioId,
             motivo: 'Registro de nuevo propietario de dominio',
             detalles: {
               nombre: usuario.nombre,
