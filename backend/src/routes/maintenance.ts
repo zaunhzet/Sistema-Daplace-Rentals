@@ -249,6 +249,32 @@ export function registerMaintenanceRoutes(prisma: PrismaClient) {
             },
           });
 
+          if (asignadoAId) {
+            await tx.notificacionInterna.upsert({
+              where: { idempotencyKey: `notif-orden-creada-${order.id}-${asignadoAId}` },
+              create: {
+                idempotencyKey: `notif-orden-creada-${order.id}-${asignadoAId}`,
+                tipo: 'ORDEN_TRABAJO_ASIGNADA',
+                estado: 'PENDIENTE',
+                titulo: `Nueva orden de trabajo asignada: ${titulo.trim()}`,
+                mensaje: `Se le ha asignado la orden "${titulo.trim()}" en la propiedad "${propiedad.nombre}". Prioridad: ${prioridad}. Tipo: ${tipo}.`,
+                usuarioId: asignadoAId,
+                ordenTrabajoId: order.id,
+                propiedadId: order.propiedadId,
+                reservaId: order.reservaId,
+                metadata: {
+                  ordenId: order.id,
+                  titulo: order.titulo,
+                  tipo: order.tipo,
+                  prioridad: order.prioridad,
+                  estado: order.estado,
+                  propiedadNombre: propiedad.nombre,
+                },
+              },
+              update: {},
+            });
+          }
+
           await recordAuditEvent(tx, {
             entidad: 'OrdenTrabajo',
             entidadId: order.id,
@@ -383,6 +409,32 @@ export function registerMaintenanceRoutes(prisma: PrismaClient) {
               await tx.propiedad.update({
                 where: { id: reserva.propiedadId },
                 data: { estadoOperativo: 'EN_MANTENIMIENTO' },
+              });
+            }
+            // HU-17: Notificación interna al operario si se le asignó la orden derivada de salida
+            if (ordenCreada && asignadoAId) {
+              await tx.notificacionInterna.upsert({
+                where: { idempotencyKey: `notif-orden-checkout-${ordenCreada.id}-${asignadoAId}` },
+                create: {
+                  idempotencyKey: `notif-orden-checkout-${ordenCreada.id}-${asignadoAId}`,
+                  tipo: 'ORDEN_TRABAJO_ASIGNADA',
+                  estado: 'PENDIENTE',
+                  titulo: `Orden de trabajo por check-out asignada: ${ordenCreada.titulo}`,
+                  mensaje: `Se le ha asignado trabajo post-checkout en "${reserva.propiedad.nombre}". Prioridad: ${ordenCreada.prioridad}. Tipo: ${ordenCreada.tipo}.`,
+                  usuarioId: asignadoAId,
+                  ordenTrabajoId: ordenCreada.id,
+                  propiedadId: reserva.propiedadId,
+                  reservaId: reserva.id,
+                  metadata: {
+                    ordenId: ordenCreada.id,
+                    titulo: ordenCreada.titulo,
+                    tipo: ordenCreada.tipo,
+                    prioridad: ordenCreada.prioridad,
+                    estado: ordenCreada.estado,
+                    propiedadNombre: reserva.propiedad.nombre,
+                  },
+                },
+                update: {},
               });
             }
           }
@@ -631,7 +683,36 @@ export function registerMaintenanceRoutes(prisma: PrismaClient) {
             },
           });
 
-          // HU-17: Aviso interno de asignación registrado en auditoría y outbox del sistema
+          // HU-17: Aviso interno persistente e idempotente al trabajador asignado
+          await tx.notificacionInterna.upsert({
+            where: { idempotencyKey: `notif-orden-reasignada-${id}-${asignadoAId}` },
+            create: {
+              idempotencyKey: `notif-orden-reasignada-${id}-${asignadoAId}`,
+              tipo: 'ORDEN_TRABAJO_ASIGNADA',
+              estado: 'PENDIENTE',
+              titulo: `Orden de trabajo asignada: ${orden.titulo}`,
+              mensaje: `Se le ha asignado la orden "${orden.titulo}". Prioridad: ${orden.prioridad}. Tipo: ${orden.tipo}.`,
+              usuarioId: asignadoAId,
+              ordenTrabajoId: id,
+              propiedadId: orden.propiedadId,
+              reservaId: orden.reservaId,
+              metadata: {
+                ordenId: id,
+                titulo: orden.titulo,
+                tipo: orden.tipo,
+                prioridad: orden.prioridad,
+                estado: orden.estado === 'PENDIENTE' ? 'EN_PROGRESO' : orden.estado,
+                operarioNombre: operario.nombre,
+              },
+            },
+            update: {
+              estado: 'PENDIENTE',
+              leidaEn: null,
+              atendidaEn: null,
+            },
+          });
+
+          // HU-17: Auditoría de asignación
           await recordAuditEvent(tx, {
             entidad: 'OrdenTrabajo',
             entidadId: id,

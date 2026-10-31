@@ -131,6 +131,7 @@ model Usuario {
   contratosValidados   ContratoReserva[]    @relation("ContratosValidados")
   trabajosAsignados    OrdenTrabajo[]       @relation("TrabajosAsignados")
   trabajosCreados      OrdenTrabajo[]       @relation("TrabajosCreados")
+  notificacionesInternas NotificacionInterna[] @relation("NotificacionesUsuario")
   user                 User?
 
   @@map("usuarios")
@@ -154,6 +155,7 @@ model Propiedad {
   reservas           Reserva[]
   gastos             Gasto[]
   ordenesTrabajo     OrdenTrabajo[]
+  notificacionesInternas NotificacionInterna[]
 
   @@index([propietarioId])
   @@index([estadoOperativo, activa])
@@ -210,6 +212,7 @@ model Reserva {
   contratos             ContratoReserva[]
   avisos                AvisoReserva[]
   ordenesTrabajo        OrdenTrabajo[]
+  notificacionesInternas NotificacionInterna[]
 
   @@index([propiedadId, ingreso, salida])
   @@index([huespedId])
@@ -562,10 +565,52 @@ model OrdenTrabajo {
   reserva          Reserva?                 @relation(fields: [reservaId], references: [id], onDelete: SetNull)
   asignadoA        Usuario?                 @relation("TrabajosAsignados", fields: [asignadoAId], references: [id], onDelete: SetNull)
   creadoPor        Usuario                  @relation("TrabajosCreados", fields: [creadoPorId], references: [id], onDelete: Restrict)
+  notificacionesInternas NotificacionInterna[]
 
   @@index([propiedadId])
   @@index([reservaId])
   @@index([asignadoAId])
   @@index([estado])
   @@map("ordenes_trabajo")
+}
+
+enum TipoNotificacionInterna {
+  NUEVA_RESERVA
+  ORDEN_TRABAJO_ASIGNADA
+}
+
+enum EstadoNotificacionInterna {
+  PENDIENTE
+  LEIDA
+  ATENDIDA
+}
+
+model NotificacionInterna {
+  id             String                    @id @default(uuid())
+  tipo           TipoNotificacionInterna
+  estado         EstadoNotificacionInterna @default(PENDIENTE)
+  titulo         String
+  mensaje        String
+  usuarioId      String?
+  reservaId      String?
+  ordenTrabajoId String?
+  propiedadId    String?
+  idempotencyKey String?                   @unique
+  metadata       Json?
+  leidaEn        DateTime?                 @db.Timestamptz(3)
+  atendidaEn     DateTime?                 @db.Timestamptz(3)
+  creadoEn       DateTime                  @default(now()) @db.Timestamptz(3)
+  actualizadoEn  DateTime                  @updatedAt @db.Timestamptz(3)
+
+  usuario        Usuario?                  @relation("NotificacionesUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  reserva        Reserva?                  @relation(fields: [reservaId], references: [id], onDelete: Cascade)
+  ordenTrabajo   OrdenTrabajo?             @relation(fields: [ordenTrabajoId], references: [id], onDelete: Cascade)
+  propiedad      Propiedad?                @relation(fields: [propiedadId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([tipo, estado])
+  @@index([creadoEn])
+  @@index([reservaId])
+  @@index([ordenTrabajoId])
+  @@map("notificaciones_internas")
 }

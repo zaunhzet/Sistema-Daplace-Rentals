@@ -88,6 +88,7 @@ export async function safeResetTestDatabase(databaseUrl: string) {
       TRUNCATE TABLE
         "auditoria_eventos",
         "avisos_reserva",
+        "notificaciones_internas",
         "contratos_reserva",
         "evidencias_pago",
         "sustentos_gasto",
@@ -124,6 +125,7 @@ export async function safeResetDatabase(options: ResetOptions = {}) {
       TRUNCATE TABLE
         "auditoria_eventos",
         "avisos_reserva",
+        "notificaciones_internas",
         "contratos_reserva",
         "evidencias_pago",
         "sustentos_gasto",

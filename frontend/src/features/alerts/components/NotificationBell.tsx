@@ -1,5 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, Clock, AlertTriangle, CheckCircle2, X } from 'lucide-react';
+import {
+  Bell,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  CalendarCheck,
+  Wrench,
+  ExternalLink,
+  X,
+} from 'lucide-react';
 import { alertService } from '../services/alertService';
 import type { InternalAlert } from '../types';
 
@@ -49,11 +58,23 @@ export const NotificationBell: React.FC = () => {
     try {
       await alertService.attendAlert(id);
       setAlerts((prev) =>
-        prev.map((a) => (a.id === id ? { ...a, estado: 'ENVIADO', enviadoEn: new Date().toISOString() } : a))
+        prev.map((a) =>
+          a.id === id
+            ? { ...a, estado: 'ATENDIDA', atendidaEn: new Date().toISOString() }
+            : a
+        )
       );
       setPendingCount((prev) => Math.max(0, prev - 1));
     } catch {
       // Silencioso
+    }
+  };
+
+  const handleNavigate = (alert: InternalAlert) => {
+    if (alert.reservaId) {
+      window.location.href = `/reservas?id=${encodeURIComponent(alert.reservaId)}`;
+    } else if (alert.ordenTrabajoId) {
+      window.location.href = '/mantenimiento';
     }
   };
 
@@ -103,46 +124,99 @@ export const NotificationBell: React.FC = () => {
               <p className="p-6 text-center text-xs text-stone-400">No hay alertas registradas.</p>
             ) : (
               alerts.map((alert) => {
-                const isPending = alert.estado === 'PROGRAMADO' || alert.estado === 'PENDIENTE';
+                const isPending =
+                  alert.estado === 'PROGRAMADO' ||
+                  alert.estado === 'PENDIENTE' ||
+                  alert.estado === 'LEIDA';
+                const isNewReservation = alert.tipoAviso === 'NUEVA_RESERVA';
+                const isWorkOrder = alert.tipoAviso === 'ORDEN_TRABAJO_ASIGNADA';
                 const isExpiring = alert.tipoAviso === 'EXPIRACION_PROXIMA';
+
+                const propName =
+                  alert.reserva?.propiedadNombre ||
+                  alert.ordenTrabajo?.propiedadNombre ||
+                  'Propiedad';
 
                 return (
                   <div
                     key={alert.id}
-                    className={`p-3.5 transition-colors hover:bg-stone-50 ${
+                    onClick={() => handleNavigate(alert)}
+                    className={`p-3.5 transition-colors cursor-pointer hover:bg-stone-50 ${
                       isPending ? 'bg-amber-50/40' : 'bg-white'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-1.5">
-                        {isExpiring ? (
+                        {isNewReservation ? (
+                          <CalendarCheck className="h-4 w-4 text-indigo-600 flex-shrink-0" />
+                        ) : isWorkOrder ? (
+                          <Wrench className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                        ) : isExpiring ? (
                           <Clock className="h-4 w-4 text-amber-600 flex-shrink-0" />
                         ) : (
                           <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0" />
                         )}
-                        <span className={`text-xs font-semibold ${isExpiring ? 'text-amber-800' : 'text-rose-800'}`}>
-                          {isExpiring ? 'Vencimiento Próximo' : 'Solicitud Expirada'}
+                        <span
+                          className={`text-xs font-semibold ${
+                            isNewReservation
+                              ? 'text-indigo-800'
+                              : isWorkOrder
+                              ? 'text-amber-800'
+                              : isExpiring
+                              ? 'text-amber-800'
+                              : 'text-rose-800'
+                          }`}
+                        >
+                          {isNewReservation
+                            ? 'Nueva Reserva'
+                            : isWorkOrder
+                            ? 'Trabajo Asignado'
+                            : isExpiring
+                            ? 'Vencimiento Próximo'
+                            : 'Solicitud Expirada'}
                         </span>
                       </div>
                       <span className="text-[10px] text-stone-400">
-                        {new Date(alert.programadoPara).toLocaleTimeString('es-PE', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {new Date(alert.programadoPara || alert.creadoEn).toLocaleTimeString(
+                          'es-PE',
+                          {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          }
+                        )}
                       </span>
                     </div>
 
                     <p className="mt-1 text-xs font-medium text-stone-800">
-                      {alert.reserva.propiedadNombre}
-                    </p>
-                    <p className="text-xs text-stone-500">
-                      Huésped: {alert.reserva.huespedNombre} • Monto: {alert.reserva.moneda} {alert.reserva.montoAcordado}
+                      {alert.titulo || propName}
                     </p>
 
+                    {alert.reserva && (
+                      <p className="text-xs text-stone-500">
+                        Huésped: {alert.reserva.huespedNombre} • Monto: {alert.reserva.moneda}{' '}
+                        {alert.reserva.montoAcordado}
+                      </p>
+                    )}
+
+                    {alert.ordenTrabajo && (
+                      <p className="text-xs text-stone-500">
+                        Propiedad: {alert.ordenTrabajo.propiedadNombre} • Prioridad:{' '}
+                        {alert.ordenTrabajo.prioridad} • Tipo: {alert.ordenTrabajo.tipo}
+                      </p>
+                    )}
+
+                    {!alert.reserva && !alert.ordenTrabajo && alert.mensaje && (
+                      <p className="text-xs text-stone-500">{alert.mensaje}</p>
+                    )}
+
                     <div className="mt-2 flex items-center justify-between">
-                      <span className="text-[10px] text-stone-400">
-                        Reserva: {alert.reservaId}
-                      </span>
+                      <div className="flex items-center gap-1.5 text-[10px] text-stone-400">
+                        {alert.reservaId && <span>Reserva: {alert.reservaId.slice(0, 8)}</span>}
+                        {alert.ordenTrabajoId && (
+                          <span>Orden: {alert.ordenTrabajoId.slice(0, 8)}</span>
+                        )}
+                        <ExternalLink className="h-3 w-3 text-stone-400" />
+                      </div>
                       {isPending && (
                         <button
                           onClick={(e) => handleAttend(alert.id, e)}
