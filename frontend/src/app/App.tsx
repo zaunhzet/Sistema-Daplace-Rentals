@@ -11,6 +11,9 @@ import { CalendarPage } from '../features/calendar';
 import { PaymentsPage } from '../features/payments';
 import { GuaranteesPage } from '../features/guarantees';
 import { ExpensesPage } from '../features/expenses';
+import { ReportsPage } from '../features/reports';
+import { StaffPage } from '../features/staff';
+import { MaintenancePage } from '../features/maintenance';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { ClientPortalPage } from './ClientPortalPage';
@@ -172,7 +175,7 @@ function AppRoutes() {
           path="/reportes"
           element={
             <ProtectedRoute path="/reportes">
-              <PendingModuleView path="/reportes" />
+              <ReportsPage />
             </ProtectedRoute>
           }
         />
@@ -180,7 +183,7 @@ function AppRoutes() {
           path="/personal"
           element={
             <ProtectedRoute path="/personal">
-              <PendingModuleView path="/personal" />
+              <StaffPage />
             </ProtectedRoute>
           }
         />
@@ -188,7 +191,7 @@ function AppRoutes() {
           path="/mantenimiento"
           element={
             <ProtectedRoute path="/mantenimiento">
-              <PendingModuleView path="/mantenimiento" />
+              <MaintenancePage />
             </ProtectedRoute>
           }
         />

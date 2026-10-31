@@ -129,6 +129,8 @@ model Usuario {
   evidenciasPagoRegistradas EvidenciaPago[] @relation("EvidenciasPagoRegistradas")
   contratosRegistrados ContratoReserva[]    @relation("ContratosRegistrados")
   contratosValidados   ContratoReserva[]    @relation("ContratosValidados")
+  trabajosAsignados    OrdenTrabajo[]       @relation("TrabajosAsignados")
+  trabajosCreados      OrdenTrabajo[]       @relation("TrabajosCreados")
   user                 User?
 
   @@map("usuarios")
@@ -151,6 +153,7 @@ model Propiedad {
   propietario        Usuario           @relation(fields: [propietarioId], references: [id], onDelete: Restrict)
   reservas           Reserva[]
   gastos             Gasto[]
+  ordenesTrabajo     OrdenTrabajo[]
 
   @@index([propietarioId])
   @@index([estadoOperativo, activa])
@@ -206,6 +209,7 @@ model Reserva {
   garantia              Garantia?
   contratos             ContratoReserva[]
   avisos                AvisoReserva[]
+  ordenesTrabajo        OrdenTrabajo[]
 
   @@index([propiedadId, ingreso, salida])
   @@index([huespedId])
@@ -512,4 +516,56 @@ model AuthSession {
   @@index([tokenHash])
   @@index([family])
   @@map("auth_sessions")
+}
+
+enum TipoTrabajoMantenimiento {
+  LIMPIEZA
+  REPARACION
+  INSPECCION
+  PINTURA
+  OTRO
+}
+
+enum PrioridadTrabajo {
+  BAJA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum EstadoOrdenTrabajo {
+  PENDIENTE
+  EN_PROGRESO
+  COMPLETADA
+  CANCELADA
+}
+
+model OrdenTrabajo {
+  id               String                   @id @default(uuid())
+  propiedadId      String
+  reservaId        String?
+  titulo           String
+  descripcion      String
+  tipo             TipoTrabajoMantenimiento @default(INSPECCION)
+  prioridad        PrioridadTrabajo         @default(MEDIA)
+  estado           EstadoOrdenTrabajo       @default(PENDIENTE)
+  asignadoAId      String?
+  costoEstimado    Decimal?                 @db.Decimal(10, 2)
+  costoReal        Decimal?                 @db.Decimal(10, 2)
+  notasResolucion  String?
+  creadoPorId      String
+  creadoEn         DateTime                 @default(now())
+  actualizadoEn    DateTime                 @updatedAt
+  completadoEn     DateTime?
+
+  propiedad        Propiedad                @relation(fields: [propiedadId], references: [id], onDelete: Restrict)
+  reserva          Reserva?                 @relation(fields: [reservaId], references: [id], onDelete: SetNull)
+  asignadoA        Usuario?                 @relation("TrabajosAsignados", fields: [asignadoAId], references: [id], onDelete: SetNull)
+  creadoPor        Usuario                  @relation("TrabajosCreados", fields: [creadoPorId], references: [id], onDelete: Restrict)
+
+  @@index([propiedadId])
+  @@index([reservaId])
+  @@index([asignadoAId])
+  @@index([estado])
+  @@map("ordenes_trabajo")
 }

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router';
-import { Menu, ChevronRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Menu, ChevronRight, AlertCircle, Loader2, Shield } from 'lucide-react';
 import { Sidebar, NAVIGATION_ITEMS } from '../shared/navigation';
 import { useAuth } from '../features/auth';
 import { canAccessPath } from '../shared/auth/permissions';
+import { NotificationBell } from '../features/alerts';
+import { AuditConsoleModal } from '../features/audit';
 
 export const AdminLayout: React.FC = () => {
   const location = useLocation();
@@ -13,6 +15,7 @@ export const AdminLayout: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [showAuditModal, setShowAuditModal] = useState<boolean>(false);
 
   // Filtrar ítems de navegación según el rol del usuario autenticado
   const userRole = session.user?.rol;
@@ -115,6 +118,24 @@ export const AdminLayout: React.FC = () => {
           <div className="flex items-center gap-3 shrink-0">
             {session.isAuthenticated ? (
               <div className="flex items-center gap-2">
+                {/* Botón de Auditoría para Administrador (HU-20) */}
+                {session.user?.rol === 'ADMINISTRADOR' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAuditModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-semibold text-stone-700 transition hover:bg-stone-50 hover:text-stone-900 cursor-pointer"
+                    title="Abrir bitácora central de auditoría"
+                  >
+                    <Shield size={14} className="text-indigo-600" />
+                    <span className="hidden md:inline">Auditoría</span>
+                  </button>
+                )}
+
+                {/* Campana de Notificaciones y Alertas (HU-11) */}
+                {(session.user?.rol === 'ADMINISTRADOR' || session.user?.rol === 'OPERADOR') && (
+                  <NotificationBell />
+                )}
+
                 <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
                   <span className="size-1.5 rounded-full bg-emerald-600" />
                   {session.user?.nombre} ({session.user?.rol})
@@ -161,6 +182,9 @@ export const AdminLayout: React.FC = () => {
           <Outlet />
         </main>
       </div>
+
+      {/* Modal Bitácora Central de Auditoría (HU-20) */}
+      <AuditConsoleModal isOpen={showAuditModal} onClose={() => setShowAuditModal(false)} />
     </div>
   );
 };
