@@ -18,6 +18,7 @@ import { registerReportsRoutes } from '../routes/reports.js';
 import { registerAuditRoutes } from '../routes/audit.js';
 import { registerAlertsRoutes } from '../routes/alerts.js';
 import { registerStaffRoutes } from '../routes/staff.js';
+import { registerMaintenanceRoutes } from '../routes/maintenance.js';
 import { authenticateRequestHook } from '../shared/auth.js';
 
 import type { PoliticaAdelantoProvider } from '../modules/reservations/confirmationRequirements.js';
@@ -363,6 +364,7 @@ export function buildApp(
     app.register(registerAuditRoutes(prisma));
     app.register(registerAlertsRoutes(prisma));
     app.register(registerStaffRoutes(prisma));
+    app.register(registerMaintenanceRoutes(prisma));
   }
 
   return app;
