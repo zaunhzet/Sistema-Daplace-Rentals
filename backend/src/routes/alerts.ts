@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import type { PrismaClient } from '../generated/prisma/client.js';
-import { requireAuth } from '../shared/auth.js';
+import { requireAuth, resolveDomainActorFromDb } from '../shared/auth.js';
 
 export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
   return async (app) => {
@@ -13,32 +13,31 @@ export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
     }>(
       '/api/alertas',
       { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
-      async (request, _reply) => {
+      async (request, reply) => {
         let limit = Number(request.query.limite) || 30;
         if (limit < 1) limit = 1;
         if (limit > 100) limit = 100;
 
         const estadoFiltro = request.query.estado;
-        const userEmail = request.user?.email;
         const userRole = request.user?.rol;
+        const isOperator = userRole === 'OPERADOR';
 
-        // Resolver identidad de dominio del operador si aplica
-        let domainUserId: string | null = null;
-        if (userEmail) {
-          const domainUser = await prisma.usuario.findFirst({
-            where: { email: userEmail, activo: true },
-            select: { id: true, rol: true },
-          });
-          domainUserId = domainUser?.id || null;
+        // Resolver identidad de dominio del operador si aplica (sin heurística de email)
+        let actorUsuarioId: string | null = null;
+        if (isOperator) {
+          actorUsuarioId = await resolveDomainActorFromDb(prisma, request, reply);
+          if (!actorUsuarioId) {
+            return;
+          }
         }
 
         // Filtro para notificaciones internas (HU-11 y HU-17)
         // Regla HU-17 (Req 5): OPERADOR solo ve avisos globales (usuarioId = null) o asignados a su propia identidad
         const notifWhere: any = {};
-        if (userRole === 'OPERADOR') {
+        if (isOperator) {
           notifWhere.OR = [
             { usuarioId: null },
-            ...(domainUserId ? [{ usuarioId: domainUserId }] : []),
+            { usuarioId: actorUsuarioId },
           ];
         }
 
@@ -238,7 +237,16 @@ export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
       async (request, reply) => {
         const { id } = request.params;
         const userRole = request.user?.rol;
-        const userEmail = request.user?.email;
+        const isOperator = userRole === 'OPERADOR';
+
+        // Si es OPERADOR, validar vínculo explícito de dominio activo
+        let actorUsuarioId: string | null = null;
+        if (isOperator) {
+          actorUsuarioId = await resolveDomainActorFromDb(prisma, request, reply);
+          if (!actorUsuarioId) {
+            return;
+          }
+        }
 
         // Comprobar primero en notificaciones internas
         const notif = await prisma.notificacionInterna.findUnique({
@@ -246,20 +254,15 @@ export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
         });
 
         if (notif) {
-          if (userRole === 'OPERADOR' && notif.usuarioId) {
-            const domainUser = await prisma.usuario.findFirst({
-              where: { email: userEmail, activo: true },
-              select: { id: true },
+          // Si es notificación privada, verificar estrictamente pertenencia
+          if (isOperator && notif.usuarioId && notif.usuarioId !== actorUsuarioId) {
+            return reply.status(403).send({
+              error: {
+                code: 'FORBIDDEN',
+                message: 'No está autorizado para atender notificaciones asignadas a otros colaboradores.',
+                requestId: request.id,
+              },
             });
-            if (domainUser && notif.usuarioId !== domainUser.id) {
-              return reply.status(403).send({
-                error: {
-                  code: 'FORBIDDEN',
-                  message: 'No está autorizado para atender notificaciones asignadas a otros colaboradores.',
-                  requestId: request.id,
-                },
-              });
-            }
           }
 
           const actualizada = await prisma.notificacionInterna.update({
@@ -317,7 +320,16 @@ export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
       async (request, reply) => {
         const { id } = request.params;
         const userRole = request.user?.rol;
-        const userEmail = request.user?.email;
+        const isOperator = userRole === 'OPERADOR';
+
+        // Si es OPERADOR, validar vínculo explícito de dominio activo
+        let actorUsuarioId: string | null = null;
+        if (isOperator) {
+          actorUsuarioId = await resolveDomainActorFromDb(prisma, request, reply);
+          if (!actorUsuarioId) {
+            return;
+          }
+        }
 
         const notif = await prisma.notificacionInterna.findUnique({
           where: { id },
@@ -333,20 +345,15 @@ export function registerAlertsRoutes(prisma: PrismaClient): FastifyPluginAsync {
           });
         }
 
-        if (userRole === 'OPERADOR' && notif.usuarioId) {
-          const domainUser = await prisma.usuario.findFirst({
-            where: { email: userEmail, activo: true },
-            select: { id: true },
+        // Si es notificación privada, verificar estrictamente pertenencia
+        if (isOperator && notif.usuarioId && notif.usuarioId !== actorUsuarioId) {
+          return reply.status(403).send({
+            error: {
+              code: 'FORBIDDEN',
+              message: 'No está autorizado para leer notificaciones asignadas a otros colaboradores.',
+              requestId: request.id,
+            },
           });
-          if (domainUser && notif.usuarioId !== domainUser.id) {
-            return reply.status(403).send({
-              error: {
-                code: 'FORBIDDEN',
-                message: 'No está autorizado para leer notificaciones asignadas a otros colaboradores.',
-                requestId: request.id,
-              },
-            });
-          }
         }
 
         const actualizada = await prisma.notificacionInterna.update({

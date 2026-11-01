@@ -20,6 +20,7 @@ describe('HU-CLOSE-01: HU-11 y HU-17 — Alertas Internas de Reserva y Asignaci�
   let op2UsuarioId: string;
   let propiedadId: string;
   let huespedId: string;
+  let passwordHash: string;
 
   before(async () => {
     db = createDatabase(testDbUrl);
@@ -42,7 +43,7 @@ describe('HU-CLOSE-01: HU-11 y HU-17 — Alertas Internas de Reserva y Asignaci�
 
   beforeEach(async () => {
     await safeResetTestDatabase(testDbUrl);
-    const passwordHash = await AuthService.hashPassword('PassSecure2026!');
+    passwordHash = await AuthService.hashPassword('PassSecure2026!');
 
     // 1. Admin Master
     const usrAdmin = await db.prisma.usuario.create({
@@ -641,6 +642,263 @@ describe('HU-CLOSE-01: HU-11 y HU-17 — Alertas Internas de Reserva y Asignaci�
       });
       assert.equal(notifEnDb?.estado, 'LEIDA');
       assert.ok(notifEnDb?.leidaEn instanceof Date);
+    });
+
+    describe('Seguridad y Validación Estricta de Identidad de Dominio (HU-11 y HU-17)', () => {
+      it('operador sin vínculo de dominio recibe 403 DOMAIN_IDENTITY_REQUIRED en GET, atender y leer', async () => {
+        await repository.createUser({
+          email: 'op-unlinked@daplace.pe',
+          passwordHash,
+          nombre: 'Operador Sin Vínculo',
+          rol: 'OPERADOR',
+          usuarioId: null,
+        });
+
+        const resLog = await app.inject({
+          method: 'POST',
+          url: '/auth/login',
+          payload: { email: 'op-unlinked@daplace.pe', password: 'PassSecure2026!' },
+        });
+        const unlinkedToken = JSON.parse(resLog.body).accessToken;
+
+        // GET /api/alertas
+        const resGet = await app.inject({
+          method: 'GET',
+          url: '/api/alertas',
+          headers: { authorization: `Bearer ${unlinkedToken}` },
+        });
+        assert.equal(resGet.statusCode, 403);
+        const errGet = JSON.parse(resGet.body);
+        assert.equal(errGet.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+        // POST /api/alertas/:id/atender
+        const resAtender = await app.inject({
+          method: 'POST',
+          url: '/api/alertas/dummy-notif-id/atender',
+          headers: { authorization: `Bearer ${unlinkedToken}` },
+        });
+        assert.equal(resAtender.statusCode, 403);
+        const errAtender = JSON.parse(resAtender.body);
+        assert.equal(errAtender.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+        // POST /api/alertas/:id/leer
+        const resLeer = await app.inject({
+          method: 'POST',
+          url: '/api/alertas/dummy-notif-id/leer',
+          headers: { authorization: `Bearer ${unlinkedToken}` },
+        });
+        assert.equal(resLeer.statusCode, 403);
+        const errLeer = JSON.parse(resLeer.body);
+        assert.equal(errLeer.error.code, 'DOMAIN_IDENTITY_REQUIRED');
+      });
+
+      it('operador con actor de dominio inactivo recibe 403 DOMAIN_IDENTITY_REQUIRED en GET, atender y leer', async () => {
+        const usrInactivo = await db.prisma.usuario.create({
+          data: {
+            id: 'usr-op-inactive-alerts',
+            nombre: 'Operador Inactivo',
+            email: 'op-inactive@daplace.pe',
+            rol: 'OPERADOR',
+            activo: false,
+          },
+        });
+
+        await repository.createUser({
+          email: 'op-inactive@daplace.pe',
+          passwordHash,
+          nombre: 'Operador Inactivo',
+          rol: 'OPERADOR',
+          usuarioId: usrInactivo.id,
+        });
+
+        const resLog = await app.inject({
+          method: 'POST',
+          url: '/auth/login',
+          payload: { email: 'op-inactive@daplace.pe', password: 'PassSecure2026!' },
+        });
+        const inactiveToken = JSON.parse(resLog.body).accessToken;
+
+        // GET /api/alertas
+        const resGet = await app.inject({
+          method: 'GET',
+          url: '/api/alertas',
+          headers: { authorization: `Bearer ${inactiveToken}` },
+        });
+        assert.equal(resGet.statusCode, 403);
+        assert.equal(JSON.parse(resGet.body).error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+        // POST /api/alertas/:id/atender
+        const resAtender = await app.inject({
+          method: 'POST',
+          url: '/api/alertas/dummy-notif-id/atender',
+          headers: { authorization: `Bearer ${inactiveToken}` },
+        });
+        assert.equal(resAtender.statusCode, 403);
+        assert.equal(JSON.parse(resAtender.body).error.code, 'DOMAIN_IDENTITY_REQUIRED');
+
+        // POST /api/alertas/:id/leer
+        const resLeer = await app.inject({
+          method: 'POST',
+          url: '/api/alertas/dummy-notif-id/leer',
+          headers: { authorization: `Bearer ${inactiveToken}` },
+        });
+        assert.equal(resLeer.statusCode, 403);
+        assert.equal(JSON.parse(resLeer.body).error.code, 'DOMAIN_IDENTITY_REQUIRED');
+      });
+
+      it('operador con email diferente entre User y Usuario pero vínculo válido accede a sus propias notificaciones y atiende globales', async () => {
+        // Usuario de dominio con email institucional
+        const usrDiff = await db.prisma.usuario.create({
+          data: {
+            id: 'usr-op-diff-alerts',
+            nombre: 'Operador Cuenta Diferente',
+            email: 'dominio.institucional@daplace.pe',
+            rol: 'OPERADOR',
+            activo: true,
+          },
+        });
+
+        // User de autenticación con email externo/personal
+        await repository.createUser({
+          email: 'login.externo@proveedor.com',
+          passwordHash,
+          nombre: 'Operador Cuenta Diferente',
+          rol: 'OPERADOR',
+          usuarioId: usrDiff.id,
+        });
+
+        const resLog = await app.inject({
+          method: 'POST',
+          url: '/auth/login',
+          payload: { email: 'login.externo@proveedor.com', password: 'PassSecure2026!' },
+        });
+        const diffToken = JSON.parse(resLog.body).accessToken;
+
+        // Crear notificación privada para este operador
+        const notifPropia = await db.prisma.notificacionInterna.create({
+          data: {
+            id: 'notif-diff-own-01',
+            tipo: 'ORDEN_TRABAJO_ASIGNADA',
+            estado: 'PENDIENTE',
+            titulo: 'Revisión privada operador diff',
+            mensaje: 'Mantenimiento preventivo',
+            usuarioId: usrDiff.id,
+            propiedadId,
+          },
+        });
+
+        // Crear notificación privada para otro operador (op2UsuarioId)
+        const notifAjena = await db.prisma.notificacionInterna.create({
+          data: {
+            id: 'notif-diff-alien-01',
+            tipo: 'ORDEN_TRABAJO_ASIGNADA',
+            estado: 'PENDIENTE',
+            titulo: 'Revisión ajena op2',
+            mensaje: 'Mantenimiento ajeno',
+            usuarioId: op2UsuarioId,
+            propiedadId,
+          },
+        });
+
+        // Crear notificación global (sin usuario asignado, HU-11)
+        const notifGlobal = await db.prisma.notificacionInterna.create({
+          data: {
+            id: 'notif-diff-global-01',
+            tipo: 'NUEVA_RESERVA',
+            estado: 'PENDIENTE',
+            titulo: 'Nueva Reserva Inmueble',
+            mensaje: 'Alerta operativa global',
+            usuarioId: null,
+            propiedadId,
+          },
+        });
+
+        // GET /api/alertas debe resolver por usuarioId sin fallar por email dispar
+        const resGet = await app.inject({
+          method: 'GET',
+          url: '/api/alertas',
+          headers: { authorization: `Bearer ${diffToken}` },
+        });
+        assert.equal(resGet.statusCode, 200);
+        const alerts = JSON.parse(resGet.body).data;
+
+        // Debe ver su propia notificación y la notificación global
+        assert.ok(alerts.some((a: any) => a.id === notifPropia.id));
+        assert.ok(alerts.some((a: any) => a.id === notifGlobal.id));
+
+        // NO debe ver la notificación ajena
+        assert.equal(alerts.some((a: any) => a.id === notifAjena.id), false);
+
+        // Puede leer su propia notificación
+        const resLeer = await app.inject({
+          method: 'POST',
+          url: `/api/alertas/${notifPropia.id}/leer`,
+          headers: { authorization: `Bearer ${diffToken}` },
+        });
+        assert.equal(resLeer.statusCode, 200);
+        assert.equal(JSON.parse(resLeer.body).estado, 'LEIDA');
+
+        // Puede atender la notificación global legítimamente
+        const resAtenderGlobal = await app.inject({
+          method: 'POST',
+          url: `/api/alertas/${notifGlobal.id}/atender`,
+          headers: { authorization: `Bearer ${diffToken}` },
+        });
+        assert.equal(resAtenderGlobal.statusCode, 200);
+        assert.equal(JSON.parse(resAtenderGlobal.body).estado, 'ATENDIDA');
+      });
+
+      it('acceso cruzado a notificación ajena devuelve 403 FORBIDDEN en atender y leer', async () => {
+        // Crear notificación asignada exclusivamente a Operador 2
+        const notifOp2Exclusiva = await db.prisma.notificacionInterna.create({
+          data: {
+            id: 'notif-op2-strict-forbidden',
+            tipo: 'ORDEN_TRABAJO_ASIGNADA',
+            estado: 'PENDIENTE',
+            titulo: 'Trabajo confidencial de gasfitería',
+            mensaje: 'Revisión técnica asignada a op2',
+            usuarioId: op2UsuarioId,
+            propiedadId,
+          },
+        });
+
+        // Operador 1 intenta marcar como leída la notificación de Operador 2
+        const resIntentoLeer = await app.inject({
+          method: 'POST',
+          url: `/api/alertas/${notifOp2Exclusiva.id}/leer`,
+          headers: { authorization: `Bearer ${operador1Token}` },
+        });
+        assert.equal(resIntentoLeer.statusCode, 403);
+        const errLeer = JSON.parse(resIntentoLeer.body);
+        assert.equal(errLeer.error.code, 'FORBIDDEN');
+        assert.equal(
+          errLeer.error.message,
+          'No está autorizado para leer notificaciones asignadas a otros colaboradores.',
+        );
+
+        // Operador 1 intenta marcar como atendida la notificación de Operador 2
+        const resIntentoAtender = await app.inject({
+          method: 'POST',
+          url: `/api/alertas/${notifOp2Exclusiva.id}/atender`,
+          headers: { authorization: `Bearer ${operador1Token}` },
+        });
+        assert.equal(resIntentoAtender.statusCode, 403);
+        const errAtender = JSON.parse(resIntentoAtender.body);
+        assert.equal(errAtender.error.code, 'FORBIDDEN');
+        assert.equal(
+          errAtender.error.message,
+          'No está autorizado para atender notificaciones asignadas a otros colaboradores.',
+        );
+
+        // Administrador sí puede atenderla administrativamente
+        const resAdminAtender = await app.inject({
+          method: 'POST',
+          url: `/api/alertas/${notifOp2Exclusiva.id}/atender`,
+          headers: { authorization: `Bearer ${adminToken}` },
+        });
+        assert.equal(resAdminAtender.statusCode, 200);
+        assert.equal(JSON.parse(resAdminAtender.body).estado, 'ATENDIDA');
+      });
     });
   });
 });
