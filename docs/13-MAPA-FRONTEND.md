@@ -21,9 +21,10 @@
 | `/catalogo` | Catálogo Público de Propiedades | Público | **André** | **FEATURE_FLAG** | RF01 / HU-01 | Vista pública con filtro en tiempo real. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
 | `/solicitar-reserva` | Solicitud Pública de Reserva | Público | **André** | **FEATURE_FLAG** | RF01, RF02 / HU-01, HU-02 | Formulario público de reserva. Activa solo con `VITE_ENABLE_PUBLIC_BOOKING=true`. |
 | `/dashboard` | Dashboard Principal | `ADMINISTRADOR` | **Diego** | *PENDIENTE (Placeholder)* | RF09 / HU-08 | Resumen general y KPIs operativos (muestra `PendingModuleView`). |
-| `/reportes` | Reportes de Liquidación | `ADMINISTRADOR` | **Diego / André** | *PENDIENTE (P0 Demo)* | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible (muestra `PendingModuleView`). |
-| `/personal` | Personal y Cuentas | `ADMINISTRADOR` | **Diego** | *PARCIAL (P1)* | RF09 / HU-19 | Cuentas gestionadas vía script `seed-dev.ts` (pantalla muestra `PendingModuleView`). |
-| `/mantenimiento` | Mantenimiento y Salidas | `ADMINISTRADOR` | **Compartido** | *PENDIENTE (P1)* | RF07, RF13 / HU-10, HU-14 | Registro de check-out y trabajos de campo (muestra `PendingModuleView`). |
+| `/reportes` | Reportes de Liquidación | `ADMINISTRADOR`, `PROPIETARIO` | **André** | **COMPLETO_VERIFICADO** | RF08, RF12 / HU-07, HU-12 | Liquidaciones por propiedad y período con desglose reproducible, protección multi-moneda y exportación CSV. |
+| `/personal` | Personal y Cuentas | `ADMINISTRADOR` | **André** | **COMPLETO_VERIFICADO** | RF09 / HU-19 | Gestión de operadores internos, alta, baja y cambio de rol con sincronización User/Usuario. |
+| `/mantenimiento` | Mantenimiento y Salidas | `ADMINISTRADOR`, `OPERADOR` | **André** | **COMPLETO_VERIFICADO** | RF07, RF13, RF15, RF16 / HU-10, HU-14, HU-16, HU-17 | Tablero operativo de órdenes de trabajo, check-out de inspección y avisos a colaboradores. |
+
 
 ---
 

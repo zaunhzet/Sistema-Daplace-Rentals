@@ -12,17 +12,17 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
     '/pagos',
     '/garantias',
     '/gastos',
+    '/reportes',
+    '/mantenimiento',
+    '/personal',
   ];
 
   const RESERVED_PENDING_ROUTES = [
     '/dashboard',
-    '/reportes',
     '/login',
-    '/personal',
-    '/mantenimiento',
   ];
 
-  it('all 7 operational routes are registered and marked DISPONIBLE in the catalog', () => {
+  it('all 10 operational routes are registered and marked DISPONIBLE in the catalog', () => {
     for (const route of OPERATIONAL_ROUTES) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === route);
       assert.ok(item, `Route ${route} must exist in NAVIGATION_ITEMS`);
@@ -31,12 +31,13 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
     }
   });
 
-  it('all 4 pending business routes in the sidebar are marked PENDIENTE', () => {
-    const businessPending = ['/dashboard', '/reportes', '/personal', '/mantenimiento'];
+  it('the pending business route in the sidebar (/dashboard) is marked PENDIENTE', () => {
+    const businessPending = ['/dashboard'];
     for (const route of businessPending) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === route);
       assert.ok(item, `Route ${route} must exist in NAVIGATION_ITEMS`);
       assert.equal(item?.status, 'PENDIENTE', `Route ${route} should have status PENDIENTE`);
+      assert.equal(item?.responsible, 'Diego', `Route ${route} is assigned to Diego`);
     }
   });
 
@@ -52,7 +53,7 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
       assert.ok(item.icon, `Route ${route} must have an icon`);
       assert.ok(item.description && item.description.length > 10, `Route ${route} must have descriptive text`);
       assert.ok(
-        ['Gestión Inmobiliaria', 'Finanzas'].includes(item.group),
+        ['Gestión Inmobiliaria', 'Finanzas', 'Operaciones'].includes(item.group),
         `Route ${route} must belong to a valid business group`,
       );
     }
@@ -88,12 +89,23 @@ describe('Application Routing & Navigation Integration (UI-INTEGRATION-001)', ()
     });
 
     it('OPERADOR has access to operations and finance, but not executive modules', () => {
-      for (const route of OPERATIONAL_ROUTES) {
+      const operatorAllowed = [
+        '/propiedades',
+        '/huespedes',
+        '/reservas',
+        '/calendario',
+        '/pagos',
+        '/garantias',
+        '/gastos',
+        '/mantenimiento',
+      ];
+      for (const route of operatorAllowed) {
         assert.equal(canAccessPath('OPERADOR', route), true, `Operador must access ${route}`);
       }
       assert.equal(canAccessPath('OPERADOR', '/dashboard'), false);
       assert.equal(canAccessPath('OPERADOR', '/reportes'), false);
       assert.equal(canAccessPath('OPERADOR', '/personal'), false);
+      assert.equal(hasPermission('OPERADOR', 'view:maintenance'), true);
       assert.equal(hasPermission('OPERADOR', 'manage:properties'), true);
       assert.equal(hasPermission('OPERADOR', 'manage:owners'), true);
     });

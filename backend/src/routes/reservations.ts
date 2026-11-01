@@ -560,7 +560,33 @@ export function registerReservationsRoutes(
               });
             }
 
-            // G. Auditoría atómica en la misma transacción
+            // G. Alerta interna de nueva reserva transaccional e idempotente (HU-11)
+            await tx.notificacionInterna.upsert({
+              where: { idempotencyKey: `notif-reserva-creada-${created.id}` },
+              create: {
+                idempotencyKey: `notif-reserva-creada-${created.id}`,
+                tipo: 'NUEVA_RESERVA',
+                estado: 'PENDIENTE',
+                titulo: `Nueva reserva ${created.id.slice(0, 8)} registrada`,
+                mensaje: `Reserva para ${created.propiedad.nombre} del ${ingreso} al ${salida} (${created.huesped.nombreCompleto})`,
+                usuarioId: null, // Visible para todo el personal operativo autorizado (ADMIN y OPERADOR)
+                reservaId: created.id,
+                propiedadId: created.propiedadId,
+                metadata: {
+                  origen: created.origen,
+                  noches: created.noches,
+                  montoAcordado: Number(created.montoAcordado),
+                  moneda: created.moneda,
+                  huespedNombre: created.huesped.nombreCompleto,
+                  propiedadNombre: created.propiedad.nombre,
+                  ingreso,
+                  salida,
+                },
+              },
+              update: {},
+            });
+
+            // H. Auditoría atómica en la misma transacción
             await recordAuditEvent(tx, {
               entidad: 'Reserva',
               entidadId: created.id,

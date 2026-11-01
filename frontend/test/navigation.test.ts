@@ -30,7 +30,7 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
     assert.equal(loginItem, undefined, 'Login should not be a navigation business item');
   });
 
-  it('marks Propiedades, Huéspedes, Reservas, Calendario, Pagos, Garantías and Gastos as DISPONIBLE', () => {
+  it('marks all 10 completed modules as DISPONIBLE with responsible André', () => {
     const availablePaths = [
       '/propiedades',
       '/huespedes',
@@ -39,6 +39,9 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
       '/pagos',
       '/garantias',
       '/gastos',
+      '/reportes',
+      '/mantenimiento',
+      '/personal',
     ];
     for (const path of availablePaths) {
       const item = NAVIGATION_ITEMS.find((it) => it.path === path);
@@ -48,7 +51,7 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
     }
   });
 
-  it('marks remaining routes as PENDIENTE without simulating non-existent features', () => {
+  it('marks Dashboard as PENDIENTE while displaying PendingModuleView', () => {
     const availablePaths = [
       '/propiedades',
       '/huespedes',
@@ -57,15 +60,18 @@ describe('Navigation Catalog — Unit Tests (UI-NAV-001)', () => {
       '/pagos',
       '/garantias',
       '/gastos',
+      '/reportes',
+      '/mantenimiento',
+      '/personal',
     ];
     const pendingItems = NAVIGATION_ITEMS.filter((it) => !availablePaths.includes(it.path));
 
-    assert.equal(pendingItems.length, 4);
-    for (const item of pendingItems) {
-      assert.equal(item.status, 'PENDIENTE', `Item ${item.name} should be PENDIENTE`);
-      assert.ok(item.description.length > 5);
-      assert.ok(item.responsible);
-    }
+    assert.equal(pendingItems.length, 1);
+    const dashboardItem = pendingItems[0];
+    assert.equal(dashboardItem.path, '/dashboard');
+    assert.equal(dashboardItem.status, 'PENDIENTE', 'Dashboard should be PENDIENTE');
+    assert.ok(dashboardItem.description.length > 5);
+    assert.equal(dashboardItem.responsible, 'Diego');
   });
 
   it('groups items into valid architectural groups', () => {

@@ -88,4 +88,15 @@ describe('Maintenance & Work Orders Module (HU-10, HU-14, HU-16, HU-17) — Fron
     assert.equal(updated.asignadoA.id, 'usr-op-02');
     assert.equal(updated.estado, 'EN_PROGRESO');
   });
+
+  it('6. HU-17: OPERADOR cuenta con permiso view:maintenance para consultar y acceder a /mantenimiento', async () => {
+    const { hasPermission, canAccessPath } = await import('../src/shared/auth/permissions');
+
+    assert.equal(hasPermission('OPERADOR', 'view:maintenance'), true);
+    assert.equal(canAccessPath('OPERADOR', '/mantenimiento'), true);
+
+    // PROPIETARIO no tiene permiso sobre el módulo de mantenimiento
+    assert.equal(hasPermission('PROPIETARIO', 'view:maintenance'), false);
+    assert.equal(canAccessPath('PROPIETARIO', '/mantenimiento'), false);
+  });
 });

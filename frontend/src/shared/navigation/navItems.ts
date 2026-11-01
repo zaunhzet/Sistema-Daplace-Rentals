@@ -112,9 +112,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/reportes',
     icon: BarChart3,
     description: 'Liquidaciones por propiedad y balance de períodos reproducibles',
-    status: 'PENDIENTE',
-    responsible: 'Diego',
+    status: 'DISPONIBLE',
+    responsible: 'André',
     group: 'Finanzas',
+    badge: 'Listo',
   },
 
   // Grupo: Operaciones
@@ -124,9 +125,10 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/mantenimiento',
     icon: Wrench,
     description: 'Inspecciones post-salida y asignación de órdenes de trabajo',
-    status: 'PENDIENTE',
-    responsible: 'Compartido',
+    status: 'DISPONIBLE',
+    responsible: 'André',
     group: 'Operaciones',
+    badge: 'Listo',
   },
   {
     id: 'nav-personal',
@@ -134,8 +136,9 @@ export const NAVIGATION_ITEMS: NavigationItem[] = [
     path: '/personal',
     icon: UserCog,
     description: 'Gestión de operadores internos y control de accesos',
-    status: 'PENDIENTE',
-    responsible: 'Diego',
+    status: 'DISPONIBLE',
+    responsible: 'André',
     group: 'Operaciones',
+    badge: 'Listo',
   },
 ];

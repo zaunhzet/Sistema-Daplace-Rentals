@@ -61,6 +61,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, readonly AppPermission[]> = {
     'view:payments',
     'view:guarantees',
     'view:expenses',
+    'view:maintenance',
     'manage:properties',
     'manage:owners',
     'manage:guests',
