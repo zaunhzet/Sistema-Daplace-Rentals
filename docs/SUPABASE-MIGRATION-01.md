@@ -1,12 +1,12 @@
 # DAPLACE RENTALS — SUPABASE-MIGRATION-01
 ## Planificación, Arquitectura y Preparación para Migración a Supabase PostgreSQL
 
-**Versión:** 1.0  
-**Fecha:** 2026-11-01  
-**Autor:** Antigravity (Líder Técnico de Implementación Full-Stack)  
-**Estado:** PREPARADO — LISTO PARA AUTORIZACIÓN REMOTA  
-**Repositorio:** `zaunhzet/Sistema-Daplace-Rentals`  
-**Rama Base:** `integration/andre-diego-20261029` (Merge PR #8 `1522568df3c06b31f247d6586f862d8644626737`)
+- **Versión:** 1.1 (Revisada — SUPABASE-PREP-FIX-01)
+- **Fecha:** 2026-11-01
+- **Autor:** Antigravity (Líder Técnico de Implementación Full-Stack)
+- **Estado:** PREPARADO — LISTO PARA AUTORIZACIÓN REMOTA
+- **Repositorio:** `zaunhzet/Sistema-Daplace-Rentals`
+- **Rama Base:** `integration/andre-diego-20261029` (Merge PR #8 `1522568df3c06b31f247d6586f862d8644626737`)
 
 ---
 
@@ -15,11 +15,12 @@
 El objetivo de esta intervención es planificar y preparar el traslado de la persistencia relacional del MVP de Daplace Rentals desde la instancia local de PostgreSQL hacia un proyecto administrado en **Supabase**, gestionado operativamente por Diego, garantizando **cero impacto funcional**, **inmunidad financiera**, **aislamiento de pruebas locales** y **continuidad estricta del modelo de autenticación y autorización vigente**.
 
 ### Principios Fundamentales
-1. **Conservación de Arquitectura:** El backend Fastify en Node.js, el cliente React con Vite, la capa ORM Prisma 7 con `@prisma/adapter-pg` y las suites de pruebas automatizadas permanecen intactos.
+1. **Conservación de Arquitectura:** El backend Fastify en Node.js 24, el cliente React con Vite, la capa ORM Prisma 7 con `@prisma/adapter-pg` y las suites de pruebas automatizadas permanecen intactos.
 2. **No Migración a Supabase Auth:** La autenticación continúa operando mediante la tabla `users`, sesiones rotativas `auth_sessions` en PostgreSQL, hashes Argon2id y tokens JWT propios del MVP. Supabase se utiliza estrictamente como proveedor de PostgreSQL administrado.
 3. **Privacidad de la Capa de Datos:** El frontend jamás se conecta directamente a Supabase ni recibe cadenas de conexión, contraseñas de PostgreSQL o tokens de administración (`service_role`). Toda interacción con la base de datos se efectúa exclusivamente a través de los contratos REST de Fastify.
-4. **Inmunidad y Seguridad de Entornos:** Las herramientas destructivas (`safeResetDatabase`, `safeResetTestDatabase`, `seed-dev`) quedan técnicamente bloqueadas contra cualquier host que no sea `localhost`/`127.0.0.1`. Las 450 pruebas automatizadas continúan ejecutándose de forma exclusiva sobre la base desechable local `daplace_test`.
-5. **Migración Aditiva y Controlada:** No se ejecutarán comandos `prisma migrate reset`, `prisma db push` ni scripts destructivos contra Supabase. La instalación del esquema sobre la base remota se realizará exclusivamente mediante `prisma migrate deploy` en orden determinístico.
+4. **Protección Integral de la Data API:** La Data API (PostgREST) de Supabase no debe quedar expuesta con privilegios públicos. Se promueve su desactivación completa o la aplicación restrictiva de RLS y revocación de permisos al rol `anon`.
+5. **Inmunidad y Seguridad de Entornos:** Las herramientas destructivas (`safeResetDatabase`, `safeResetTestDatabase`, `seed-dev`) quedan técnicamente bloqueadas contra cualquier host que no sea `localhost`/`127.0.0.1`. Las 450 pruebas automatizadas continúan ejecutándose de forma exclusiva sobre la base desechable local `daplace_test`.
+6. **Migración Aditiva y Controlada:** No se ejecutarán comandos `prisma migrate reset`, `prisma db push` ni scripts destructivos contra Supabase. La instalación del esquema sobre la base remota se realizará exclusivamente mediante `prisma migrate deploy` en orden determinístico, exigiendo de forma obligatoria `DIRECT_DATABASE_URL`.
 
 ---
 
@@ -39,14 +40,15 @@ El objetivo de esta intervención es planificar y preparar el traslado de la per
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                             CAPA DE APLICACIÓN                              │
 │                                                                             │
-│                     Backend Fastify (Node.js 22 LTS)                        │
+│                     Backend Fastify (Node.js 24 LTS)                        │
 │                     - Escucha en http://127.0.0.1:3000                     │
 │                     - Módulos: Auth, Reservas, Pagos, Gastos, Mantenimiento,│
 │                       Garantías, Reportes, Personal, Alertas, Auditoría     │
 │                     - RBAC: ADMINISTRADOR, OPERADOR, PROPIETARIO, CLIENTE   │
 │                     - Motor ORM: Prisma 7 con @prisma/adapter-pg + pg.Pool  │
 └──────────────────────────────────────┬──────────────────────────────────────┘
-                                       │ TCP / SSL TLS (Pool local max 10 conn)
+                                       │ TCP / TLS con Validación Estricta de Certificado
+                                       │ (rejectUnauthorized: true, Pool local max 10)
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                          PERSISTENCIA EN SUPABASE                           │
@@ -54,15 +56,16 @@ El objetivo de esta intervención es planificar y preparar el traslado de la per
 │                  Proyecto Supabase PostgreSQL (AWS / Diego)                 │
 │                                                                             │
 │  [Puerto 5432: Conexión Directa] ───► Para 'prisma migrate deploy'        │
-│                                        (Advisory locks, DDL transaccional)  │
+│                                        (DIRECT_DATABASE_URL obligatoria,    │
+│                                         advisory locks, DDL transaccional)  │
 │                                                                             │
 │  [Puerto 5432: Session Pooler]   ───► Para Fastify Runtime (@prisma/pg)     │
-│                                        (Sesiones seguras, SSL require)      │
+│                                        (DATABASE_URL, TLS estricto)         │
 │                                                                             │
 │  - Extensiones activas: btree_gist                                          │
 │  - Restricción de concurrencia: reservas_no_overlapping_excl (GIST)         │
 │  - Esquema: 17 tablas relacionales + _prisma_migrations                     │
-│  - Data API (PostgREST): Sin exposición pública de tablas privadas          │
+│  - Data API (PostgREST): Deshabilitada o asegurada con RLS restrictivo      │
 │  - Storage / Edge Functions: No utilizados en esta fase                     │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -146,63 +149,122 @@ La instalación completa del esquema sobre una base Supabase limpia aplicará ex
 
 ---
 
-## 4. Estrategia de Conectividad con Supabase
+## 4. Estrategia de Conectividad y Seguridad con Supabase
 
-### 4.1. Modos de Conexión y Puertos
+### 4.1. Modos de Conexión, Puertos y Migraciones
 
-Supabase implementa un pooler centralizado (Supavisor). Para una operación estable de Prisma 7 se requieren dos canales:
+Supabase implementa un pooler centralizado (Supavisor). Para una operación estable y segura de Prisma 7 se establecen los siguientes requisitos:
 
-1. **Conexión Directa (`DIRECT_DATABASE_URL` — Puerto 5432):**
+1. **Exigencia Estricta de `DIRECT_DATABASE_URL` para Migraciones Remotas:**
    - URL: `postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?schema=public&sslmode=require`
-   - Uso: **Exclusivo para `prisma migrate deploy`**.
-   - Justificación técnica: las migraciones de Prisma utilizan bloqueos consultivos (`pg_advisory_lock`) y comandos DDL que fallan en Transaction Poolers.
-2. **Conexión de Aplicación (`DATABASE_URL` — Puerto 5432 Session Pooler o Directa):**
-   - URL: `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?schema=public&sslmode=require`
-   - Uso: Runtime del backend Fastify mediante `@prisma/adapter-pg`.
-   - Parámetros configurados en [backend/src/shared/database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts):
-     - Pool local `pg.Pool` con límite conservador (`maxConnections: 10`).
-     - Detección automática de SSL (`ssl: { rejectUnauthorized: false }`) ante URLs con `sslmode=require` o dominios `supabase.co` / `supabase.com`.
-     - Timeout de conexión: 10,000 ms.
+   - Configurado en [prisma.config.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/prisma.config.ts): **Si el host objetivo es remoto, el sistema EXIGE `DIRECT_DATABASE_URL` explícita y bloquea categóricamente cualquier fallback silencioso a `DATABASE_URL`**.
+   - Para entornos locales y Docker (`localhost`, `127.0.0.1`, `postgres`, `db`), se mantiene el soporte directo de `DATABASE_URL` sin requisitos adicionales.
+   - Justificación técnica: `prisma migrate deploy` requiere bloqueos consultivos (`pg_advisory_lock`) y comandos DDL directos sobre PostgreSQL (puerto 5432 directo), los cuales fallan o provocan bloqueos indebidos en Transaction Poolers.
+2. **Conexión de Aplicación en Runtime (`DATABASE_URL`):**
+   - URL: `postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?schema=public&sslmode=require` (Session Pooler) o conexión directa con límites de pool.
+   - Configurado en [database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts):
+     - Pool local `pg.Pool` con límite conservador (`maxConnections: 10`, configurable con `DATABASE_POOL_MAX`).
+     - Timeout de conexión: 10,000 ms (`DATABASE_TIMEOUT_MS`).
 
-### 4.2. Protección de la Data API (PostgREST) y RLS
+### 4.2. TLS Obligatorio con Verificación Estricta de Certificado
 
-- Supabase expone automáticamente una API REST vía PostgREST sobre el puerto HTTPS 443 utilizando la `anon` key.
-- **Directriz de Seguridad:**
-  1. No compartir la clave `anon` con el frontend del MVP.
-  2. Verificar que las tablas sensibles (`users`, `auth_sessions`, `usuarios`, `huespedes`, `reservas`, `pagos`, `garantias`, `gastos`) no tengan políticas RLS públicas permisivas (`SELECT true USING (true)`).
-  3. En el panel de Supabase (Settings → API), si es factible, deshabilitar la exposición pública del esquema `public` o habilitar Row Level Security (RLS) en modo restrictivo por defecto (`ALTER TABLE <tabla> ENABLE ROW LEVEL SECURITY;` sin políticas públicas anónimas).
+- **Prohibición de `rejectUnauthorized: false`:**
+  - Se eliminó completamente la opción `rejectUnauthorized: false`.
+  - En [database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts), si se detecta una conexión remota o SSL activo, el sistema fuerza estrictamente `rejectUnauthorized: true`.
+  - Si una opción externa intenta forzar `rejectUnauthorized: false`, el runtime lanza inmediatamente una excepción de seguridad bloqueando el arranque.
+- **Soporte de Certificado CA (`DATABASE_SSL_CA`):**
+  - Para proveedores con CA personalizada o certificados raíz de Supabase, se admite la variable de entorno `DATABASE_SSL_CA`.
+  - Si `DATABASE_SSL_CA` contiene la cadena del certificado PEM directa o una ruta a archivo local (`.crt`/`.pem`), se carga de forma segura y se inyecta en el atributo `ca` de TLS.
+  - Si no se especifica CA personalizada, Node.js utiliza el almacén de certificados raíz estándar de confianza del sistema operativo.
+
+### 4.3. Protección Obligatoria de la Data API (PostgREST) y RLS
+
+No se confía en que el cliente frontend ignore la clave pública `anon` (seguridad por oscuridad rechazada):
+
+1. **Opción Recomendada (Desactivación de Data API):**
+   - En el panel de Supabase: `Project Settings` → `API` → Deshabilitar `Data API (PostgREST)`.
+   - Dado que el MVP de Daplace Rentals opera exclusivamente a través del backend Fastify, la Data API no debe estar expuesta hacia internet.
+2. **Opción Alternativa (Restricción Absoluta de RLS y Privilegios):**
+   - Si PostgREST debe permanecer activo por requerimientos de la plataforma de Supabase:
+     ```sql
+     -- 1. Habilitar RLS en todas las tablas del dominio y autenticación
+     ALTER TABLE "users" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "auth_sessions" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "usuarios" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "propiedades" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "huespedes" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "reservas" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "pagos" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "garantias" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "movimientos_garantia" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "gastos" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "sustentos_gasto" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "evidencias_pago" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "contratos_reserva" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "avisos_reserva" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "ordenes_trabajo" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "notificaciones_internas" ENABLE ROW LEVEL SECURITY;
+     ALTER TABLE "auditoria_eventos" ENABLE ROW LEVEL SECURITY;
+
+     -- 2. Revocar todos los privilegios sobre el esquema public a los roles anónimos y autenticados de Supabase
+     REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+     REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+     REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM anon, authenticated;
+     ```
+   - **Garantía:** Cero políticas permisivas (`CREATE POLICY`) para `anon` o `authenticated`. El rol de conexión de Fastify (`postgres` o rol de servicio propio) mantiene privilegios directos de conexión.
 
 ---
 
-## 5. Estrategia de Respaldo y Restauración Local
+## 5. Estrategia de Respaldo, Rollback y Recuperación Local
 
-Antes de activar la conexión hacia la base remota, debe preservarse una instantánea completa de la base de datos local de desarrollo (`daplace_dev`).
+### 5.1. Respaldo Preventivo Local de Seguridad (Backup)
 
-### 5.1. Procedimiento de Respaldo Local (Backup)
-
-Desde PowerShell en la raíz del proyecto:
+Antes de cualquier intervención remota, se genera una instantánea completa de la base de datos local de desarrollo (`daplace_dev`):
 
 ```powershell
-# 1. Definir marca temporal
 $TIMESTAMP = Get-Date -Format "yyyyMMdd-HHmmss"
 $BACKUP_FILE = "d:\Proyectos VS Code\Daplace\daplace-rentals\backups\daplace_dev_pre_supabase_$TIMESTAMP.sql"
 
-# Crear directorio si no existe
 New-Item -ItemType Directory -Force -Path "d:\Proyectos VS Code\Daplace\daplace-rentals\backups"
 
-# 2. Ejecutar pg_dump excluyendo contraseñas en terminal
 $env:PGPASSWORD = "daplace_local_only"
 pg_dump -h localhost -p 5432 -U daplace -d daplace_dev -F p -b -v -f $BACKUP_FILE
 $env:PGPASSWORD = $null
 
-Write-Host "Respaldo completado exitosamente en: $BACKUP_FILE"
+Write-Host "Respaldo preventivo completado en: $BACKUP_FILE"
 ```
 
-### 5.2. Procedimiento de Restauración Local (Rollback de Datos)
+### 5.2. Procedimiento Habitual de Rollback Operativo (Inmediato y No Destructivo)
 
-En caso de requerir volver a la base local con el estado previo:
+Si durante la conexión hacia Supabase se presentan anomalías de red, latencia inaceptable, errores de pooler o incompatibilidad:
+
+1. **Revertir variables de entorno en `.env`:**
+   ```env
+   DATABASE_URL="postgresql://daplace:daplace_local_only@localhost:5432/daplace_dev?schema=public"
+   # Comentar o eliminar DIRECT_DATABASE_URL remota:
+   # DIRECT_DATABASE_URL=
+   ```
+2. **Reiniciar el backend Fastify:**
+   ```powershell
+   npm run dev:api
+   ```
+3. **Validar salud operativa local:**
+   - Comprobar que Fastify arranca y responde exitosamente en `http://127.0.0.1:3000` ejecutando `SELECT 1` sobre PostgreSQL local.
+4. **Impacto:** Cero pérdida de datos, cero alteraciones en la base local y retorno inmediato al estado estable en segundos.
+
+### 5.3. Procedimiento de Restauración Destructiva (Excepcional — Solo con Autorización Explícita y Respaldo Verificado)
+
+*ADVERTENCIA: Este procedimiento es de carácter catastrófico y NO forma parte del rollback operativo estándar. Requiere autorización previa explícita de André y verificación de la integridad del archivo de respaldo.*
+
+Solo si la base local sufriera corrupción de datos o pérdida de consistencia se procederá a:
 
 ```powershell
+# 1. Comprobar que el archivo de respaldo existe y tiene tamaño válido (> 0 bytes)
+if (-not (Test-Path $BACKUP_FILE) -or (Get-Item $BACKUP_FILE).Length -eq 0) {
+    throw "ABORTADO: Archivo de respaldo inexistente o corrupto."
+}
+
+# 2. Restaurar esquema de forma controlada
 $env:PGPASSWORD = "daplace_local_only"
 psql -h localhost -p 5432 -U daplace -d daplace_dev -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 psql -h localhost -p 5432 -U daplace -d daplace_dev -f $BACKUP_FILE
@@ -221,16 +283,16 @@ $env:PGPASSWORD = $null
 - [x] Invariantes críticos validados (`btree_gist`, exclusión GIST de reservas, DR-04, DR-05).
 - [x] Salvaguardas en scripts destructivos (`reset.ts`, `seed-dev.ts`, `seed.ts`) validadas contra hosts no locales.
 
-### FASE 1 — Configuración Segura (PREPARADA)
-- [x] [prisma.config.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/prisma.config.ts) actualizado para resolver `DIRECT_DATABASE_URL` (para migraciones en Supabase) con respaldo a `DATABASE_URL`.
-- [x] [database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts) enriquecido con soporte de `pg.Pool`, SSL condicional seguro y timeouts de pooler.
-- [x] [.env.example](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/.env.example) documentado con las variables requeridas para Supabase.
-- [ ] **Espera de Entrada Externa:** Recepción de credenciales del proyecto Supabase creado por Diego mediante canal privado y seguro (nunca por commit o chat público).
+### FASE 1 — Configuración Segura y TLS Estricto (COMPLETADA LOCALMENTE)
+- [x] [prisma.config.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/prisma.config.ts) actualizado: **exige `DIRECT_DATABASE_URL` obligatoria para migraciones remotas** sin fallback silencioso, preservando `DATABASE_URL` para Docker/local.
+- [x] [database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts) actualizado: **eliminado `rejectUnauthorized: false`**, configuración estricta de TLS (`rejectUnauthorized: true`), soporte de CA personalizada (`DATABASE_SSL_CA`) y pool controlado (`maxConnections: 10`).
+- [x] [.env.example](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/.env.example) documentado con `DATABASE_URL`, `DIRECT_DATABASE_URL`, `DATABASE_SSL_CA` y `DATABASE_POOL_MAX`.
+- [ ] **Espera de Entrada Externa:** Recepción de credenciales del proyecto Supabase creado por Diego mediante canal privado y seguro.
 
 ### FASE 2 — Despliegue de Esquema sobre Base Remota Limpia (POR EJECUTAR TRAS AUTORIZACIÓN)
 *Nota: Solo ejecutar cuando Diego proporcione las credenciales oficiales.*
 
-1. **Configurar `.env` local temporal:**
+1. **Configurar `.env` local:**
    ```env
    DATABASE_URL="postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres?schema=public&sslmode=require"
    DIRECT_DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres?schema=public&sslmode=require"
@@ -240,32 +302,59 @@ $env:PGPASSWORD = $null
    cd backend
    npm run db:migrate:deploy
    ```
-   *Comprobación:* salida esperada `17 migrations found. All migrations have been applied.`
+   *Comprobación esperada:* `17 migrations found. All migrations have been applied.`
 3. **Verificar estado de migraciones:**
    ```bash
    npm run db:status
    ```
-   *Comprobación:* `Database schema is up to date.`
+   *Comprobación esperada:* `Database schema is up to date.`
 
-### FASE 3 — Validación Funcional y Pruebas de Humo (POR EJECUTAR TRAS FASE 2)
+### FASE 3A — Smoke Tests de Solo Lectura (No Invasivos — Obligatorios)
+*Comprobaciones directas sin mutación de datos en Supabase:*
+
 1. **Verificación de Estructura Físico-Relacional en Supabase:**
    - Comprobar que `_prisma_migrations` contiene las 17 filas con `finished_at` no nulo.
-   - Comprobar que la extensión `btree_gist` está activa (`SELECT * FROM pg_extension WHERE extname = 'btree_gist';`).
-   - Comprobar que la restricción `reservas_no_overlapping_excl` existe en `reservas`.
+   - Comprobar que la extensión `btree_gist` está activa:
+     ```sql
+     SELECT extname, extversion FROM pg_extension WHERE extname = 'btree_gist';
+     ```
+   - Comprobar que la restricción de exclusión existe en `reservas`:
+     ```sql
+     SELECT conname, contype FROM pg_constraint WHERE conname = 'reservas_no_overlapping_excl';
+     ```
    - Comprobar que las 17 tablas tienen sus claves foráneas, columnas e índices correspondientes.
-2. **Prueba de Conexión y Arranque del Backend:**
-   - Iniciar `npm run dev` en `backend`.
+2. **Prueba de Conexión del Backend Fastify:**
+   - Iniciar `npm run dev:api` en `backend`.
    - Confirmar arranque en `http://127.0.0.1:3000` con conexión exitosa (`SELECT 1`).
-3. **Smoke Test Operativo No Destructivo (Vía API Fastify):**
-   - **Identidad:** Registrar administrador inicial (o migrar credenciales mínimas de demostración) e iniciar sesión en `POST /auth/login`. Verificar recepción de JWT y cookie HttpOnly.
-   - **Propiedades:** Registrar propiedad de prueba en `POST /api/propiedades` y verificar consulta en `GET /api/propiedades`.
-   - **Reservas:** Crear reserva de prueba en `POST /api/reservas` verificando creación de alerta interna en `notificaciones_internas` (HU-11).
-   - **Anti-Overbooking:** Intentar registrar reserva solapada y confirmar rechazo 409 `CONCURRENCY_CONFLICT` respaldado por la restricción física `reservas_no_overlapping_excl`.
-   - **Mantenimiento:** Asignar orden de trabajo en `POST /api/mantenimiento/ordenes` y verificar notificación personal en `notificaciones_internas` (HU-17).
-   - **Reportes:** Consultar reporte financiero en `GET /api/reportes/mensual` verificando cálculo consistente.
-4. **Validación de Pruebas Automatizadas:**
+3. **Smoke Tests de Solo Lectura vía Endpoints REST:**
+   - **Consulta de Propiedades:** `GET /api/propiedades` → Retorna `200 OK` con arreglo vacío o datos preexistentes.
+   - **Consulta de Alertas:** `GET /api/alertas` (con token de prueba) → Retorna `200 OK` con `data: []` y `totalPendientes: 0`.
+   - **Consulta de Liquidación de Propietario (HU-07/HU-12):**
+     - Endpoint exacto: `GET /api/reportes/propietario?propiedadId=<id>&mes=<m>&anio=<a>`
+     - Contratos de error verificados contra el código real:
+       - `400 VALIDATION_ERROR`: Si falta `propiedadId`.
+       - `401 UNAUTHORIZED`: Si no hay sesión válida.
+       - `403 DOMAIN_IDENTITY_REQUIRED`: Si el rol `PROPIETARIO` no tiene identidad transaccional en `Usuario`.
+       - `403 FORBIDDEN`: Si el propietario intenta consultar liquidaciones de un inmueble ajeno.
+       - `404 PROPERTY_NOT_FOUND`: Si la propiedad no existe en la base de datos.
+       - `409 MIXED_CURRENCY_REPORT`: Si existen transacciones en monedas incompatibles sin tasa de conversión.
+       - `200 OK`: Si la consulta es válida (devuelve desglose contable o CSV según `format=csv`).
+4. **Aislamiento de Pruebas Automatizadas:**
    - Ejecutar `npm test` en `backend`.
-   - **Verificar que `backend/test` corre contra `daplace_test` local (localhost:5432) y que las 282 pruebas pasan al 100% sin enviar una sola petición a Supabase.**
+   - **Verificar que `DATABASE_TEST_URL` corre contra `daplace_test` local y que las 282 pruebas pasan al 100% sin interacción con Supabase.**
+
+### FASE 3B — Smoke Tests de Escritura (RESTRINGIDOS — Solo con Autorización Explícita)
+*Queda estrictamente prohibido ejecutar escrituras no autorizadas sobre Supabase.*
+
+En caso de que André autorice formalmente una prueba de escritura sobre la base remota:
+1. **Identificadores Rastreables:**
+   - Se utilizarán entidades con prefijo identificable `smoke-test-*` (ej. huésped `smoke-test-guest@daplace.invalid`, reserva con notas `smoke-test-verification`).
+2. **Prueba Transaccional Controlada:**
+   - Crear reserva y comprobar alerta interna en `notificaciones_internas` (HU-11).
+   - Probar rechazo físico de sobreventa `409 CONCURRENCY_CONFLICT` mediante intento de reserva solapada.
+3. **Estrategia de Limpieza No Destructiva:**
+   - Eliminación focal de las entidades creadas mediante su ID exacto (`DELETE FROM ... WHERE id = 'smoke-test-...'` o baja lógica).
+   - **Prohibición terminante:** Jamás utilizar `TRUNCATE TABLE`, `prisma migrate reset` ni `DROP SCHEMA` en la base remota.
 
 ---
 
@@ -273,24 +362,22 @@ $env:PGPASSWORD = $null
 
 | Riesgo Técnico | Severidad | Mitigación Implementada |
 |---|:---:|---|
-| **Fallo en Advisory Locks de Prisma con Transaction Pooler (Puerto 6543)** | ALTA | Se configuró `DIRECT_DATABASE_URL` apuntando al puerto 5432 directo para la ejecución de `prisma migrate deploy`. |
-| **Error en creación de extensión `btree_gist` por permisos insuficientes** | ALTA | El rol predeterminado de Supabase (`postgres`) cuenta con permisos de superusuario gestionado para `CREATE EXTENSION btree_gist`. Se verificará explícitamente en el primer paso de migración. |
-| **Exposición no autorizada de datos vía PostgREST / clave `anon`** | CRÍTICA | No se usa PostgREST ni se comparte la clave `anon`. Las tablas sensibles deben permanecer con RLS restrictivo sin políticas públicas anónimas. |
-| **Ejecución accidental de `npm test` o scripts de limpieza contra Supabase** | CRÍTICA | [backend/src/scripts/reset.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/scripts/reset.ts) y [seed-dev.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/scripts/seed-dev.ts) contienen una salvaguarda que bloquea la ejecución ante cualquier host que no sea `localhost`, `127.0.0.1` o `::1`. |
-| **Filtración de credenciales en commits o reportes** | CRÍTICA | Las cadenas de conexión se almacenan exclusivamente en `.env` (ignorado en `.gitignore`). NUNCA se escriben en documentos, repositorios ni logs. |
-| **Límite de conexiones agotado en Supabase (Connection Exhaustion)** | MEDIA | Se fijó `maxConnections: 10` en el pool `pg.Pool` del backend Fastify para evitar sobrecargar los límites del plan de Supabase. |
+| **Fallo de advisory locks con Transaction Pooler (Puerto 6543)** | ALTA | [prisma.config.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/prisma.config.ts) **exige `DIRECT_DATABASE_URL` obligatoria** (puerto 5432 directo) para migraciones remotas y bloquea el fallback silencioso. |
+| **Vulnerabilidad por desactivación de TLS (MITM en conexión remota)** | CRÍTICA | [database.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/shared/database.ts) **fuerza `rejectUnauthorized: true`** en conexiones remotas y bloquea cualquier intento de configurar `false`. Soporta `DATABASE_SSL_CA`. |
+| **Exposición no autorizada de datos vía PostgREST / clave `anon`** | CRÍTICA | Documentada la desactivación de la Data API en el panel de Supabase o la aplicación obligatoria de RLS restrictivo sin políticas públicas anónimas. |
+| **Ejecución accidental de `npm test` o scripts de reset contra Supabase** | CRÍTICA | [reset.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/scripts/reset.ts) y [seed-dev.ts](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/src/scripts/seed-dev.ts) contienen salvaguardas que abortan la ejecución ante cualquier host que no sea `localhost`, `127.0.0.1` o `::1`. |
+| **Corrupción o pérdida de datos locales durante rollback** | ALTA | El rollback operativo estándar **no utiliza `DROP SCHEMA CASCADE`**; consiste exclusivamente en revertir las variables a PostgreSQL local y reiniciar Fastify. |
+| **Contaminación de la base remota con datos de prueba** | MEDIA | Se separaron los smoke tests en Solo Lectura (3A) y Escritura Restringida (3B), requiriendo autorización previa y limpieza focal por ID. |
 
 ---
 
 ## 8. Criterios Binarios de Aprobación (Checklist Go / No-Go)
 
-Para declarar formalmente completada la migración una vez recibidas las credenciales, deben satisfacerse los siguientes criterios:
-
-- [ ] **G1 (Estado Git):** PR #8 fusionado y rama de integración `integration/andre-diego-20261029` limpia y actualizada.
-- [ ] **G2 (Migraciones Remotas):** Las 17 migraciones fueron aplicadas con éxito mediante `prisma migrate deploy` sobre Supabase sin errores ni rollbacks.
-- [ ] **G3 (Extensiones y Exclusiones):** `btree_gist` y la restricción `reservas_no_overlapping_excl` existen activas en la base de datos Supabase.
-- [ ] **G4 (Conectividad Fastify):** El backend Fastify local se conecta a Supabase con SSL y responde exitosamente al check de salud `SELECT 1`.
-- [ ] **G5 (Seguridad de Autenticación):** El login autentica contra la tabla `users` en Supabase y emite JWT válidos sin utilizar Supabase Auth.
-- [ ] **G6 (Pruebas Automatizadas Intactas):** `DATABASE_TEST_URL` continúa apuntando a `daplace_test` local y las 450 pruebas (282 backend + 168 frontend) pasan al 100%.
-- [ ] **G7 (Cero Exposición de Secretos):** No existen credenciales de Supabase en archivos trackeados por Git, reportes o commits.
-- [ ] **G8 (Plan de Rollback Probado):** El archivo de respaldo local de `daplace_dev` existe y el procedimiento de retorno a PostgreSQL local está documentado y listo.
+- [ ] **G1 (Estado Git y Node.js):** Rama `feat/supabase-migration-prep` basada en la integración actualizada, con Node.js 24 especificado en `package.json`.
+- [ ] **G2 (Migraciones Remotas con URL Directa):** Las 17 migraciones aplicadas con éxito mediante `prisma migrate deploy` utilizando `DIRECT_DATABASE_URL` obligatoria sobre Supabase.
+- [ ] **G3 (Extensiones e Invariantes):** `btree_gist` activa y restricción `reservas_no_overlapping_excl` verificada en catálogo de Supabase.
+- [ ] **G4 (Conectividad con TLS Verificado):** Backend Fastify conectado con `rejectUnauthorized: true`, validación de certificado (y `DATABASE_SSL_CA` si aplica) y respuesta exitosa a `SELECT 1`.
+- [ ] **G5 (Contratos de Reportes Exactos):** `GET /api/reportes/propietario` probado contra los contratos reales (400, 401, 403, 404, 409 y 200).
+- [ ] **G6 (Protección Data API):** PostgREST deshabilitado en Supabase o RLS habilitado en todas las tablas sin políticas públicas anónimas.
+- [ ] **G7 (Pruebas Automatizadas 100% Locales):** `DATABASE_TEST_URL` intacta en `daplace_test` local y las 450 pruebas automatizadas pasando al 100%.
+- [ ] **G8 (Rollback Operativo No Destructivo):** Procedimiento de conmutación rápida a PostgreSQL local documentado y verificado sin sentencias destructivas.

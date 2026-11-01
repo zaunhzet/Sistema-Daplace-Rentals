@@ -1,11 +1,13 @@
+import fs from 'node:fs';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 
 export interface DatabaseOptions {
-  ssl?: boolean | pg.PoolConfig['ssl'];
+  ssl?: pg.PoolConfig['ssl'];
   maxConnections?: number;
   connectionTimeoutMillis?: number;
+  ca?: string;
 }
 
 export function createDatabase(url: string, options?: DatabaseOptions) {
@@ -21,8 +23,43 @@ export function createDatabase(url: string, options?: DatabaseOptions) {
     connectionTimeoutMillis: options?.connectionTimeoutMillis ?? Number(process.env.DATABASE_TIMEOUT_MS || 10000),
   };
 
-  if (isCloudOrSsl && poolConfig.ssl === undefined) {
-    poolConfig.ssl = options?.ssl ?? { rejectUnauthorized: false };
+  if (isCloudOrSsl) {
+    // Si se pasa una configuración explícita en options.ssl, verificar que NO desactive la validación TLS
+    if (typeof options?.ssl === 'object' && options.ssl !== null && options.ssl.rejectUnauthorized === false) {
+      throw new Error(
+        'CONFIGURACIÓN INSEGURA BLOQUEADA: No se permite desactivar la validación TLS (rejectUnauthorized: false) en conexiones remotas.'
+      );
+    }
+
+    // Resolver CA si se proporciona por variable de entorno o parámetro
+    let caContent: string | undefined;
+    const caSource = options?.ca || process.env.DATABASE_SSL_CA;
+    if (caSource && caSource.trim() !== '') {
+      const trimmed = caSource.trim();
+      if (trimmed.includes('BEGIN CERTIFICATE')) {
+        caContent = trimmed;
+      } else {
+        try {
+          caContent = fs.readFileSync(trimmed, 'utf8');
+        } catch (err: any) {
+          throw new Error(`Error al leer archivo de certificado CA ("${trimmed}"): ${err.message}`);
+        }
+      }
+    }
+
+    // TLS con verificación estricta de certificado (rejectUnauthorized: true)
+    if (typeof options?.ssl === 'object' && options.ssl !== null) {
+      poolConfig.ssl = {
+        ...options.ssl,
+        rejectUnauthorized: true,
+        ...(caContent ? { ca: caContent } : {}),
+      };
+    } else {
+      poolConfig.ssl = {
+        rejectUnauthorized: true,
+        ...(caContent ? { ca: caContent } : {}),
+      };
+    }
   }
 
   const pool = new pg.Pool(poolConfig);
