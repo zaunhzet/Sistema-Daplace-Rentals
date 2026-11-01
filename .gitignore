@@ -12,3 +12,7 @@ node_modules/
 *.log
 .DS_Store
 *.tsbuildinfo
+# Credenciales demo (entrega privada — nunca commitear)
+backend/.demo-credentials
+database/backups/
+*.dump

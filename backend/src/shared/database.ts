@@ -1,4 +1,6 @@
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
@@ -11,14 +13,41 @@ export interface DatabaseOptions {
 }
 
 export function createDatabase(url: string, options?: DatabaseOptions) {
+  let isLocalHost = false;
+  try {
+    const parsed = new URL(url.replace(/^postgres(ql)?:\/\//, 'http://'));
+    const h = parsed.hostname.toLowerCase();
+    isLocalHost = ['localhost', '127.0.0.1', '::1', 'postgres', 'db'].includes(h);
+  } catch {
+    isLocalHost = url.includes('localhost') || url.includes('127.0.0.1') || url.includes('::1');
+  }
+
   const isCloudOrSsl =
     url.includes('sslmode=require') ||
     url.includes('supabase.co') ||
     url.includes('supabase.com') ||
-    process.env.DATABASE_SSL === 'true';
+    (!isLocalHost && process.env.DATABASE_SSL === 'true');
+
+  // Limpiar parámetros de SSL de la cadena de conexión para evitar que pg-connection-string
+  // sobrescriba 'poolConfig.ssl' con un objeto vacío o incompatible en Object.assign.
+  let cleanedUrl = url;
+  try {
+    const isPostgres = url.startsWith('postgresql://') || url.startsWith('postgres://');
+    if (isPostgres) {
+      const prefix = url.startsWith('postgresql://') ? 'postgresql://' : 'postgres://';
+      const parsedUrl = new URL(url.replace(/^postgres(ql)?:\/\//, 'http://'));
+      if (parsedUrl.searchParams.has('sslmode') || parsedUrl.searchParams.has('ssl')) {
+        parsedUrl.searchParams.delete('sslmode');
+        parsedUrl.searchParams.delete('ssl');
+        cleanedUrl = prefix + parsedUrl.toString().substring('http://'.length);
+      }
+    }
+  } catch {
+    // Si no se puede parsear como URL, mantener url intacta
+  }
 
   const poolConfig: pg.PoolConfig = {
-    connectionString: url,
+    connectionString: cleanedUrl,
     max: options?.maxConnections ?? Number(process.env.DATABASE_POOL_MAX || 10),
     connectionTimeoutMillis: options?.connectionTimeoutMillis ?? Number(process.env.DATABASE_TIMEOUT_MS || 10000),
   };
@@ -31,7 +60,7 @@ export function createDatabase(url: string, options?: DatabaseOptions) {
       );
     }
 
-    // Resolver CA si se proporciona por variable de entorno o parámetro
+    // Resolver CA si se proporciona por variable de entorno o parámetro, o desde certs
     let caContent: string | undefined;
     const caSource = options?.ca || process.env.DATABASE_SSL_CA;
     if (caSource && caSource.trim() !== '') {
@@ -39,10 +68,36 @@ export function createDatabase(url: string, options?: DatabaseOptions) {
       if (trimmed.includes('BEGIN CERTIFICATE')) {
         caContent = trimmed;
       } else {
-        try {
-          caContent = fs.readFileSync(trimmed, 'utf8');
-        } catch (err: any) {
-          throw new Error(`Error al leer archivo de certificado CA ("${trimmed}"): ${err.message}`);
+        const candidatePaths = [
+          trimmed,
+          path.resolve(process.cwd(), trimmed),
+          fileURLToPath(new URL(`../../certs/${path.basename(trimmed)}`, import.meta.url)),
+          fileURLToPath(new URL(`../../../${trimmed}`, import.meta.url)),
+        ];
+        let foundPath: string | null = null;
+        for (const p of candidatePaths) {
+          if (fs.existsSync(p)) {
+            foundPath = p;
+            break;
+          }
+        }
+        if (!foundPath) {
+          throw new Error(`Error al leer archivo de certificado CA ("${trimmed}"): no se encontró en las rutas buscadas.`);
+        }
+        caContent = fs.readFileSync(foundPath, 'utf8');
+      }
+    } else {
+      // Fallback automático al certificado oficial si existe en backend/certs/
+      const defaultCertCandidates = [
+        fileURLToPath(new URL('../../certs/supabase-ca.crt', import.meta.url)),
+        fileURLToPath(new URL('../certs/supabase-ca.crt', import.meta.url)),
+        path.resolve(process.cwd(), 'certs/supabase-ca.crt'),
+        path.resolve(process.cwd(), 'backend/certs/supabase-ca.crt'),
+      ];
+      for (const p of defaultCertCandidates) {
+        if (fs.existsSync(p)) {
+          caContent = fs.readFileSync(p, 'utf8');
+          break;
         }
       }
     }
