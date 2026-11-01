@@ -12,3 +12,5 @@ node_modules/
 *.log
 .DS_Store
 *.tsbuildinfo
+database/backups/
+*.dump
