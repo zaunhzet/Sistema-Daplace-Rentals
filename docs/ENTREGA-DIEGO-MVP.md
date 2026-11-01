@@ -6,7 +6,7 @@
 - **Base de Datos Remota:** Supabase PostgreSQL (`bdfeiiqcswdxzrqoykwp`)
 - **Modo de Conexión:** Session Pooler IPv4 (`aws-1-sa-east-1.pooler.supabase.com:5432`)
 - **Estado de Seguridad Remoto:** 17 migraciones completas, RLS activo en las 18 tablas (Default Deny), permisos públicos revocados, Data API deshabilitada.
-- **Responsabilidad de Validación:** La exploración de interfaz, recorridos manuales y aceptación funcional corresponden exclusivamente a Diego en calidad de usuario y validador de negocio.
+- **Responsabilidad de Validación:** La exploración de interfaz, los recorridos manuales y la aceptación funcional corresponden exclusivamente a Diego en calidad de usuario y validador de negocio. El equipo técnico (André / Antigravity) únicamente entrega el entorno preparado y da soporte ante defectos técnicos.
 
 ---
 
@@ -44,7 +44,8 @@ API_HOST="127.0.0.1"
 API_PORT="3000"
 
 # 5. Seguridad Web y Sesiones
-JWT_SECRET="daplace_jwt_secret_local_diego_mvp_2026_super_seguro_min32chars"
+# Generar con: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+JWT_SECRET="<GENERAR_CLAVE_ALEATORIA_MIN_32_CHARS>"
 JWT_EXPIRES_IN="15m"
 COOKIE_SECURE="false"
 
@@ -63,7 +64,7 @@ ALLOW_DEV_SEED="false"
 > **NOTA DE SEGURIDAD:** 
 > - El archivo `.env` está en `.gitignore` y **nunca** debe ser añadido a commits ni compartido públicamente.
 > - La contraseña de la base de datos se proporciona exclusivamente por canal privado y seguro.
-> - El certificado CA oficial de Supabase ya se encuentra versionado en [backend/certs/supabase-ca.crt](file:///d:/Proyectos%20VS%20Code/Daplace/daplace-rentals/backend/certs/supabase-ca.crt).
+> - El certificado CA oficial de Supabase ya se encuentra versionado en [`backend/certs/supabase-ca.crt`](../backend/certs/supabase-ca.crt).
 
 ---
 
@@ -90,9 +91,9 @@ npm run build
 #### 4.1. Verificación Opcional de Conexión Remota
 Antes de iniciar los servidores, puedes comprobar la conectividad TLS con Supabase ejecutando:
 ```bash
-npm --prefix backend run tsx src/scripts/test-remote-connection.ts
+npx --prefix backend tsx src/scripts/test-remote-connection.ts
 ```
-*(Debe retornar `CONECTIVIDAD REMOTA: OK` confirmando sesión `postgres` y TLS estricto).*
+*(Debe retornar `CONECTIVIDAD REMOTA: OK` confirmando sesión `postgres` y TLS estricto. Requiere que `DATABASE_URL` esté configurada en `.env` y que las dependencias estén instaladas).*
 
 #### 4.2. Ejecución Concurrente del MVP
 Para iniciar tanto el backend (Fastify) como el frontend (React/Vite) en una sola terminal:
