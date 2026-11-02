@@ -10,5 +10,5 @@ export function isMockMode(): boolean {
   if (typeof window === 'undefined') {
     return process.env.VITE_USE_MOCKS !== 'false';
   }
-  return import.meta.env.VITE_USE_MOCKS === 'true';
+  return import.meta.env?.VITE_USE_MOCKS === 'true';
 }

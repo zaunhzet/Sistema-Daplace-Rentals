@@ -184,6 +184,10 @@ class ReportService {
         const errorJson = await response.json();
         if (errorJson?.error?.message) {
           errorMsg = errorJson.error.message;
+        } else if (typeof errorJson?.error === 'string') {
+          errorMsg = errorJson.error;
+        } else if (typeof errorJson?.message === 'string') {
+          errorMsg = errorJson.message;
         }
       } catch {
         // no es json estructurado

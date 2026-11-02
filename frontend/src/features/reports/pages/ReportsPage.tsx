@@ -15,7 +15,7 @@ import { reportService } from '../services/reportService';
 import type { LiquidationReport } from '../types';
 import { propertyService } from '../../properties';
 import type { Property } from '../../properties/types';
-import { useAuth } from '../../auth';
+import { useAuth } from '../../auth/AuthContext';
 
 const MESES = [
   { value: 1, label: 'Enero' },
