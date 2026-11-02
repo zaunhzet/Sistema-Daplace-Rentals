@@ -3,6 +3,7 @@ import type { GuestWithReservations } from '../types';
 export const INITIAL_GUESTS_MOCK: GuestWithReservations[] = [
   {
     id: 'hue-01',
+    codigo: 'HSP-000001',
     nombreCompleto: 'Alejandro Silva Rivas',
     telefono: '+51 987 000 111',
     email: 'alejandro.silva@example.invalid',
@@ -16,6 +17,7 @@ export const INITIAL_GUESTS_MOCK: GuestWithReservations[] = [
   },
   {
     id: 'hue-02',
+    codigo: 'HSP-000002',
     nombreCompleto: 'Sophie Martin',
     telefono: '+33 600 112 233',
     email: 'sophie.martin@example.invalid',
@@ -29,6 +31,7 @@ export const INITIAL_GUESTS_MOCK: GuestWithReservations[] = [
   },
   {
     id: 'hue-03',
+    codigo: 'HSP-000003',
     nombreCompleto: 'Diego Fernando Rojas',
     telefono: '+51 999 444 333',
     email: 'diego.rojas@example.invalid',
@@ -42,6 +45,7 @@ export const INITIAL_GUESTS_MOCK: GuestWithReservations[] = [
   },
   {
     id: 'hue-04',
+    codigo: 'HSP-000004',
     nombreCompleto: 'Camila Vega Benavides',
     telefono: '+56 9 8877 6655',
     email: 'camila.vega@example.invalid',

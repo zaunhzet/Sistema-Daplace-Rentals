@@ -220,12 +220,14 @@ export function registerReservationsRoutes(
         desde?: string;
         hasta?: string;
         search?: string;
+        page?: string | number;
+        pageSize?: string | number;
       };
     }>(
       '/api/reservas',
       { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
-      async (request) => {
-        const { propiedadId, huespedId, estado, desde, hasta, search } = request.query;
+      async (request, reply) => {
+        const { propiedadId, huespedId, estado, desde, hasta, search, page, pageSize } = request.query;
 
         const where: any = {};
 
@@ -253,31 +255,30 @@ export function registerReservationsRoutes(
           const q = search.trim();
           where.OR = [
             { id: { contains: q, mode: 'insensitive' } },
+            { codigo: { contains: q, mode: 'insensitive' } },
             { propiedad: { nombre: { contains: q, mode: 'insensitive' } } },
             { huesped: { nombreCompleto: { contains: q, mode: 'insensitive' } } },
             { referenciaCanal: { contains: q, mode: 'insensitive' } },
           ];
         }
 
-        const reservas = await prisma.reserva.findMany({
-          where,
-          include: {
-            propiedad: { select: { id: true, nombre: true } },
-            huesped: { select: { id: true, nombreCompleto: true, email: true, telefono: true } },
-          },
-          orderBy: { ingreso: 'desc' },
-        });
-
-        return reservas.map((r) => ({
+        const mapReserva = (r: any) => ({
           id: r.id,
+          codigo: r.codigo || undefined,
           propiedadId: r.propiedadId,
-          propiedadNombre: r.propiedad.nombre,
+          propiedadNombre: r.propiedad?.nombre,
           huespedId: r.huespedId,
-          huespedNombre: r.huesped.nombreCompleto,
-          huespedContacto: r.huesped.telefono || r.huesped.email || undefined,
-          ingreso: r.ingreso.toISOString().slice(0, 10),
-          salida: r.salida.toISOString().slice(0, 10),
+          huespedNombre: r.huesped?.nombreCompleto,
+          huespedContacto: r.huesped?.telefono || r.huesped?.email || undefined,
+          ingreso: r.ingreso instanceof Date ? r.ingreso.toISOString().slice(0, 10) : r.ingreso,
+          salida: r.salida instanceof Date ? r.salida.toISOString().slice(0, 10) : r.salida,
           noches: r.noches,
+          cantidadHuespedes: r.cantidadHuespedes ?? undefined,
+          horaCheckIn: r.horaCheckIn || undefined,
+          horaCheckOut: r.horaCheckOut || undefined,
+          precioBaseNocheSnapshot: r.precioBaseNocheSnapshot ? Number(r.precioBaseNocheSnapshot) : undefined,
+          precioLimpiezaSnapshot: r.precioLimpiezaSnapshot ? Number(r.precioLimpiezaSnapshot) : undefined,
+          subtotalSnapshot: r.subtotalSnapshot ? Number(r.subtotalSnapshot) : undefined,
           estado: r.estado,
           montoAcordado: Number(r.montoAcordado),
           moneda: r.moneda,
@@ -285,15 +286,59 @@ export function registerReservationsRoutes(
           referenciaCanal: r.referenciaCanal || undefined,
           notas: r.notas || undefined,
           motivoCancelacion: r.motivoCancelacion || undefined,
-          plazoIniciadoEn: r.plazoIniciadoEn ? r.plazoIniciadoEn.toISOString() : undefined,
-          venceEn: r.venceEn ? r.venceEn.toISOString() : undefined,
+          plazoIniciadoEn: r.plazoIniciadoEn ? (r.plazoIniciadoEn instanceof Date ? r.plazoIniciadoEn.toISOString() : r.plazoIniciadoEn) : undefined,
+          venceEn: r.venceEn ? (r.venceEn instanceof Date ? r.venceEn.toISOString() : r.venceEn) : undefined,
           politicaPlazoVersion: r.politicaPlazoVersion || undefined,
           politicaPlazoSnapshot: r.politicaPlazoSnapshot || undefined,
-          avisoProgramadoEn: r.avisoProgramadoEn ? r.avisoProgramadoEn.toISOString() : undefined,
-          expiradaEn: r.expiradaEn ? r.expiradaEn.toISOString() : undefined,
-          creadaEn: r.creadaEn.toISOString(),
-          actualizadaEn: r.actualizadaEn.toISOString(),
-        }));
+          avisoProgramadoEn: r.avisoProgramadoEn ? (r.avisoProgramadoEn instanceof Date ? r.avisoProgramadoEn.toISOString() : r.avisoProgramadoEn) : undefined,
+          expiradaEn: r.expiradaEn ? (r.expiradaEn instanceof Date ? r.expiradaEn.toISOString() : r.expiradaEn) : undefined,
+          creadaEn: r.creadaEn instanceof Date ? r.creadaEn.toISOString() : r.creadaEn,
+          actualizadaEn: r.actualizadaEn instanceof Date ? r.actualizadaEn.toISOString() : r.actualizadaEn,
+        });
+
+        const includeRelations = {
+          propiedad: { select: { id: true, nombre: true } },
+          huesped: { select: { id: true, nombreCompleto: true, email: true, telefono: true } },
+        };
+
+        if (page !== undefined) {
+          const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+          const limit = pageSize ? Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20)) : 20;
+          const skip = (pageNum - 1) * limit;
+
+          const [total, reservas] = await Promise.all([
+            prisma.reserva.count({ where }),
+            prisma.reserva.findMany({
+              where,
+              include: includeRelations,
+              orderBy: { ingreso: 'desc' },
+              skip,
+              take: limit,
+            }),
+          ]);
+
+          const totalPages = Math.ceil(total / limit);
+
+          reply.header('X-Total-Count', total.toString());
+          reply.header('X-Page', pageNum.toString());
+          reply.header('X-Page-Size', limit.toString());
+
+          return {
+            data: reservas.map(mapReserva),
+            total,
+            page: pageNum,
+            pageSize: limit,
+            totalPages,
+          };
+        }
+
+        const reservas = await prisma.reserva.findMany({
+          where,
+          include: includeRelations,
+          orderBy: { ingreso: 'desc' },
+        });
+
+        return reservas.map(mapReserva);
       }
     );
 
@@ -324,6 +369,7 @@ export function registerReservationsRoutes(
 
         return {
           id: r.id,
+          codigo: r.codigo || undefined,
           propiedadId: r.propiedadId,
           propiedadNombre: r.propiedad.nombre,
           huespedId: r.huespedId,
@@ -332,6 +378,12 @@ export function registerReservationsRoutes(
           ingreso: r.ingreso.toISOString().slice(0, 10),
           salida: r.salida.toISOString().slice(0, 10),
           noches: r.noches,
+          cantidadHuespedes: r.cantidadHuespedes ?? undefined,
+          horaCheckIn: r.horaCheckIn || undefined,
+          horaCheckOut: r.horaCheckOut || undefined,
+          precioBaseNocheSnapshot: r.precioBaseNocheSnapshot ? Number(r.precioBaseNocheSnapshot) : undefined,
+          precioLimpiezaSnapshot: r.precioLimpiezaSnapshot ? Number(r.precioLimpiezaSnapshot) : undefined,
+          subtotalSnapshot: r.subtotalSnapshot ? Number(r.subtotalSnapshot) : undefined,
           estado: r.estado,
           montoAcordado: Number(r.montoAcordado),
           moneda: r.moneda,
@@ -359,6 +411,9 @@ export function registerReservationsRoutes(
         huespedId: string;
         ingreso: string;
         salida: string;
+        cantidadHuespedes?: number;
+        horaCheckIn?: string;
+        horaCheckOut?: string;
         montoAcordado: number;
         moneda?: string;
         origen?: 'WEB' | 'DIRECTO' | 'AIRBNB';
@@ -375,6 +430,9 @@ export function registerReservationsRoutes(
           huespedId,
           ingreso,
           salida,
+          cantidadHuespedes,
+          horaCheckIn,
+          horaCheckOut,
           montoAcordado,
           moneda = 'PEN',
           origen = 'WEB',
@@ -419,6 +477,38 @@ export function registerReservationsRoutes(
             error: {
               code: 'VALIDATION_ERROR',
               message: 'El monto acordado debe ser un número finito mayor a 0.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const numHuespedes = cantidadHuespedes !== undefined ? Number(cantidadHuespedes) : undefined;
+        if (numHuespedes !== undefined && (!Number.isInteger(numHuespedes) || numHuespedes <= 0)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'La cantidad de huéspedes debe ser un número entero mayor a 0.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+        if (horaCheckIn && !TIME_REGEX.test(horaCheckIn.trim())) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El formato de horaCheckIn debe ser HH:mm (ej. 15:00).',
+              requestId: request.id,
+            },
+          });
+        }
+
+        if (horaCheckOut && !TIME_REGEX.test(horaCheckOut.trim())) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El formato de horaCheckOut debe ser HH:mm (ej. 11:00).',
               requestId: request.id,
             },
           });
@@ -479,6 +569,21 @@ export function registerReservationsRoutes(
               throw err;
             }
 
+            // Validar capacidad de huéspedes
+            if (numHuespedes !== undefined && numHuespedes > propiedad.capacidadHuespedes) {
+              const err = new Error(
+                `La cantidad de huéspedes (${numHuespedes}) excede la capacidad máxima de la propiedad (${propiedad.capacidadHuespedes}).`
+              );
+              (err as any).statusCode = 400;
+              (err as any).code = 'CAPACITY_EXCEEDED';
+              throw err;
+            }
+
+            // Snapshots financieros para trazabilidad
+            const precioBaseNocheSnapshot = propiedad.precioBaseNoche;
+            const precioLimpiezaSnapshot = propiedad.precioLimpieza;
+            const subtotalSnapshot = (Number(propiedad.precioBaseNoche) * noches) + Number(propiedad.precioLimpieza);
+
             // B. Verificar huésped
             const huesped = await tx.huesped.findUnique({ where: { id: huespedId } });
             if (!huesped) {
@@ -523,6 +628,12 @@ export function registerReservationsRoutes(
                 ingreso: ingresoDate,
                 salida: salidaDate,
                 noches,
+                cantidadHuespedes: numHuespedes ?? null,
+                horaCheckIn: horaCheckIn?.trim() || null,
+                horaCheckOut: horaCheckOut?.trim() || null,
+                precioBaseNocheSnapshot,
+                precioLimpiezaSnapshot,
+                subtotalSnapshot,
                 estado: 'SOLICITADA',
                 montoAcordado: numMonto,
                 moneda,
@@ -612,6 +723,7 @@ export function registerReservationsRoutes(
 
           return reply.status(201).send({
             id: result.id,
+            codigo: result.codigo || undefined,
             propiedadId: result.propiedadId,
             propiedadNombre: result.propiedad.nombre,
             huespedId: result.huespedId,
@@ -620,6 +732,12 @@ export function registerReservationsRoutes(
             ingreso: result.ingreso.toISOString().slice(0, 10),
             salida: result.salida.toISOString().slice(0, 10),
             noches: result.noches,
+            cantidadHuespedes: result.cantidadHuespedes ?? undefined,
+            horaCheckIn: result.horaCheckIn || undefined,
+            horaCheckOut: result.horaCheckOut || undefined,
+            precioBaseNocheSnapshot: result.precioBaseNocheSnapshot ? Number(result.precioBaseNocheSnapshot) : undefined,
+            precioLimpiezaSnapshot: result.precioLimpiezaSnapshot ? Number(result.precioLimpiezaSnapshot) : undefined,
+            subtotalSnapshot: result.subtotalSnapshot ? Number(result.subtotalSnapshot) : undefined,
             estado: result.estado,
             montoAcordado: Number(result.montoAcordado),
             moneda: result.moneda,

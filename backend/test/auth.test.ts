@@ -440,4 +440,86 @@ describe('Authentication & Authorization Suite', () => {
 
     assert.equal(hitRateLimit, true, 'Debe responder con 429 tras superar el límite');
   });
+
+  it('permite logout y refresh cuando el origen es un loopback equivalente (localhost <-> 127.0.0.1) con el mismo puerto', async () => {
+    // Configurado solo con 127.0.0.1:5173
+    app = buildApp({
+      authRepository: repository,
+      jwtSecret: TEST_JWT_SECRET,
+      allowedOrigins: ['http://127.0.0.1:5173'],
+    });
+
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: {
+        email: testUser.email,
+        password: validPassword,
+      },
+    });
+    const cookie = (loginRes.headers['set-cookie'] as string).split(';')[0];
+
+    // Petición de logout desde http://localhost:5173 (loopback equivalente)
+    const logoutRes = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: {
+        origin: 'http://localhost:5173',
+        cookie,
+        'x-requested-with': 'XMLHttpRequest',
+      },
+    });
+    assert.equal(logoutRes.statusCode, 200, 'Debe autorizar el loopback equivalente');
+    assert.equal(logoutRes.json().success, true);
+  });
+
+  it('rechaza logout con 403 CSRF_VIOLATION si el origen no está autorizado o difiere en puerto', async () => {
+    app = buildApp({
+      authRepository: repository,
+      jwtSecret: TEST_JWT_SECRET,
+      allowedOrigins: ['http://127.0.0.1:5173'],
+    });
+
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/auth/login',
+      payload: {
+        email: testUser.email,
+        password: validPassword,
+      },
+    });
+    const cookie = (loginRes.headers['set-cookie'] as string).split(';')[0];
+
+    // Intento con puerto no autorizado
+    const wrongPortRes = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: {
+        origin: 'http://localhost:8080',
+        cookie,
+        'x-requested-with': 'XMLHttpRequest',
+      },
+    });
+    assert.equal(wrongPortRes.statusCode, 403);
+    assert.ok(
+      ['CSRF_VIOLATION', 'CORS_VIOLATION'].includes(wrongPortRes.json().error.code),
+      'Debe rechazar con código de violación de seguridad CORS o CSRF'
+    );
+
+    // Intento con dominio externo no autorizado
+    const evilRes = await app.inject({
+      method: 'POST',
+      url: '/auth/logout',
+      headers: {
+        origin: 'https://evil-site.com',
+        cookie,
+        'x-requested-with': 'XMLHttpRequest',
+      },
+    });
+    assert.equal(evilRes.statusCode, 403);
+    assert.ok(
+      ['CSRF_VIOLATION', 'CORS_VIOLATION'].includes(evilRes.json().error.code),
+      'Debe rechazar con código de violación de seguridad CORS o CSRF'
+    );
+  });
 });

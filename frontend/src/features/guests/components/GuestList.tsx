@@ -57,7 +57,14 @@ export const GuestList: React.FC<GuestListProps> = ({
               <tr key={guest.id} className="hover:bg-stone-50/50 transition-colors">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-stone-900">{guest.nombreCompleto}</div>
-                  <div className="font-mono text-[10px] text-stone-400 mt-0.5">{guest.id}</div>
+                  <div className="font-mono text-[10px] text-stone-500 mt-0.5 flex items-center gap-1.5">
+                    {guest.codigo && (
+                      <span className="rounded bg-stone-100 px-1 py-0.5 font-semibold text-stone-800 border border-stone-200">
+                        {guest.codigo}
+                      </span>
+                    )}
+                    <span className="text-stone-400">{guest.id}</span>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   {guest.telefono ? (

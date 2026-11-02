@@ -136,6 +136,78 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
       assert.equal(audit.actor, 'admin@daplace.example.invalid');
     });
 
+    it('persiste cantidadHuespedes, horaCheckIn, horaCheckOut y snapshots financieros en la reserva', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        payload: {
+          id: 'res-test-snapshots',
+          propiedadId: 'prop-04',
+          huespedId: 'hue-01',
+          ingreso: '2026-12-01',
+          salida: '2026-12-04',
+          cantidadHuespedes: 5,
+          horaCheckIn: '16:00',
+          horaCheckOut: '10:30',
+          montoAcordado: 1950,
+        },
+      });
+
+      assert.equal(res.statusCode, 201);
+      const data = res.json();
+      assert.equal(data.cantidadHuespedes, 5);
+      assert.equal(data.horaCheckIn, '16:00');
+      assert.equal(data.horaCheckOut, '10:30');
+      assert.equal(data.precioBaseNocheSnapshot, 650);
+      assert.equal(data.subtotalSnapshot, 1950);
+
+      const inDb = await db.prisma.reserva.findUnique({ where: { id: 'res-test-snapshots' } });
+      assert.ok(inDb);
+      assert.equal(inDb.cantidadHuespedes, 5);
+      assert.equal(inDb.horaCheckIn, '16:00');
+      assert.equal(inDb.horaCheckOut, '10:30');
+      assert.equal(Number(inDb.precioBaseNocheSnapshot), 650);
+    });
+
+    it('rechaza creación si cantidadHuespedes excede la capacidad de la propiedad (400)', async () => {
+      // prop-02 tiene capacidadHuespedes = 2
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        payload: {
+          propiedadId: 'prop-02',
+          huespedId: 'hue-01',
+          ingreso: '2026-12-20',
+          salida: '2026-12-23',
+          cantidadHuespedes: 10,
+          montoAcordado: 660,
+        },
+      });
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.json().error.code, 'CAPACITY_EXCEEDED');
+      assert.ok(res.json().error.message.includes('excede la capacidad máxima'));
+    });
+
+    it('rechaza creación si horaCheckIn u horaCheckOut tienen formato no válido (400)', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        payload: {
+          propiedadId: 'prop-02',
+          huespedId: 'hue-01',
+          ingreso: '2026-12-25',
+          salida: '2026-12-28',
+          horaCheckIn: '25:99',
+          montoAcordado: 660,
+        },
+      });
+
+      assert.equal(res.statusCode, 400);
+      assert.equal(res.json().error.code, 'VALIDATION_ERROR');
+      assert.ok(res.json().error.message.includes('HH:mm'));
+    });
+
     it('rechaza creación si las fechas se solapan con reserva activa existente (409)', async () => {
       const resConflict = await app.inject({
         method: 'POST',
@@ -300,4 +372,77 @@ describe('Hito 3 — Reservas, Disponibilidad, Calendario y Concurrencia (Postgr
       assert.equal(day28.status, 'DISPONIBLE');
     });
   });
+
+  describe('5. Códigos Legibles y Paginación Server-Side (FEEDBACK-DIEGO-01-C)', () => {
+    it('genera código legible RSV-XXXXXX al crear una reserva y permite buscar por él', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/reservas',
+        payload: {
+          id: 'res-test-codes-01',
+          propiedadId: 'prop-02',
+          huespedId: 'hue-02',
+          ingreso: '2027-02-10',
+          salida: '2027-02-15',
+          montoAcordado: 900,
+        },
+      });
+
+      assert.equal(res.statusCode, 201);
+      const created = res.json();
+      assert.ok(created.codigo, 'Debe asignar código legible a la reserva');
+      assert.match(created.codigo, /^RSV-\d{6}$/, 'Formato debe ser RSV-XXXXXX');
+
+      // Buscar por código legible
+      const searchRes = await app.inject({
+        method: 'GET',
+        url: `/api/reservas?search=${created.codigo}`,
+      });
+      assert.equal(searchRes.statusCode, 200);
+      const results = searchRes.json();
+      assert.ok(Array.isArray(results));
+      assert.ok(results.some((r: any) => r.codigo === created.codigo));
+    });
+
+    it('soporta paginación server-side con page, pageSize y headers en /api/reservas', async () => {
+      const page1Res = await app.inject({
+        method: 'GET',
+        url: '/api/reservas?page=1&pageSize=2',
+      });
+
+      assert.equal(page1Res.statusCode, 200);
+      assert.ok(page1Res.headers['x-total-count'], 'Debe incluir header X-Total-Count');
+      assert.equal(page1Res.headers['x-page'], '1');
+      assert.equal(page1Res.headers['x-page-size'], '2');
+
+      const body = page1Res.json();
+      assert.equal(body.page, 1);
+      assert.equal(body.pageSize, 2);
+      assert.ok(typeof body.total === 'number');
+      assert.ok(body.total >= 5);
+      assert.equal(body.data.length, 2);
+      assert.ok(body.totalPages >= 3);
+      assert.ok(body.data[0].codigo, 'Los items paginados deben incluir código');
+
+      // Página 2
+      const page2Res = await app.inject({
+        method: 'GET',
+        url: '/api/reservas?page=2&pageSize=2',
+      });
+      assert.equal(page2Res.statusCode, 200);
+      const body2 = page2Res.json();
+      assert.equal(body2.page, 2);
+      assert.equal(body2.data.length, 2);
+      assert.notEqual(body.data[0].id, body2.data[0].id, 'Los items de la página 2 deben diferir de la 1');
+
+      // Comprobar que sin parámetro page sigue devolviendo un array (retrocompatibilidad)
+      const noPageRes = await app.inject({
+        method: 'GET',
+        url: '/api/reservas',
+      });
+      assert.equal(noPageRes.statusCode, 200);
+      assert.ok(Array.isArray(noPageRes.json()), 'Sin page debe devolver array simple');
+    });
+  });
 });
+

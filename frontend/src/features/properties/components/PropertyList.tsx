@@ -117,8 +117,14 @@ export const PropertyList: React.FC<PropertyListProps> = ({
               <tr key={property.id} className="hover:bg-stone-50/50 transition-colors">
                 <td className="px-4 py-3">
                   <div className="font-semibold text-stone-900 truncate">{property.nombre}</div>
-                  <div className="text-xs text-stone-500 mt-0.5 truncate max-w-xs">{property.direccion}</div>
-                  <div className="mt-0.5 font-mono text-[10px] text-stone-400">{property.id}</div>
+                  <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-stone-500">
+                    {property.codigo && (
+                      <span className="rounded bg-stone-100 px-1 py-0.5 font-semibold text-stone-800 border border-stone-200">
+                        {property.codigo}
+                      </span>
+                    )}
+                    <span className="text-stone-400">{property.id}</span>
+                  </div>
                 </td>
                 <td className="px-4 py-3 font-medium text-stone-800 truncate">
                   {property.propietarioNombre}

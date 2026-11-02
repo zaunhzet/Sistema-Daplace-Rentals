@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, AlertCircle, FileText, Building2 } from 'lucide-react';
+import { X, AlertCircle, FileText, Building2, ShieldCheck } from 'lucide-react';
 import type { BeneficiarioPago, ConceptoPago, CreatePaymentDto, MetodoPago } from '../types';
 import type { Reservation } from '../../reservations';
 import { formatMoney, validateMoneyInput } from '../../../shared/money';
@@ -190,7 +190,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
               <option value="">Seleccione una reserva...</option>
               {reservations.map((r) => (
                 <option key={r.id} value={r.id}>
-                  {r.id} — {r.huespedNombre} ({r.propiedadNombre})
+                  {r.codigo ? `${r.codigo} — ` : ''}{r.huespedNombre} ({r.propiedadNombre})
                 </option>
               ))}
             </select>
@@ -201,6 +201,12 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           {selectedReservation && (
             <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3 text-xs text-stone-700">
               <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div>
+                  <span className="text-stone-500">Reserva:</span>{' '}
+                  <strong className="text-stone-800 font-mono">
+                    {selectedReservation.codigo || selectedReservation.id}
+                  </strong>
+                </div>
                 <div>
                   <span className="text-stone-500">Inmueble:</span>{' '}
                   <strong className="text-stone-800">{selectedReservation.propiedadNombre}</strong>
@@ -332,13 +338,13 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-3.5 space-y-3">
             <div className="flex items-center gap-1.5 text-xs font-bold text-stone-800">
               <Building2 size={14} className="text-[#183b32]" />
-              <span>DESTINO Y BENEFICIARIO (DR-01)</span>
+              <span>DESTINO BANCARIO Y BENEFICIARIO (DR-01)</span>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label htmlFor="pago-beneficiario-tipo" className="block text-xs font-semibold text-stone-700 mb-1">
-                  BENEFICIARIO
+                  BENEFICIARIO / DESTINO
                 </label>
                 <select
                   id="pago-beneficiario-tipo"
@@ -361,17 +367,16 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
                   type="text"
                   value={bancoReceptor}
                   onChange={(e) => setBancoReceptor(e.target.value)}
-                  placeholder="Ej. BCP, BBVA, Interbank"
+                  placeholder="Ej. BCP, BBVA, Interbank, Scotiabank"
                   className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs text-stone-800 focus:border-[#183b32] focus:outline-hidden"
-                >
-                </input>
+                />
               </div>
             </div>
 
             {(beneficiarioTipo === 'PROPIETARIO' || beneficiarioTipo === 'OTRO') && (
               <div>
                 <label htmlFor="pago-beneficiario-nombre" className="block text-xs font-semibold text-stone-700 mb-1">
-                  NOMBRE DEL BENEFICIARIO
+                  TITULAR DE LA CUENTA RECEPTORA
                 </label>
                 <input
                   id="pago-beneficiario-nombre"
@@ -386,19 +391,26 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
             <div>
               <label htmlFor="pago-cuenta-referencia" className="block text-xs font-semibold text-stone-700 mb-1">
-                REFERENCIA RESTRINGIDA DE CUENTA (PRIVACIDAD)
+                ÚLTIMOS 4 DÍGITOS O REF. DE OPERACIÓN
               </label>
               <input
                 id="pago-cuenta-referencia"
                 type="text"
                 value={cuentaReferencia}
                 onChange={(e) => setCuentaReferencia(e.target.value)}
-                placeholder="Ej. ****4589 o CTA-***1234"
+                placeholder="Ej. ****4589 o 4589"
                 className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-mono text-stone-800 focus:border-[#183b32] focus:outline-hidden"
               />
               <p className="mt-1 text-[10px] text-stone-500">
-                Solo se conservan los últimos dígitos o referencia restringida para resguardar información bancaria sensible.
+                Por privacidad y verificación de integridad (HMAC), registre únicamente los últimos 4 dígitos o identificador de operación. No almacene números de cuenta completos.
               </p>
+            </div>
+
+            <div className="flex items-start gap-2 rounded-xl bg-emerald-50/80 border border-emerald-200/70 p-2.5 text-[11px] text-emerald-900">
+              <ShieldCheck size={15} className="text-emerald-700 shrink-0 mt-0.5" />
+              <span>
+                <strong>Privacidad e Integridad (HMAC):</strong> La verificación de autenticidad se realiza mediante firmas criptográficas. Solo se conservan referencias operativas restringidas para conciliación bancaria.
+              </span>
             </div>
           </div>
 

@@ -3,6 +3,7 @@ import type { Reservation } from '../types';
 export const INITIAL_RESERVATIONS_MOCK: Reservation[] = [
   {
     id: 'res-01',
+    codigo: 'RSV-000001',
     propiedadId: 'prop-01',
     propiedadNombre: 'Departamento Miraflores Malecón Balta',
     huespedId: 'hue-01',
@@ -21,6 +22,7 @@ export const INITIAL_RESERVATIONS_MOCK: Reservation[] = [
   },
   {
     id: 'res-02',
+    codigo: 'RSV-000002',
     propiedadId: 'prop-03',
     propiedadNombre: 'Loft Ejecutivo San Isidro Golf',
     huespedId: 'hue-02',
@@ -40,6 +42,7 @@ export const INITIAL_RESERVATIONS_MOCK: Reservation[] = [
   },
   {
     id: 'res-03',
+    codigo: 'RSV-000003',
     propiedadId: 'prop-01',
     propiedadNombre: 'Departamento Miraflores Malecón Balta',
     huespedId: 'hue-03',
@@ -58,6 +61,7 @@ export const INITIAL_RESERVATIONS_MOCK: Reservation[] = [
   },
   {
     id: 'res-04',
+    codigo: 'RSV-000004',
     propiedadId: 'prop-02',
     propiedadNombre: 'Suite Boutique Barranco Tradicional',
     huespedId: 'hue-01',
@@ -76,6 +80,7 @@ export const INITIAL_RESERVATIONS_MOCK: Reservation[] = [
   },
   {
     id: 'res-05',
+    codigo: 'RSV-000005',
     propiedadId: 'prop-01',
     propiedadNombre: 'Departamento Miraflores Malecón Balta',
     huespedId: 'hue-02',

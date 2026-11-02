@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, CheckCircle, Plus } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import type {
   CreateReservationDto,
   Reservation,
@@ -24,7 +24,9 @@ export const ReservationsPage: React.FC = () => {
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Filters
+  // Filters & Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
   const [filters, setFilters] = useState<ReservationFilterParams>({
     propiedadId: 'TODAS',
     huespedId: 'TODOS',
@@ -80,8 +82,8 @@ export const ReservationsPage: React.FC = () => {
   );
 
   const loadData = useCallback(async (silent = false) => {
-    await coordinatorRef.current.loadData(filters, silent);
-  }, [filters]);
+    await coordinatorRef.current.loadData({ ...filters, page: currentPage, pageSize }, silent);
+  }, [filters, currentPage]);
 
   useEffect(() => {
     loadData();
@@ -293,15 +295,19 @@ export const ReservationsPage: React.FC = () => {
         filters={filters}
         properties={properties}
         guests={guests}
-        onFilterChange={setFilters}
-        onReset={() =>
+        onFilterChange={(f) => {
+          setCurrentPage(1);
+          setFilters(f);
+        }}
+        onReset={() => {
+          setCurrentPage(1);
           setFilters({
             propiedadId: 'TODAS',
             huespedId: 'TODOS',
             estado: 'TODOS',
             search: '',
-          })
-        }
+          });
+        }}
       />
 
       {/* List Component */}
@@ -310,19 +316,51 @@ export const ReservationsPage: React.FC = () => {
           Cargando reservas...
         </div>
       ) : (
-        <ReservationList
-          reservations={reservations}
-          onViewDetail={(r) => {
-            setSelectedReservation(r);
-            setIsDetailOpen(true);
-          }}
-          onOpenEditDates={(r) => {
-            setSelectedReservation(r);
-            setIsEditDatesOpen(true);
-          }}
-          onConfirm={handleConfirmReservation}
-          onCreateNew={() => setIsFormOpen(true)}
-        />
+        <div className="space-y-3">
+          <ReservationList
+            reservations={reservations}
+            onViewDetail={(r) => {
+              setSelectedReservation(r);
+              setIsDetailOpen(true);
+            }}
+            onOpenEditDates={(r) => {
+              setSelectedReservation(r);
+              setIsEditDatesOpen(true);
+            }}
+            onConfirm={handleConfirmReservation}
+            onCreateNew={() => setIsFormOpen(true)}
+          />
+
+          {/* Pagination Controls */}
+          {reservations.length > 0 && (
+            <div className="flex items-center justify-between rounded-xl border border-stone-200/90 bg-white px-4 py-2.5 shadow-2xs text-xs text-stone-600">
+              <div className="font-medium text-stone-500">
+                Página <strong className="text-stone-800">{currentPage}</strong>
+                {totalCount > 0 && <span> — Mostrando {reservations.length} de {totalCount} reservas</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <ChevronLeft size={14} />
+                  <span>Anterior</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={reservations.length < pageSize}
+                  onClick={() => setCurrentPage((p) => p + 1)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-stone-200 bg-white px-2.5 py-1.5 font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                >
+                  <span>Siguiente</span>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modals */}

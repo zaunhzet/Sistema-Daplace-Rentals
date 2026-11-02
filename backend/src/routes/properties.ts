@@ -229,6 +229,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             { nombre: { contains: q, mode: 'insensitive' } },
             { direccion: { contains: q, mode: 'insensitive' } },
             { id: { contains: q, mode: 'insensitive' } },
+            { codigo: { contains: q, mode: 'insensitive' } },
             { propietario: { nombre: { contains: q, mode: 'insensitive' } } },
           ];
         }
@@ -245,6 +246,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
 
         return propiedades.map((p) => ({
           id: p.id,
+          codigo: p.codigo || undefined,
           nombre: p.nombre,
           propietarioId: p.propietarioId,
           propietarioNombre: p.propietario?.nombre || 'Sin Propietario',
@@ -254,6 +256,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           activa: p.activa,
           capacidadHuespedes: p.capacidadHuespedes,
           precioBaseNoche: Number(p.precioBaseNoche),
+          precioLimpieza: Number(p.precioLimpieza),
           moneda: p.moneda,
           creadoEn: p.creadoEn.toISOString(),
           actualizadoEn: p.actualizadoEn.toISOString(),
@@ -310,6 +313,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
 
         return {
           id: propiedad.id,
+          codigo: propiedad.codigo || undefined,
           nombre: propiedad.nombre,
           propietarioId: propiedad.propietarioId,
           propietarioNombre: propiedad.propietario?.nombre || 'Sin Propietario',
@@ -319,6 +323,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           activa: propiedad.activa,
           capacidadHuespedes: propiedad.capacidadHuespedes,
           precioBaseNoche: Number(propiedad.precioBaseNoche),
+          precioLimpieza: Number(propiedad.precioLimpieza),
           moneda: propiedad.moneda,
           creadoEn: propiedad.creadoEn.toISOString(),
           actualizadoEn: propiedad.actualizadoEn.toISOString(),
@@ -337,6 +342,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
         estadoPublicacion?: 'PUBLICADA' | 'BORRADOR' | 'PAUSADA';
         capacidadHuespedes?: number;
         precioBaseNoche?: number;
+        precioLimpieza?: number;
         moneda?: string;
       };
     }>(
@@ -352,6 +358,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           estadoPublicacion = 'BORRADOR',
           capacidadHuespedes = 2,
           precioBaseNoche = 200,
+          precioLimpieza = 0,
           moneda = 'PEN',
         } = request.body || {};
 
@@ -437,6 +444,17 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           });
         }
 
+        const numLimpieza = Number(precioLimpieza);
+        if (!Number.isFinite(numLimpieza) || numLimpieza < 0) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El precio de limpieza debe ser un número finito mayor o igual a 0.',
+              requestId: request.id,
+            },
+          });
+        }
+
         if (!ALLOWED_CURRENCIES.includes(moneda as any)) {
           return reply.status(400).send({
             error: {
@@ -480,6 +498,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
               activa: true,
               capacidadHuespedes: numCapacidad,
               precioBaseNoche: numPrecio,
+              precioLimpieza: numLimpieza,
               moneda,
             },
             include: {
@@ -504,6 +523,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
 
         return reply.status(201).send({
           id: created.id,
+          codigo: created.codigo || undefined,
           nombre: created.nombre,
           propietarioId: created.propietarioId,
           propietarioNombre: created.propietario?.nombre || 'Sin Propietario',
@@ -513,6 +533,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           activa: created.activa,
           capacidadHuespedes: created.capacidadHuespedes,
           precioBaseNoche: Number(created.precioBaseNoche),
+          precioLimpieza: Number(created.precioLimpieza),
           moneda: created.moneda,
           creadoEn: created.creadoEn.toISOString(),
           actualizadoEn: created.actualizadoEn.toISOString(),
@@ -532,6 +553,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
         activa?: boolean;
         capacidadHuespedes?: number;
         precioBaseNoche?: number;
+        precioLimpieza?: number;
         moneda?: string;
       };
     }>(
@@ -608,6 +630,19 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           }
         }
 
+        if (body.precioLimpieza !== undefined) {
+          const numLimpieza = Number(body.precioLimpieza);
+          if (!Number.isFinite(numLimpieza) || numLimpieza < 0) {
+            return reply.status(400).send({
+              error: {
+                code: 'VALIDATION_ERROR',
+                message: 'El precio de limpieza debe ser un número finito mayor o igual a 0.',
+                requestId: request.id,
+              },
+            });
+          }
+        }
+
         if (body.capacidadHuespedes !== undefined) {
           const numCap = Number(body.capacidadHuespedes);
           if (!Number.isInteger(numCap) || numCap <= 0 || numCap > 100) {
@@ -653,6 +688,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
               ...(body.activa !== undefined ? { activa: body.activa } : {}),
               ...(body.capacidadHuespedes !== undefined ? { capacidadHuespedes: Number(body.capacidadHuespedes) } : {}),
               ...(body.precioBaseNoche !== undefined ? { precioBaseNoche: Number(body.precioBaseNoche) } : {}),
+              ...(body.precioLimpieza !== undefined ? { precioLimpieza: Number(body.precioLimpieza) } : {}),
               ...(body.moneda !== undefined ? { moneda: body.moneda } : {}),
             },
             include: {
@@ -686,6 +722,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           activa: updated.activa,
           capacidadHuespedes: updated.capacidadHuespedes,
           precioBaseNoche: Number(updated.precioBaseNoche),
+          precioLimpieza: Number(updated.precioLimpieza),
           moneda: updated.moneda,
           creadoEn: updated.creadoEn.toISOString(),
           actualizadoEn: updated.actualizadoEn.toISOString(),

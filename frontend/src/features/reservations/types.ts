@@ -4,6 +4,7 @@ export type OrigenReserva = 'WEB' | 'DIRECTO' | 'AIRBNB';
 
 export interface Reservation {
   id: string;
+  codigo?: string;
   propiedadId: string;
   propiedadNombre: string;
   huespedId: string;
@@ -12,6 +13,12 @@ export interface Reservation {
   ingreso: string; // 'YYYY-MM-DD'
   salida: string;  // 'YYYY-MM-DD'
   noches: number;
+  cantidadHuespedes?: number;
+  horaCheckIn?: string;
+  horaCheckOut?: string;
+  precioBaseNocheSnapshot?: number;
+  precioLimpiezaSnapshot?: number;
+  subtotalSnapshot?: number;
   estado: EstadoReserva;
   montoAcordado: number;
   moneda: string;  // 'PEN' | 'USD'
@@ -34,6 +41,9 @@ export interface CreateReservationDto {
   huespedId: string;
   ingreso: string;
   salida: string;
+  cantidadHuespedes?: number;
+  horaCheckIn?: string;
+  horaCheckOut?: string;
   montoAcordado: number;
   moneda?: string;
   origen?: OrigenReserva;
@@ -55,6 +65,16 @@ export interface ReservationFilterParams {
   desde?: string;
   hasta?: string;
   search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedReservations {
+  data: Reservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface AvailabilityCheckResult {

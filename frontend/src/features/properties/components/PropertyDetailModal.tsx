@@ -60,7 +60,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-bold text-stone-700">
+              {property.codigo && (
+                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
+                  {property.codigo}
+                </span>
+              )}
+              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
                 {property.id}
               </span>
               <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${property.activa ? 'text-emerald-700' : 'text-stone-400'}`}>
@@ -119,7 +124,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           </div>
 
           {/* Commercial / Operating details */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Capacidad</p>
               <p className="mt-1 text-lg font-bold text-stone-800">
@@ -130,6 +135,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Precio Base Noche</p>
               <p className="mt-1 text-lg font-bold text-stone-800">
                 {property.moneda === 'USD' ? '$' : 'S/'} {property.precioBaseNoche ?? '—'}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Tarifa Limpieza</p>
+              <p className="mt-1 text-lg font-bold text-stone-800">
+                {property.moneda === 'USD' ? '$' : 'S/'} {property.precioLimpieza ?? 0}
               </p>
             </div>
             <div className="rounded-2xl border border-stone-200 bg-white p-4">

@@ -107,7 +107,15 @@ export const ReservationList: React.FC<ReservationListProps> = ({
             {reservations.map((r) => (
               <tr key={r.id} className="hover:bg-stone-50/50 transition-colors">
                 <td className="px-4 py-3">
-                  <div className="font-mono font-bold text-stone-900">{r.id}</div>
+                  <div className="font-mono font-bold text-stone-900 flex items-center gap-1.5">
+                    {r.codigo ? (
+                      <span className="rounded-md bg-stone-100 px-1.5 py-0.5 text-xs text-stone-900 font-semibold border border-stone-200">
+                        {r.codigo}
+                      </span>
+                    ) : (
+                      <span>{r.id}</span>
+                    )}
+                  </div>
                   <div className="text-[10px] text-stone-500 uppercase tracking-wider mt-0.5">
                     {r.origen} {r.referenciaCanal ? `(${r.referenciaCanal})` : ''}
                   </div>

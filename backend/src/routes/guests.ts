@@ -27,6 +27,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
             { telefono: { contains: q, mode: 'insensitive' } },
             { numeroDocumento: { contains: q, mode: 'insensitive' } },
             { id: { contains: q, mode: 'insensitive' } },
+            { codigo: { contains: q, mode: 'insensitive' } },
           ];
         }
 
@@ -37,6 +38,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
 
         return huespedes.map((g) => ({
           id: g.id,
+          codigo: g.codigo || undefined,
           nombreCompleto: g.nombreCompleto,
           telefono: g.telefono || '',
           email: g.email || '',
@@ -83,6 +85,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
 
         return {
           id: guest.id,
+          codigo: guest.codigo || undefined,
           nombreCompleto: guest.nombreCompleto,
           telefono: guest.telefono || '',
           email: guest.email || '',
@@ -239,6 +242,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
 
         return reply.status(201).send({
           id: created.id,
+          codigo: created.codigo || undefined,
           nombreCompleto: created.nombreCompleto,
           telefono: created.telefono || '',
           email: created.email || '',

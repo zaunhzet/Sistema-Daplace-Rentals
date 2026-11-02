@@ -372,7 +372,12 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-bold text-stone-700">
+              {reservation.codigo && (
+                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
+                  {reservation.codigo}
+                </span>
+              )}
+              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
                 {reservation.id}
               </span>
               <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs text-stone-600 font-mono">
@@ -411,6 +416,11 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 mb-2">Estado Transaccional</p>
               <div>{getStatusBadge(reservation.estado)}</div>
+              {reservation.cantidadHuespedes && (
+                <p className="mt-3 text-xs text-stone-600">
+                  Huéspedes: <strong className="text-stone-800">{reservation.cantidadHuespedes} personas</strong>
+                </p>
+              )}
             </div>
 
             <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-4">
@@ -418,6 +428,18 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <p className="text-xl font-bold text-stone-900">
                 {reservation.moneda === 'USD' ? '$' : 'S/'} {reservation.montoAcordado.toFixed(2)}
               </p>
+              {reservation.precioLimpiezaSnapshot !== undefined && (
+                <div className="mt-2 pt-2 border-t border-stone-200/80 text-[11px] text-stone-500 space-y-0.5">
+                  <div className="flex justify-between">
+                    <span>Base ({reservation.noches} n.):</span>
+                    <span>{reservation.moneda === 'USD' ? '$' : 'S/'} {((reservation.precioBaseNocheSnapshot || 0) * reservation.noches).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Limpieza:</span>
+                    <span>{reservation.moneda === 'USD' ? '$' : 'S/'} {(reservation.precioLimpiezaSnapshot || 0).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -429,14 +451,18 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <p className="text-xs text-stone-400 uppercase font-semibold">Check-in</p>
-                <p className="text-base font-bold text-stone-800 font-mono mt-0.5">{reservation.ingreso}</p>
+                <p className="text-base font-bold text-stone-800 font-mono mt-0.5">
+                  {reservation.ingreso} {reservation.horaCheckIn && <span className="text-xs text-stone-500 font-normal">({reservation.horaCheckIn})</span>}
+                </p>
               </div>
               <div className="text-center px-4 py-1.5 rounded-full bg-stone-100 text-xs font-bold text-stone-600">
                 → {reservation.noches} noche{reservation.noches > 1 ? 's' : ''} →
               </div>
               <div>
                 <p className="text-xs text-stone-400 uppercase font-semibold">Check-out</p>
-                <p className="text-base font-bold text-stone-800 font-mono mt-0.5">{reservation.salida}</p>
+                <p className="text-base font-bold text-stone-800 font-mono mt-0.5">
+                  {reservation.salida} {reservation.horaCheckOut && <span className="text-xs text-stone-500 font-normal">({reservation.horaCheckOut})</span>}
+                </p>
               </div>
             </div>
             <p className="mt-3 text-[11px] text-stone-400">

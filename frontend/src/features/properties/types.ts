@@ -21,6 +21,7 @@ export interface CreatePropietarioDto {
 
 export interface Property {
   id: string;
+  codigo?: string;
   nombre: string;
   propietarioId: string;
   propietarioNombre: string;
@@ -30,6 +31,7 @@ export interface Property {
   activa: boolean;
   capacidadHuespedes?: number;
   precioBaseNoche?: number;
+  precioLimpieza?: number;
   moneda: string;
   creadoEn: string;
   actualizadoEn: string;
@@ -43,6 +45,7 @@ export interface CreatePropertyDto {
   estadoPublicacion?: EstadoPublicacion;
   capacidadHuespedes?: number;
   precioBaseNoche?: number;
+  precioLimpieza?: number;
   moneda?: string;
 }
 
@@ -55,6 +58,7 @@ export interface UpdatePropertyDto {
   activa?: boolean;
   capacidadHuespedes?: number;
   precioBaseNoche?: number;
+  precioLimpieza?: number;
   moneda?: string;
 }
 
