@@ -184,25 +184,33 @@ export function registerCalendarRoutes(prisma: PrismaClient): FastifyPluginAsync
             status = occupyingRes.estado === 'SOLICITADA' ? 'SOLICITADA' : 'CONFIRMADA';
           }
 
+          const mapCalendarRes = (r: any) => ({
+            id: r.id,
+            codigo: r.codigo || undefined,
+            propiedadId: r.propiedadId,
+            huespedId: r.huespedId,
+            huespedNombre: r.huesped?.nombreCompleto || 'Huésped',
+            ingreso: r.ingreso instanceof Date ? r.ingreso.toISOString().slice(0, 10) : r.ingreso,
+            salida: r.salida instanceof Date ? r.salida.toISOString().slice(0, 10) : r.salida,
+            estado: r.estado,
+            montoAcordado: Number(r.montoAcordado),
+            moneda: r.moneda,
+            cantidadHuespedes: r.cantidadHuespedes ?? undefined,
+            horaCheckIn: r.horaCheckIn || undefined,
+            horaCheckOut: r.horaCheckOut || undefined,
+            origen: r.origen || undefined,
+            notas: request.user?.rol !== 'PROPIETARIO' ? (r.notas || undefined) : undefined,
+          });
+
           days.push({
             date: dateStr,
             dayNumber: day,
             isCurrentMonth: true,
             isToday: dateStr === todayStr,
             status,
-            reservation: occupyingRes
-              ? {
-                  id: occupyingRes.id,
-                  propiedadId: occupyingRes.propiedadId,
-                  huespedId: occupyingRes.huespedId,
-                  huespedNombre: occupyingRes.huesped.nombreCompleto,
-                  ingreso: occupyingRes.ingreso.toISOString().slice(0, 10),
-                  salida: occupyingRes.salida.toISOString().slice(0, 10),
-                  estado: occupyingRes.estado,
-                  montoAcordado: Number(occupyingRes.montoAcordado),
-                  moneda: occupyingRes.moneda,
-                }
-              : undefined,
+            reservation: occupyingRes ? mapCalendarRes(occupyingRes) : undefined,
+            checkinReservation: checkinRes ? mapCalendarRes(checkinRes) : undefined,
+            checkoutReservation: checkoutRes ? mapCalendarRes(checkoutRes) : undefined,
           });
         }
 

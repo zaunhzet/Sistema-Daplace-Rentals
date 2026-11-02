@@ -7,6 +7,13 @@ import type {
 } from '../types';
 import { reservationService } from '../services/reservationService';
 import { ApiError } from '../../../shared/api/client';
+import { TechnicalIdBadge } from '../../../shared/components/TechnicalIdBadge';
+import {
+  formatNights,
+  formatTimeHHmm,
+  formatChannelLabel,
+  formatDisplayDate,
+} from '../../../shared/utils/stayFormatters';
 
 interface ReservationDetailModalProps {
   reservation: Reservation | null;
@@ -372,16 +379,9 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              {reservation.codigo && (
-                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
-                  {reservation.codigo}
-                </span>
-              )}
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
-                {reservation.id}
-              </span>
+              <TechnicalIdBadge id={reservation.id} code={reservation.codigo} />
               <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs text-stone-600 font-mono">
-                Canal: {reservation.origen}
+                Canal: {formatChannelLabel(reservation.origen)}
               </span>
             </div>
             <h2 id="detail-res-title" className="mt-2 text-2xl font-bold tracking-tight text-stone-900">
@@ -416,11 +416,14 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
             <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500 mb-2">Estado Transaccional</p>
               <div>{getStatusBadge(reservation.estado)}</div>
-              {reservation.cantidadHuespedes && (
-                <p className="mt-3 text-xs text-stone-600">
-                  Huéspedes: <strong className="text-stone-800">{reservation.cantidadHuespedes} personas</strong>
-                </p>
-              )}
+              <p className="mt-3 text-xs text-stone-600">
+                Huéspedes:{' '}
+                <strong className="text-stone-800">
+                  {reservation.cantidadHuespedes
+                    ? `${reservation.cantidadHuespedes} persona${reservation.cantidadHuespedes > 1 ? 's' : ''}`
+                    : 'No especificado (histórica)'}
+                </strong>
+              </p>
             </div>
 
             <div className="rounded-2xl border border-stone-200 bg-stone-50/50 p-4">
@@ -432,7 +435,7 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
                 <div className="mt-2 pt-2 border-t border-stone-200/80 text-[11px] text-stone-500 space-y-0.5">
                   <div className="flex justify-between">
                     <span>Base ({reservation.noches} n.):</span>
-                    <span>{reservation.moneda === 'USD' ? '$' : 'S/'} {((reservation.precioBaseNocheSnapshot || 0) * reservation.noches).toFixed(2)}</span>
+                    <span>{reservation.moneda === 'USD' ? '$' : 'S/'} {((reservation.precioBaseNocheSnapshot || 0) * (reservation.noches || 1)).toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Limpieza:</span>
@@ -452,21 +455,27 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               <div>
                 <p className="text-xs text-stone-400 uppercase font-semibold">Check-in</p>
                 <p className="text-base font-bold text-stone-800 font-mono mt-0.5">
-                  {reservation.ingreso} {reservation.horaCheckIn && <span className="text-xs text-stone-500 font-normal">({reservation.horaCheckIn})</span>}
+                  {formatDisplayDate(reservation.ingreso)}{' '}
+                  <span className="text-xs text-stone-500 font-normal">
+                    ({formatTimeHHmm(reservation.horaCheckIn)})
+                  </span>
                 </p>
               </div>
               <div className="text-center px-4 py-1.5 rounded-full bg-stone-100 text-xs font-bold text-stone-600">
-                → {reservation.noches} noche{reservation.noches > 1 ? 's' : ''} →
+                → {formatNights(reservation.noches, reservation.ingreso, reservation.salida)} →
               </div>
               <div>
                 <p className="text-xs text-stone-400 uppercase font-semibold">Check-out</p>
                 <p className="text-base font-bold text-stone-800 font-mono mt-0.5">
-                  {reservation.salida} {reservation.horaCheckOut && <span className="text-xs text-stone-500 font-normal">({reservation.horaCheckOut})</span>}
+                  {formatDisplayDate(reservation.salida)}{' '}
+                  <span className="text-xs text-stone-500 font-normal">
+                    ({formatTimeHHmm(reservation.horaCheckOut)})
+                  </span>
                 </p>
               </div>
             </div>
             <p className="mt-3 text-[11px] text-stone-400">
-              * El día de check-out ({reservation.salida}) queda disponible para un nuevo check-in en la tarde (consecutivas permitidas).
+              * El día de check-out ({formatDisplayDate(reservation.salida)}) queda disponible para un nuevo check-in en la tarde (consecutivas permitidas).
             </p>
           </div>
 

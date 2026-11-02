@@ -19,6 +19,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           where: { rol: 'PROPIETARIO', activo: true },
           select: {
             id: true,
+            codigo: true,
             nombre: true,
             email: true,
             telefono: true,
@@ -141,6 +142,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             },
             select: {
               id: true,
+              codigo: true,
               nombre: true,
               email: true,
               telefono: true,
@@ -238,7 +240,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           where,
           include: {
             propietario: {
-              select: { id: true, nombre: true, email: true, telefono: true },
+              select: { id: true, codigo: true, nombre: true, email: true, telefono: true },
             },
           },
           orderBy: { creadoEn: 'desc' },
@@ -249,6 +251,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           codigo: p.codigo || undefined,
           nombre: p.nombre,
           propietarioId: p.propietarioId,
+          propietarioCodigo: p.propietario?.codigo || undefined,
           propietarioNombre: p.propietario?.nombre || 'Sin Propietario',
           estadoOperativo: p.estadoOperativo,
           estadoPublicacion: p.estadoPublicacion,
@@ -274,7 +277,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           where: { id },
           include: {
             propietario: {
-              select: { id: true, nombre: true, email: true, telefono: true },
+              select: { id: true, codigo: true, nombre: true, email: true, telefono: true },
             },
           },
         });
@@ -316,6 +319,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           codigo: propiedad.codigo || undefined,
           nombre: propiedad.nombre,
           propietarioId: propiedad.propietarioId,
+          propietarioCodigo: propiedad.propietario?.codigo || undefined,
           propietarioNombre: propiedad.propietario?.nombre || 'Sin Propietario',
           estadoOperativo: propiedad.estadoOperativo,
           estadoPublicacion: propiedad.estadoPublicacion,
@@ -503,7 +507,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             },
             include: {
               propietario: {
-                select: { id: true, nombre: true },
+                select: { id: true, codigo: true, nombre: true },
               },
             },
           });
@@ -526,6 +530,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
           codigo: created.codigo || undefined,
           nombre: created.nombre,
           propietarioId: created.propietarioId,
+          propietarioCodigo: created.propietario?.codigo || undefined,
           propietarioNombre: created.propietario?.nombre || 'Sin Propietario',
           estadoOperativo: created.estadoOperativo,
           estadoPublicacion: created.estadoPublicacion,
@@ -693,7 +698,7 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
             },
             include: {
               propietario: {
-                select: { id: true, nombre: true },
+                select: { id: true, codigo: true, nombre: true },
               },
             },
           });
@@ -713,8 +718,10 @@ export function registerPropertiesRoutes(prisma: PrismaClient): FastifyPluginAsy
 
         return {
           id: updated.id,
+          codigo: updated.codigo || undefined,
           nombre: updated.nombre,
           propietarioId: updated.propietarioId,
+          propietarioCodigo: updated.propietario?.codigo || undefined,
           propietarioNombre: updated.propietario?.nombre || 'Sin Propietario',
           estadoOperativo: updated.estadoOperativo,
           estadoPublicacion: updated.estadoPublicacion,

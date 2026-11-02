@@ -88,8 +88,10 @@ class MockPropertyService implements IPropertyService {
       throw new Error(`Ya existe un propietario registrado con el correo "${cleanEmail}".`);
     }
 
+    const nextOwnerNum = this.propietarios.length + 1;
     const nuevo: Propietario = {
       id: `usr-mock-${Date.now()}`,
+      codigo: `PRO-${String(nextOwnerNum).padStart(6, '0')}`,
       nombre: dto.nombre.trim(),
       email: cleanEmail,
       telefono: dto.telefono?.trim() || undefined,
@@ -112,6 +114,8 @@ class MockPropertyService implements IPropertyService {
           p.nombre.toLowerCase().includes(q) ||
           p.direccion.toLowerCase().includes(q) ||
           p.propietarioNombre.toLowerCase().includes(q) ||
+          (p.codigo && p.codigo.toLowerCase().includes(q)) ||
+          (p.propietarioCodigo && p.propietarioCodigo.toLowerCase().includes(q)) ||
           p.id.toLowerCase().includes(q)
       );
     }
@@ -148,13 +152,16 @@ class MockPropertyService implements IPropertyService {
       throw new Error(`El propietario con ID ${dto.propietarioId} no existe.`);
     }
 
-    const newId = `prop-${String(this.properties.length + 1).padStart(2, '0')}`;
+    const nextPropNum = this.properties.length + 1;
+    const newId = `prop-${String(nextPropNum).padStart(2, '0')}`;
     const now = new Date().toISOString();
 
     const newProperty: Property = {
       id: newId,
+      codigo: `PRP-${String(nextPropNum).padStart(6, '0')}`,
       nombre: dto.nombre.trim(),
       propietarioId: propietario.id,
+      propietarioCodigo: propietario.codigo,
       propietarioNombre: propietario.nombre,
       direccion: dto.direccion.trim(),
       estadoOperativo: dto.estadoOperativo || 'OPERATIVA',

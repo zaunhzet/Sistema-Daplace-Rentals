@@ -110,6 +110,7 @@ enum EstadoGasto {
 
 model Usuario {
   id                  String               @id @default(uuid())
+  codigo              String?              @unique
   nombre              String
   email               String               @unique
   telefono            String?
