@@ -1,5 +1,6 @@
-import React from 'react';
 import type { GuestWithReservations } from '../types';
+import { TechnicalIdBadge } from '../../../shared/components/TechnicalIdBadge';
+import { formatDisplayDate } from '../../../shared/utils/stayFormatters';
 
 interface GuestDetailModalProps {
   guest: GuestWithReservations | null;
@@ -42,14 +43,7 @@ export const GuestDetailModal: React.FC<GuestDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              {guest.codigo && (
-                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
-                  {guest.codigo}
-                </span>
-              )}
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
-                {guest.id}
-              </span>
+              <TechnicalIdBadge id={guest.id} code={guest.codigo} />
               {guest.nacionalidad && (
                 <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800">
                   {guest.nacionalidad}
@@ -60,7 +54,7 @@ export const GuestDetailModal: React.FC<GuestDetailModalProps> = ({
               {guest.nombreCompleto}
             </h2>
             <p className="text-xs text-stone-500 font-mono mt-0.5">
-              Registrado el: {new Date(guest.creadoEn).toLocaleDateString('es-PE')}
+              Registrado el: {formatDisplayDate(guest.creadoEn)}
             </p>
           </div>
           <button
@@ -145,10 +139,16 @@ export const GuestDetailModal: React.FC<GuestDetailModalProps> = ({
                   <tbody className="divide-y divide-stone-200 text-xs">
                     {guest.reservasRelacionadas.map((res) => (
                       <tr key={res.id} className="hover:bg-stone-50/50">
-                        <td className="px-4 py-3 font-mono font-medium text-stone-900">{res.id}</td>
+                        <td className="px-4 py-3">
+                          <TechnicalIdBadge
+                            id={res.id}
+                            code={res.codigo}
+                            badgeClassName="bg-stone-100 text-stone-900 border border-stone-200"
+                          />
+                        </td>
                         <td className="px-4 py-3 font-medium text-stone-800">{res.propiedadNombre}</td>
                         <td className="px-4 py-3 font-mono text-stone-600">
-                          {res.ingreso} <span className="text-stone-400">→</span> {res.salida}
+                          {formatDisplayDate(res.ingreso)} <span className="text-stone-400">→</span> {formatDisplayDate(res.salida)}
                         </td>
                         <td className="px-4 py-3">{getReservationBadge(res.estado)}</td>
                         <td className="px-4 py-3 text-right font-medium text-stone-900">

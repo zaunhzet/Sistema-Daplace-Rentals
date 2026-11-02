@@ -109,6 +109,7 @@ class MockGuestService implements IGuestService {
             .filter((r) => r.huespedId === id)
             .map((r) => ({
               id: r.id,
+              codigo: r.codigo,
               propiedadId: r.propiedadId,
               propiedadNombre: r.propiedadNombre,
               ingreso: r.ingreso,

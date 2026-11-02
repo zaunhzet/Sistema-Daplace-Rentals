@@ -4,6 +4,7 @@ export type EstadoReserva = 'SOLICITADA' | 'CONFIRMADA' | 'COMPLETADA' | 'CANCEL
 
 export interface ReservaRelacionada {
   id: string;
+  codigo?: string;
   propiedadId: string;
   propiedadNombre: string;
   ingreso: string;
