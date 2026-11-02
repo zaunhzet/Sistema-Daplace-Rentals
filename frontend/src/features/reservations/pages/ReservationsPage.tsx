@@ -17,22 +17,45 @@ import { ReservationFormModal } from '../components/ReservationFormModal';
 import { ReservationDetailModal } from '../components/ReservationDetailModal';
 import { ReservationDateEditModal } from '../components/ReservationDateEditModal';
 import { createReservationsPageCoordinator } from '../services/reservationPageCoordinator';
+import { useAuth } from '../../auth/AuthContext';
+import { loadPersistentState, savePersistentState } from '../../../shared/utils/persistence';
 
 export const ReservationsPage: React.FC = () => {
+  let user: { id?: string; email?: string; rol?: string } | null = null;
+  try {
+    const auth = useAuth();
+    user = auth?.session?.user || null;
+  } catch {
+    user = null;
+  }
+
+  const initialFilterState = loadPersistentState<{
+    filters: ReservationFilterParams;
+    page: number;
+  }>('reservations_filters', {
+    filters: {
+      propiedadId: 'TODAS',
+      huespedId: 'TODOS',
+      estado: 'TODOS',
+      search: '',
+    },
+    page: 1,
+  }, user);
+
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters & Pagination
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(initialFilterState.page || 1);
   const pageSize = 15;
-  const [filters, setFilters] = useState<ReservationFilterParams>({
-    propiedadId: 'TODAS',
-    huespedId: 'TODOS',
-    estado: 'TODOS',
-    search: '',
-  });
+  const [filters, setFilters] = useState<ReservationFilterParams>(initialFilterState.filters);
+
+  // Persistir filtros ante cambios
+  useEffect(() => {
+    savePersistentState('reservations_filters', { filters, page: currentPage }, user);
+  }, [filters, currentPage, user]);
 
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
