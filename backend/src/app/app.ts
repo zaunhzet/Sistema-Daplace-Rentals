@@ -103,6 +103,20 @@ export function buildApp(
     ajv: { customOptions: { removeAdditional: false } },
   });
 
+  // Content type parser robusto: tolera Content-Type application/json con body vacío devolviendo {}
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    if (!body || (typeof body === 'string' && body.trim() === '')) {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(body));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   // CORS con orígenes estrictamente explícitos
   app.register(fastifyCors, {
     origin: (origin, cb) => {

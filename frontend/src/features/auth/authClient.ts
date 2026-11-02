@@ -5,7 +5,7 @@ import type {
   User,
 } from './types';
 
-const API_BASE_URL =
+export const API_BASE_URL =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) ||
   'http://127.0.0.1:3000';
 
@@ -55,6 +55,9 @@ export class ApiError extends Error {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   if (response.ok) {
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return undefined as unknown as T;
+    }
     return (await response.json()) as T;
   }
 
@@ -129,12 +132,10 @@ export function refreshApi(): Promise<RefreshResponse> {
   return activeRefreshPromise;
 }
 
-// Fix 5: Si la revocación en el servidor falla, no se presenta como exitoso ni se oculta el fallo.
-// No limpia el token en memoria si el servidor o red fallaron.
+// Fix 5 & FEEDBACK-DIEGO-03: Logout sin encabezado Content-Type vacío, tolerante a 204 y con revocación
 export async function logoutApi(): Promise<void> {
   const currentToken = getAccessToken();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
   };
   if (currentToken) {

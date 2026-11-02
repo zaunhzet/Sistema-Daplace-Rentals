@@ -1,6 +1,7 @@
 import type { LiquidationFilterParams, LiquidationReport } from '../types';
 import { apiClient } from '../../../shared/api/client';
 import { isMockMode } from '../../../shared/api/config';
+import { authenticatedFetch, API_BASE_URL } from '../../auth/authClient';
 
 const NOMBRES_MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -124,7 +125,7 @@ class ReportService {
    */
   public async downloadLiquidacionCsv(params: LiquidationFilterParams): Promise<{ blob: Blob; filename: string }> {
     const mesNombre = NOMBRES_MESES[params.mes - 1] || `Mes-${params.mes}`;
-    const filename = `liquidacion-${params.propiedadId}-${params.anio}-${String(params.mes).padStart(2, '0')}.csv`;
+    let filename = `liquidacion-${params.propiedadId}-${params.anio}-${String(params.mes).padStart(2, '0')}.csv`;
 
     if (isMockMode()) {
       const mock = await this.getMockLiquidacion(params);
@@ -170,14 +171,32 @@ class ReportService {
       format: 'csv',
     });
 
-    const response = await fetch(`/api/reportes/propietario?${query.toString()}`, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('daplace_access_token') || ''}`,
-      },
-    });
+    const response = await authenticatedFetch(
+      `${API_BASE_URL}/api/reportes/propietario?${query.toString()}`,
+      {
+        method: 'GET',
+      }
+    );
 
     if (!response.ok) {
-      throw new Error(`Error al exportar CSV: ${response.statusText}`);
+      let errorMsg = `Error al exportar liquidación CSV (${response.status})`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson?.error?.message) {
+          errorMsg = errorJson.error.message;
+        }
+      } catch {
+        // no es json estructurado
+      }
+      throw new Error(errorMsg);
+    }
+
+    const disposition = response.headers.get('content-disposition');
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename="?([^";]+)"?/);
+      if (match && match[1]) {
+        filename = match[1];
+      }
     }
 
     const blob = await response.blob();

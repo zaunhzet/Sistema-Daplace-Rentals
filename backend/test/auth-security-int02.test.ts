@@ -108,7 +108,7 @@ describe('Gate INT-02 — Autenticación Real, Rotación Concurrente y Pruebas N
         origin: 'http://localhost:5173',
       },
     });
-    assert.equal(logoutRes.statusCode, 200);
+    assert.equal(logoutRes.statusCode, 204);
 
     // 1. Verificar revocación persistente en PostgreSQL (la fila no se borra, se marca revokedAt)
     const decoded = app.jwt.decode<any>(accessToken);
@@ -302,7 +302,7 @@ describe('Gate INT-02 — Autenticación Real, Rotación Concurrente y Pruebas N
         origin: 'http://localhost:5173',
       },
     });
-    assert.equal(logoutRes.statusCode, 200);
+    assert.equal(logoutRes.statusCode, 204);
 
     // Dispositivo A queda revocado (401)
     const resA2 = await app.inject({
@@ -371,7 +371,7 @@ describe('Gate INT-02 — Autenticación Real, Rotación Concurrente y Pruebas N
     });
 
     const [logoutRes, refreshRes] = await Promise.all([logoutPromise, refreshPromise]);
-    assert.equal(logoutRes.statusCode, 200, 'Logout debe completarse con éxito');
+    assert.equal(logoutRes.statusCode, 204, 'Logout debe completarse con éxito');
 
     // Si el refresh logró devolver un nuevo token antes de la revocación, ese nuevo token
     // debe ser inválido de inmediato porque la familia completa fue revocada
@@ -464,7 +464,7 @@ describe('Gate INT-02 — Autenticación Real, Rotación Concurrente y Pruebas N
         origin: 'http://localhost:5173',
       },
     });
-    assert.equal(logoutRes.statusCode, 200);
+    assert.equal(logoutRes.statusCode, 204);
 
     // Ni el token original ni el nuevo token emitido por el refresh deben ser aceptados
     const resAOriginal = await app.inject({
