@@ -3,6 +3,7 @@ import { Navigate } from 'react-router';
 import { useAuth } from '../features/auth';
 import { canAccessPath, getDefaultAuthorizedPath } from '../shared/auth/permissions';
 import { ForbiddenPage } from './ForbiddenPage';
+import daplaceIcon from '../assets/daplace-icon.png';
 
 interface ProtectedRouteProps {
   children: React.ReactElement;
@@ -10,7 +11,23 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, path }) => {
-  const { session } = useAuth();
+  const { session, isRestoringSession } = useAuth();
+
+  // Mientras se restaura la sesión con el refresh token, evitar redirección prematura al login
+  if (isRestoringSession) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f7f7f5]">
+        <div className="flex flex-col items-center gap-3">
+          <img
+            src={daplaceIcon}
+            alt="Cargando Daplace"
+            className="size-12 animate-pulse rounded-2xl border border-stone-200/80 bg-white p-2 shadow-xs"
+          />
+          <p className="text-xs font-medium text-stone-500">Restaurando sesión segura...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!session.isAuthenticated) {
     return <Navigate to="/login" replace />;

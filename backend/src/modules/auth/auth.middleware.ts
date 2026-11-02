@@ -101,6 +101,31 @@ export function createAuthMiddleware(
     };
   };
 
+  const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
+
+  const isLoopbackEquivalent = (candidate: string, allowedList: string[]): boolean => {
+    try {
+      const candidateUrl = new URL(candidate);
+      if (!LOOPBACK_HOSTS.includes(candidateUrl.hostname)) {
+        return false;
+      }
+      return allowedList.some((allowed) => {
+        try {
+          const allowedUrl = new URL(allowed);
+          return (
+            LOOPBACK_HOSTS.includes(allowedUrl.hostname) &&
+            allowedUrl.port === candidateUrl.port &&
+            allowedUrl.protocol === candidateUrl.protocol
+          );
+        } catch {
+          return false;
+        }
+      });
+    } catch {
+      return false;
+    }
+  };
+
   const verifyCsrf = async (request: FastifyRequest, _reply: FastifyReply) => {
     const origin = request.headers.origin;
     const referer = request.headers.referer;
@@ -108,12 +133,14 @@ export function createAuthMiddleware(
 
     // Origen explícito validado sin comodín '*'
     if (origin) {
-      const isAllowed = allowedOrigins.includes(origin);
+      const isAllowed = allowedOrigins.includes(origin) || isLoopbackEquivalent(origin, allowedOrigins);
       if (!isAllowed) {
         throw new AuthError('CSRF_VIOLATION', 'Origen no autorizado para operaciones con cookies.', 403);
       }
     } else if (referer) {
-      const isAllowed = allowedOrigins.some((allowed) => referer.startsWith(allowed));
+      const isAllowed =
+        allowedOrigins.some((allowed) => referer.startsWith(allowed)) ||
+        isLoopbackEquivalent(referer, allowedOrigins);
       if (!isAllowed) {
         throw new AuthError('CSRF_VIOLATION', 'Referer no autorizado para operaciones con cookies.', 403);
       }
