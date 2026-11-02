@@ -211,10 +211,7 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (
         'Sesión revocada y cookie eliminada'
       );
 
-      return reply.status(200).send({
-        success: true,
-        message: 'Sesión finalizada exitosamente.',
-      });
+      return reply.status(204).send();
     }
   );
 

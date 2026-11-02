@@ -7,18 +7,44 @@ import { calendarService, getMonthName } from '../services/calendarService';
 import { propertyService } from '../../properties/services/propertyService';
 import { reservationService } from '../../reservations/services/reservationService';
 import { CalendarGrid } from '../components/CalendarGrid';
+import { CalendarWeekView } from '../components/CalendarWeekView';
+import { CalendarDayView } from '../components/CalendarDayView';
 import { CalendarLegend } from '../components/CalendarLegend';
 import { ReservationDetailModal } from '../../reservations/components/ReservationDetailModal';
 import { ReservationDateEditModal } from '../../reservations/components/ReservationDateEditModal';
 import { createCalendarPageCoordinator } from '../../reservations/services/reservationPageCoordinator';
+import { useAuth } from '../../auth/AuthContext';
+import { loadPersistentState, savePersistentState } from '../../../shared/utils/persistence';
+
+export type CalendarViewMode = 'mes' | 'semana' | 'dia';
+
+interface PersistentCalendarState {
+  propertyId?: string;
+  year?: number;
+  month?: number;
+  viewMode?: CalendarViewMode;
+  selectedDate?: string;
+}
 
 export const CalendarPage: React.FC = () => {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  let user: { id?: string; email?: string; rol?: string } | null = null;
+  try {
+    const auth = useAuth();
+    user = auth?.session?.user || null;
+  } catch {
+    user = null;
+  }
 
-  // Default to November 2026 (target MVP demo timeframe)
-  const [currentYear, setCurrentYear] = useState<number>(2026);
-  const [currentMonth, setCurrentMonth] = useState<number>(11);
+  const initialPrefs = loadPersistentState<PersistentCalendarState>('calendar_prefs', {}, user);
+
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(initialPrefs.propertyId || '');
+
+  // Default to November 2026 (target MVP demo timeframe) or persisted state
+  const [currentYear, setCurrentYear] = useState<number>(initialPrefs.year || 2026);
+  const [currentMonth, setCurrentMonth] = useState<number>(initialPrefs.month || 11);
+  const [viewMode, setViewMode] = useState<CalendarViewMode>(initialPrefs.viewMode || 'mes');
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(initialPrefs.selectedDate || '2026-11-01');
 
   const [days, setDays] = useState<CalendarDay[]>([]);
   const [summary, setSummary] = useState<MonthOccupancySummary>({
@@ -41,13 +67,30 @@ export const CalendarPage: React.FC = () => {
     try {
       const props = await propertyService.getProperties();
       setProperties(props);
-      if (props.length > 0 && !selectedPropertyId) {
-        setSelectedPropertyId(props[0].id);
+      if (props.length > 0) {
+        if (!selectedPropertyId || !props.some((p) => p.id === selectedPropertyId)) {
+          setSelectedPropertyId(props[0].id);
+        }
       }
     } catch {
       // Error handling
     }
   }, [selectedPropertyId]);
+
+  // Persistir selecciones de calendario por usuario/rol
+  useEffect(() => {
+    savePersistentState(
+      'calendar_prefs',
+      {
+        propertyId: selectedPropertyId,
+        year: currentYear,
+        month: currentMonth,
+        viewMode,
+        selectedDate: selectedDateStr,
+      },
+      user
+    );
+  }, [selectedPropertyId, currentYear, currentMonth, viewMode, selectedDateStr, user]);
 
   const selectedReservationRef = React.useRef<Reservation | null>(null);
 
@@ -108,28 +151,84 @@ export const CalendarPage: React.FC = () => {
     };
   }, [loadCalendar]);
 
-  const handlePrevMonth = () => {
-    if (currentMonth === 1) {
-      setCurrentMonth(12);
-      setCurrentYear(currentYear - 1);
+  const shiftDate = (dateStr: string, daysOffset: number): string => {
+    const parts = dateStr.split('-');
+    const dt = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    dt.setDate(dt.getDate() + daysOffset);
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const d = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const handlePrev = () => {
+    if (viewMode === 'mes') {
+      if (currentMonth === 1) {
+        setCurrentMonth(12);
+        setCurrentYear(currentYear - 1);
+        setSelectedDateStr(`${currentYear - 1}-12-01`);
+      } else {
+        const prevM = currentMonth - 1;
+        setCurrentMonth(prevM);
+        setSelectedDateStr(`${currentYear}-${String(prevM).padStart(2, '0')}-01`);
+      }
+    } else if (viewMode === 'semana') {
+      const nextDate = shiftDate(selectedDateStr, -7);
+      setSelectedDateStr(nextDate);
+      const [y, m] = nextDate.split('-').map(Number);
+      if (y !== currentYear || m !== currentMonth) {
+        setCurrentYear(y);
+        setCurrentMonth(m);
+      }
     } else {
-      setCurrentMonth(currentMonth - 1);
+      const nextDate = shiftDate(selectedDateStr, -1);
+      setSelectedDateStr(nextDate);
+      const [y, m] = nextDate.split('-').map(Number);
+      if (y !== currentYear || m !== currentMonth) {
+        setCurrentYear(y);
+        setCurrentMonth(m);
+      }
     }
   };
 
-  const handleNextMonth = () => {
-    if (currentMonth === 12) {
-      setCurrentMonth(1);
-      setCurrentYear(currentYear + 1);
+  const handleNext = () => {
+    if (viewMode === 'mes') {
+      if (currentMonth === 12) {
+        setCurrentMonth(1);
+        setCurrentYear(currentYear + 1);
+        setSelectedDateStr(`${currentYear + 1}-01-01`);
+      } else {
+        const nextM = currentMonth + 1;
+        setCurrentMonth(nextM);
+        setSelectedDateStr(`${currentYear}-${String(nextM).padStart(2, '0')}-01`);
+      }
+    } else if (viewMode === 'semana') {
+      const nextDate = shiftDate(selectedDateStr, 7);
+      setSelectedDateStr(nextDate);
+      const [y, m] = nextDate.split('-').map(Number);
+      if (y !== currentYear || m !== currentMonth) {
+        setCurrentYear(y);
+        setCurrentMonth(m);
+      }
     } else {
-      setCurrentMonth(currentMonth + 1);
+      const nextDate = shiftDate(selectedDateStr, 1);
+      setSelectedDateStr(nextDate);
+      const [y, m] = nextDate.split('-').map(Number);
+      if (y !== currentYear || m !== currentMonth) {
+        setCurrentYear(y);
+        setCurrentMonth(m);
+      }
     }
   };
 
   const handleGoToday = () => {
     const now = new Date();
-    setCurrentYear(now.getFullYear());
-    setCurrentMonth(now.getMonth() + 1);
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = String(now.getDate()).padStart(2, '0');
+    setCurrentYear(y);
+    setCurrentMonth(m);
+    setSelectedDateStr(`${y}-${String(m).padStart(2, '0')}-${d}`);
   };
 
   // Actions from modal con manejo estricto de errores y recarga sin falso éxito
@@ -238,16 +337,53 @@ export const CalendarPage: React.FC = () => {
         </div>
       )}
 
-      {/* Month Navigator Toolbar & Summary Metrics */}
+      {/* Month/Week/Day Navigator Toolbar & Summary Metrics */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between rounded-xl border border-stone-200/90 bg-white p-3 shadow-2xs">
         {/* Navigation Controls with Lucide Icons */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* View mode switcher */}
+          <div className="inline-flex items-center rounded-lg border border-stone-200 bg-stone-100 p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('mes')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                viewMode === 'mes'
+                  ? 'bg-white text-stone-900 shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Mes
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('semana')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                viewMode === 'semana'
+                  ? 'bg-white text-stone-900 shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Semana
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('dia')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                viewMode === 'dia'
+                  ? 'bg-white text-stone-900 shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Día
+            </button>
+          </div>
+
           <div className="inline-flex items-center rounded-lg border border-stone-200 bg-stone-50/50 p-0.5 shadow-2xs">
             <button
               type="button"
-              onClick={handlePrevMonth}
-              aria-label="Mes anterior"
-              title="Mes anterior"
+              onClick={handlePrev}
+              aria-label="Período anterior"
+              title="Período anterior"
               className="grid size-8 place-items-center rounded-md text-stone-600 hover:bg-white hover:text-stone-900 transition-colors cursor-pointer"
             >
               <ChevronLeft size={16} aria-hidden="true" />
@@ -261,9 +397,9 @@ export const CalendarPage: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={handleNextMonth}
-              aria-label="Mes siguiente"
-              title="Mes siguiente"
+              onClick={handleNext}
+              aria-label="Período siguiente"
+              title="Período siguiente"
               className="grid size-8 place-items-center rounded-md text-stone-600 hover:bg-white hover:text-stone-900 transition-colors cursor-pointer"
             >
               <ChevronRight size={16} aria-hidden="true" />
@@ -273,7 +409,9 @@ export const CalendarPage: React.FC = () => {
           <div className="flex items-center gap-2 pl-2">
             <CalendarIcon size={16} className="text-[#5E6C5B]" aria-hidden="true" />
             <span className="text-base sm:text-lg font-bold tracking-tight text-stone-900">
-              {getMonthName(currentMonth)} {currentYear}
+              {viewMode === 'mes' && `${getMonthName(currentMonth)} ${currentYear}`}
+              {viewMode === 'semana' && `Semana (${selectedDateStr})`}
+              {viewMode === 'dia' && `Día: ${selectedDateStr}`}
             </span>
           </div>
         </div>
@@ -299,19 +437,46 @@ export const CalendarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Calendar Grid */}
+      {/* Calendar Views */}
       {loading ? (
         <div className="rounded-3xl border border-stone-200 bg-white p-16 text-center text-sm text-stone-500">
           Cargando disponibilidad...
         </div>
       ) : (
-        <CalendarGrid
-          days={days}
-          onSelectReservation={(res) => {
-            setSelectedReservation(res);
-            setIsDetailOpen(true);
-          }}
-        />
+        <>
+          {viewMode === 'mes' && (
+            <CalendarGrid
+              days={days}
+              onSelectReservation={(res) => {
+                setSelectedReservation(res);
+                setIsDetailOpen(true);
+              }}
+            />
+          )}
+
+          {viewMode === 'semana' && (
+            <CalendarWeekView
+              days={days}
+              selectedDate={selectedDateStr}
+              onSelectDate={(d) => setSelectedDateStr(d)}
+              onSelectReservation={(res) => {
+                setSelectedReservation(res);
+                setIsDetailOpen(true);
+              }}
+            />
+          )}
+
+          {viewMode === 'dia' && (
+            <CalendarDayView
+              days={days}
+              selectedDate={selectedDateStr}
+              onSelectReservation={(res) => {
+                setSelectedReservation(res);
+                setIsDetailOpen(true);
+              }}
+            />
+          )}
+        </>
       )}
 
       {/* Legend */}

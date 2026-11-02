@@ -97,6 +97,7 @@ export function registerGuestsRoutes(prisma: PrismaClient): FastifyPluginAsync {
           actualizadoEn: guest.actualizadoEn.toISOString(),
           reservasRelacionadas: guest.reservas.map((r) => ({
             id: r.id,
+            codigo: r.codigo || undefined,
             propiedadId: r.propiedadId,
             propiedadNombre: r.propiedad.nombre,
             ingreso: r.ingreso.toISOString().slice(0, 10),

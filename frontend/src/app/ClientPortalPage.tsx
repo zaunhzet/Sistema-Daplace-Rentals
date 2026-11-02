@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../features/auth/AuthContext';
-import { UserCheck, LogOut, Loader2, AlertCircle } from 'lucide-react';
+import { UserCheck, LogOut, Loader2, AlertCircle, Shield, ArrowLeft } from 'lucide-react';
+import { AccountSecurityPage } from '../features/account';
 import daplaceIcon from '../assets/daplace-icon.png';
 
 export const ClientPortalPage: React.FC = () => {
   const { session, logout } = useAuth();
   const navigate = useNavigate();
+  const [viewMode, setViewMode] = useState<'portal' | 'seguridad'>('portal');
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -24,6 +26,35 @@ export const ClientPortalPage: React.FC = () => {
       setIsLoggingOut(false);
     }
   };
+
+  if (viewMode === 'seguridad') {
+    return (
+      <div className="min-h-screen bg-[#f7f7f5] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-6 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setViewMode('portal')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 cursor-pointer"
+            >
+              <ArrowLeft size={14} />
+              <span>Volver a mi portal</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-2xs hover:bg-stone-50 disabled:opacity-50 cursor-pointer"
+            >
+              <LogOut size={14} />
+              <span>Cerrar sesión</span>
+            </button>
+          </div>
+          <AccountSecurityPage />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-[#f7f7f5] items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
@@ -68,7 +99,16 @@ export const ClientPortalPage: React.FC = () => {
             </div>
           )}
 
-          <div className="mt-7">
+          <div className="mt-7 space-y-3">
+            <button
+              type="button"
+              onClick={() => setViewMode('seguridad')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-stone-300 bg-white px-4 py-2.5 text-xs font-semibold text-stone-800 shadow-2xs hover:bg-stone-50 transition cursor-pointer"
+            >
+              <Shield size={15} className="text-stone-700" />
+              <span>Mi Cuenta y Seguridad</span>
+            </button>
+
             <button
               type="button"
               onClick={handleLogout}

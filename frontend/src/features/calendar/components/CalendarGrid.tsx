@@ -100,9 +100,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         type="button"
                         onClick={() => onSelectReservation(day.checkoutReservation!)}
                         className="w-full text-left rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-700 truncate hover:bg-stone-200 cursor-pointer"
-                        title={`Check-out mañana: ${day.checkoutReservation.id} (${day.checkoutReservation.huespedNombre})`}
+                        title={`Check-out: ${day.checkoutReservation.codigo || day.checkoutReservation.id} — ${day.checkoutReservation.huespedNombre} (${day.checkoutReservation.horaCheckOut || '11:00'})`}
                       >
-                        Salida: {day.checkoutReservation.id}
+                        Salida: {day.checkoutReservation.codigo || 'RSV'} ({day.checkoutReservation.horaCheckOut || '11:00'})
                       </button>
                     )}
                     {day.checkinReservation && (
@@ -110,9 +110,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                         type="button"
                         onClick={() => onSelectReservation(day.checkinReservation!)}
                         className="w-full text-left rounded-md bg-purple-200 px-1.5 py-0.5 text-[10px] font-bold text-purple-900 truncate hover:bg-purple-300 cursor-pointer"
-                        title={`Check-in tarde: ${day.checkinReservation.id} (${day.checkinReservation.huespedNombre})`}
+                        title={`Check-in: ${day.checkinReservation.codigo || day.checkinReservation.id} — ${day.checkinReservation.huespedNombre} (${day.checkinReservation.horaCheckIn || '15:00'})`}
                       >
-                        Ingreso: {day.checkinReservation.huespedNombre}
+                        Ingreso: {day.checkinReservation.huespedNombre} ({day.checkinReservation.horaCheckIn || '15:00'})
                       </button>
                     )}
                   </div>
@@ -124,7 +124,9 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     <button
                       type="button"
                       onClick={() => onSelectReservation(mainRes)}
-                      title={`Reserva ${mainRes.id}: ${mainRes.huespedNombre} (${mainRes.estado}). Clic para ver detalle.`}
+                      title={`Reserva ${mainRes.codigo || mainRes.id}: ${mainRes.huespedNombre} (${mainRes.estado})${
+                        mainRes.cantidadHuespedes ? `, ${mainRes.cantidadHuespedes} personas` : ''
+                      }. Clic para ver detalle.`}
                       className={`w-full text-left rounded-lg p-1.5 text-xs font-semibold shadow-2xs transition-transform hover:scale-[1.02] cursor-pointer ${
                         day.status === 'CONFIRMADA'
                           ? 'bg-blue-600 text-white'
@@ -133,9 +135,19 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({
                     >
                       <div className="truncate text-[11px] font-bold">{mainRes.huespedNombre}</div>
                       <div className="text-[9px] opacity-90 font-mono mt-0.5 flex items-center justify-between">
-                        <span>{mainRes.id}</span>
-                        <span>{day.status === 'CONFIRMADA' ? 'Conf.' : 'Sol.'}</span>
+                        <span className="font-bold tracking-tight">
+                          {mainRes.codigo || mainRes.id.slice(0, 8)}
+                        </span>
+                        <span>
+                          {mainRes.cantidadHuespedes ? `${mainRes.cantidadHuespedes}p ` : ''}
+                          {day.status === 'CONFIRMADA' ? 'Conf.' : 'Sol.'}
+                        </span>
                       </div>
+                      {mainRes.ingreso === day.date && (
+                        <div className="text-[8px] opacity-80 mt-0.5 font-sans">
+                          Ingreso: {mainRes.horaCheckIn || '15:00'}
+                        </div>
+                      )}
                     </button>
                   )}
               </div>

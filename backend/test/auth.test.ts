@@ -399,8 +399,7 @@ describe('Authentication & Authorization Suite', () => {
         'x-requested-with': 'XMLHttpRequest',
       },
     });
-    assert.equal(goodLogout.statusCode, 200);
-    assert.equal(goodLogout.json().success, true);
+    assert.equal(goodLogout.statusCode, 204);
 
     // Intento posterior de refresco debe fallar con 401
     const refreshPostLogout = await app.inject({
@@ -469,8 +468,7 @@ describe('Authentication & Authorization Suite', () => {
         'x-requested-with': 'XMLHttpRequest',
       },
     });
-    assert.equal(logoutRes.statusCode, 200, 'Debe autorizar el loopback equivalente');
-    assert.equal(logoutRes.json().success, true);
+    assert.equal(logoutRes.statusCode, 204, 'Debe autorizar el loopback equivalente');
   });
 
   it('rechaza logout con 403 CSRF_VIOLATION si el origen no está autorizado o difiere en puerto', async () => {

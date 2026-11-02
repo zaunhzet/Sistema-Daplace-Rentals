@@ -1,6 +1,7 @@
 import React from 'react';
 import { ShieldCheck } from 'lucide-react';
 import type { Property, Propietario } from '../types';
+import { TechnicalIdBadge } from '../../../shared/components/TechnicalIdBadge';
 
 interface PropertyDetailModalProps {
   property: Property | null;
@@ -60,14 +61,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              {property.codigo && (
-                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
-                  {property.codigo}
-                </span>
-              )}
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
-                {property.id}
-              </span>
+              <TechnicalIdBadge id={property.id} code={property.codigo} />
               <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${property.activa ? 'text-emerald-700' : 'text-stone-400'}`}>
                 <span className={`size-2 rounded-full ${property.activa ? 'bg-emerald-500' : 'bg-stone-300'}`} />
                 {property.activa ? 'Activa' : 'Desactivada'}
@@ -112,7 +106,13 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <p className="font-semibold text-stone-900">{property.propietarioNombre}</p>
-                <p className="text-xs text-stone-500 font-mono mt-0.5">ID: {property.propietarioId}</p>
+                <div className="mt-1">
+                  <TechnicalIdBadge
+                    id={property.propietarioId}
+                    code={property.propietarioCodigo || propietario?.codigo}
+                    badgeClassName="bg-stone-100 text-stone-800 border border-stone-200"
+                  />
+                </div>
               </div>
               {propietario && (
                 <div className="text-xs text-stone-600 sm:text-right">

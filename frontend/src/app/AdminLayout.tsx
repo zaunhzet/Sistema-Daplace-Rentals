@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate, NavLink } from 'react-router';
-import { Menu, ChevronRight, AlertCircle, Loader2, Shield } from 'lucide-react';
+import { Menu, ChevronRight, AlertCircle, Loader2, Shield, KeyRound } from 'lucide-react';
 import { Sidebar, NAVIGATION_ITEMS } from '../shared/navigation';
 import { useAuth } from '../features/auth';
 import { canAccessPath } from '../shared/auth/permissions';
@@ -136,10 +136,23 @@ export const AdminLayout: React.FC = () => {
                   <NotificationBell />
                 )}
 
-                <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200">
+                <button
+                  type="button"
+                  onClick={() => navigate('/cuenta')}
+                  className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer"
+                  title="Administrar credenciales y seguridad de mi cuenta"
+                >
                   <span className="size-1.5 rounded-full bg-emerald-600" />
-                  {session.user?.nombre} ({session.user?.rol})
-                </span>
+                  <span>{session.user?.nombre} ({session.user?.rol})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/cuenta')}
+                  className="sm:hidden inline-flex items-center justify-center p-1.5 rounded-lg border border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+                  title="Seguridad de la cuenta"
+                >
+                  <KeyRound size={14} />
+                </button>
                 <button
                   type="button"
                   onClick={handleLogout}

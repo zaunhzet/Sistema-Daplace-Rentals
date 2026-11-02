@@ -14,6 +14,7 @@ import { ExpensesPage } from '../features/expenses';
 import { ReportsPage } from '../features/reports';
 import { StaffPage } from '../features/staff';
 import { MaintenancePage } from '../features/maintenance';
+import { AccountSecurityPage } from '../features/account';
 import { PendingModuleView } from './PendingModuleView';
 import { NotFoundPage } from './NotFoundPage';
 import { ClientPortalPage } from './ClientPortalPage';
@@ -194,6 +195,10 @@ function AppRoutes() {
               <MaintenancePage />
             </ProtectedRoute>
           }
+        />
+        <Route
+          path="/cuenta"
+          element={<AccountSecurityPage />}
         />
 
         {/* Fallback 404 para rutas desconocidas */}

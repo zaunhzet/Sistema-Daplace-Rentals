@@ -19,6 +19,7 @@ import { registerAuditRoutes } from '../routes/audit.js';
 import { registerAlertsRoutes } from '../routes/alerts.js';
 import { registerStaffRoutes } from '../routes/staff.js';
 import { registerMaintenanceRoutes } from '../routes/maintenance.js';
+import { registerAccountRoutes } from '../routes/account.js';
 import { authenticateRequestHook } from '../shared/auth.js';
 
 import type { PoliticaAdelantoProvider } from '../modules/reservations/confirmationRequirements.js';
@@ -103,6 +104,21 @@ export function buildApp(
     ajv: { customOptions: { removeAdditional: false } },
   });
 
+  // Content type parser robusto: tolera Content-Type application/json con body vacío devolviendo {}
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body: string | Buffer, done) => {
+    const bodyStr = typeof body === 'string' ? body : body.toString('utf-8');
+    if (!bodyStr || bodyStr.trim() === '') {
+      done(null, {});
+      return;
+    }
+    try {
+      done(null, JSON.parse(bodyStr));
+    } catch (err: any) {
+      err.statusCode = 400;
+      done(err, undefined);
+    }
+  });
+
   // CORS con orígenes estrictamente explícitos
   app.register(fastifyCors, {
     origin: (origin, cb) => {
@@ -158,6 +174,11 @@ export function buildApp(
       allowedOrigins,
       enableRateLimit: options.enableRateLimit,
     });
+    app.register(registerAccountRoutes({
+      repository: options.authRepository,
+      allowedOrigins,
+      secureCookies: options.secureCookies,
+    }));
   }
 
   // Hook centralizado de resolución de autenticación e identidad

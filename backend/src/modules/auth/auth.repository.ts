@@ -36,15 +36,30 @@ export class PrismaAuthRepository implements IAuthRepository {
 
   async updateUser(
     id: string,
-    data: Partial<Pick<UserEntity, 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>
+    data: Partial<Pick<UserEntity, 'email' | 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>
   ): Promise<UserEntity> {
-    const updated = await this.prisma.user.update({
-      where: { id },
-      data: {
-        ...data,
-        rol: data.rol ? (data.rol as any) : undefined,
-      },
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id },
+        data: {
+          ...data,
+          rol: data.rol ? (data.rol as any) : undefined,
+        },
+      });
+
+      // Si se actualizó el email y tiene Usuario de dominio vinculado, sincronizar Usuario
+      if (data.email && u.usuarioId) {
+        await tx.usuario.update({
+          where: { id: u.usuarioId },
+          data: { email: data.email },
+        }).catch(() => {
+          // Si el usuario no existe en la tabla transaccional (ej. tests o mocks), continuar
+        });
+      }
+
+      return u;
     });
+
     return {
       ...updated,
       rol: updated.rol as UserRole,
@@ -131,6 +146,13 @@ export class PrismaAuthRepository implements IAuthRepository {
   async revokeFamily(family: string): Promise<void> {
     await this.prisma.authSession.updateMany({
       where: { family, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    await this.prisma.authSession.updateMany({
+      where: { userId, revokedAt: null },
       data: { revokedAt: new Date() },
     });
   }
@@ -244,7 +266,7 @@ export class InMemoryAuthRepository implements IAuthRepository {
 
   async updateUser(
     id: string,
-    data: Partial<Pick<UserEntity, 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>
+    data: Partial<Pick<UserEntity, 'email' | 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>
   ): Promise<UserEntity> {
     const existing = this.users.get(id);
     if (!existing) {
@@ -336,6 +358,16 @@ export class InMemoryAuthRepository implements IAuthRepository {
     const now = new Date();
     for (const session of this.sessions.values()) {
       if (session.family === family && !session.revokedAt) {
+        session.revokedAt = now;
+        session.updatedAt = now;
+      }
+    }
+  }
+
+  async revokeAllUserSessions(userId: string): Promise<void> {
+    const now = new Date();
+    for (const session of this.sessions.values()) {
+      if (session.userId === userId && !session.revokedAt) {
         session.revokedAt = now;
         session.updatedAt = now;
       }

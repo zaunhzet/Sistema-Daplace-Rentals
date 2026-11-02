@@ -83,7 +83,7 @@ export type RotateSessionResult =
 export interface IAuthRepository {
   findUserByEmail(email: string): Promise<UserEntity | null>;
   findUserById(id: string): Promise<UserEntity | null>;
-  updateUser(id: string, data: Partial<Pick<UserEntity, 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>): Promise<UserEntity>;
+  updateUser(id: string, data: Partial<Pick<UserEntity, 'email' | 'nombre' | 'cargo' | 'rol' | 'isActive' | 'passwordHash' | 'usuarioId'>>): Promise<UserEntity>;
   createUser(data: {
     email: string;
     passwordHash: string;
@@ -104,6 +104,7 @@ export interface IAuthRepository {
   findSessionByTokenHash(tokenHash: string): Promise<AuthSessionEntity | null>;
   revokeSession(id: string): Promise<void>;
   revokeFamily(family: string): Promise<void>;
+  revokeAllUserSessions(userId: string): Promise<void>;
   rotateSessionAtomic(params: RotateSessionParams): Promise<RotateSessionResult>;
 }
 

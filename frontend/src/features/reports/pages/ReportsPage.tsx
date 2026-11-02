@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import {
   BarChart3,
   Building2,
@@ -14,6 +15,7 @@ import { reportService } from '../services/reportService';
 import type { LiquidationReport } from '../types';
 import { propertyService } from '../../properties';
 import type { Property } from '../../properties/types';
+import { useAuth } from '../../auth/AuthContext';
 
 const MESES = [
   { value: 1, label: 'Enero' },
@@ -30,13 +32,50 @@ const MESES = [
   { value: 12, label: 'Diciembre' },
 ];
 
-const ANIOS = [2025, 2026, 2027];
+const ANIOS = Array.from(new Set([2025, 2026, 2027, new Date().getFullYear()])).sort((a, b) => a - b);
 
 export const ReportsPage: React.FC = () => {
+  const { session } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const now = new Date();
+  const defaultMonth = now.getMonth() + 1;
+  const defaultYear = now.getFullYear();
+
+  // FEEDBACK-DIEGO-03-A3: Almacenamiento segregado por cuenta para no reutilizar filtros entre usuarios distintos
+  const userStorageKey = `daplace_reports_filter_${session.user?.id || 'anon'}`;
+
+  const getInitialFilters = () => {
+    let propId = searchParams.get('propiedadId');
+    let mes = Number(searchParams.get('mes'));
+    let anio = Number(searchParams.get('anio'));
+
+    if (!propId || Number.isNaN(mes) || Number.isNaN(anio)) {
+      try {
+        const stored = sessionStorage.getItem(userStorageKey);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (!propId && parsed.propiedadId) propId = parsed.propiedadId;
+          if (Number.isNaN(mes) && parsed.mes) mes = Number(parsed.mes);
+          if (Number.isNaN(anio) && parsed.anio) anio = Number(parsed.anio);
+        }
+      } catch {
+        // ignore parse error
+      }
+    }
+
+    return {
+      propiedadId: propId || '',
+      mes: mes >= 1 && mes <= 12 ? mes : defaultMonth,
+      anio: anio >= 2020 && anio <= 2100 ? anio : defaultYear,
+    };
+  };
+
+  const initialFilters = getInitialFilters();
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropiedadId, setSelectedPropiedadId] = useState<string>('');
-  const [selectedMes, setSelectedMes] = useState<number>(10);
-  const [selectedAnio, setSelectedAnio] = useState<number>(2026);
+  const [selectedPropiedadId, setSelectedPropiedadId] = useState<string>(initialFilters.propiedadId);
+  const [selectedMes, setSelectedMes] = useState<number>(initialFilters.mes);
+  const [selectedAnio, setSelectedAnio] = useState<number>(initialFilters.anio);
 
   const [report, setReport] = useState<LiquidationReport | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -44,21 +83,51 @@ export const ReportsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'ingresos' | 'gastos' | 'garantias'>('ingresos');
 
-  // Cargar lista de propiedades para el selector
+  // Cargar lista de propiedades para el selector validando que la selección previa siga estando autorizada
   useEffect(() => {
     async function loadProperties() {
       try {
         const props = await propertyService.getProperties({ soloActivas: true });
         setProperties(props);
         if (props.length > 0) {
-          setSelectedPropiedadId(props[0].id);
+          setSelectedPropiedadId((prev) => {
+            const isAuthorized = props.some((p) => p.id === prev);
+            return isAuthorized && prev ? prev : props[0].id;
+          });
+        } else {
+          setSelectedPropiedadId('');
         }
       } catch (err: any) {
         setError(err.message || 'Error al cargar propiedades');
       }
     }
     loadProperties();
-  }, []);
+  }, [session.user?.id]);
+
+  // Persistir cambios en sessionStorage específico de la cuenta y reflejar en URL searchParams
+  useEffect(() => {
+    if (!selectedPropiedadId) return;
+    try {
+      sessionStorage.setItem(
+        userStorageKey,
+        JSON.stringify({
+          propiedadId: selectedPropiedadId,
+          mes: selectedMes,
+          anio: selectedAnio,
+        })
+      );
+      setSearchParams(
+        {
+          propiedadId: selectedPropiedadId,
+          mes: String(selectedMes),
+          anio: String(selectedAnio),
+        },
+        { replace: true }
+      );
+    } catch {
+      // ignore storage error
+    }
+  }, [selectedPropiedadId, selectedMes, selectedAnio, userStorageKey, setSearchParams]);
 
   // Cargar liquidación cuando se seleccione una propiedad o cambie el período
   const fetchReport = async (propId: string, mes: number, anio: number) => {
