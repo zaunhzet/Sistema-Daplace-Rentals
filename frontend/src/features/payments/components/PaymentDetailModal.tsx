@@ -177,7 +177,7 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
               </div>
               {payment.beneficiarioTipo && (
                 <div>
-                  <span className="text-stone-500 block">Beneficiario:</span>
+                  <span className="text-stone-500 block">Beneficiario / Titular:</span>
                   <span className="font-semibold text-stone-800">
                     {payment.beneficiarioTipo}
                     {payment.beneficiarioNombre ? ` — ${payment.beneficiarioNombre}` : ''}
@@ -192,7 +192,7 @@ export const PaymentDetailModal: React.FC<PaymentDetailModalProps> = ({
               )}
               {payment.cuentaReferencia && (
                 <div className="col-span-2">
-                  <span className="text-stone-500 block">Cuenta restringida:</span>
+                  <span className="text-stone-500 block">Últimos 4 dígitos / Ref. operación:</span>
                   <span className="font-mono font-semibold text-stone-800">{payment.cuentaReferencia}</span>
                 </div>
               )}
