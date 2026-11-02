@@ -111,7 +111,7 @@ export function validateReservationPayload(
 
 export interface IReservationService {
   getReservations(filters?: ReservationFilterParams): Promise<Reservation[]>;
-  getReservationsPaginated?(filters?: ReservationFilterParams): Promise<PaginatedReservations>;
+  getReservationsPaginated(filters?: ReservationFilterParams): Promise<PaginatedReservations>;
   getReservationById(id: string): Promise<Reservation | null>;
   getReservationsByGuestId(guestId: string): Promise<Reservation[]>;
   getReservationsByPropertyId(propiedadId: string): Promise<Reservation[]>;
