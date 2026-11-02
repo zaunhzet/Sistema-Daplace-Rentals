@@ -8,6 +8,7 @@ export type EstadoPublicacion = 'PUBLICADA' | 'BORRADOR' | 'PAUSADA';
 
 export interface Propietario {
   id: string;
+  codigo?: string;
   nombre: string;
   email: string;
   telefono?: string;
@@ -24,6 +25,7 @@ export interface Property {
   codigo?: string;
   nombre: string;
   propietarioId: string;
+  propietarioCodigo?: string;
   propietarioNombre: string;
   estadoOperativo: EstadoOperativo;
   estadoPublicacion: EstadoPublicacion;
