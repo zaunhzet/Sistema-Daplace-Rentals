@@ -147,6 +147,7 @@ model Propiedad {
   activa             Boolean           @default(true)
   capacidadHuespedes Int               @default(2)
   precioBaseNoche    Decimal           @default(200.00) @db.Decimal(10, 2)
+  precioLimpieza     Decimal           @default(0.00) @db.Decimal(10, 2)
   moneda             String            @default("PEN")
   creadoEn           DateTime          @default(now())
   actualizadoEn      DateTime          @updatedAt
@@ -189,6 +190,12 @@ model Reserva {
   ingreso           DateTime      @db.Date
   salida            DateTime      @db.Date
   noches            Int
+  cantidadHuespedes Int?
+  horaCheckIn       String?
+  horaCheckOut      String?
+  precioBaseNocheSnapshot Decimal?  @db.Decimal(10, 2)
+  precioLimpiezaSnapshot  Decimal?  @db.Decimal(10, 2)
+  subtotalSnapshot        Decimal?  @db.Decimal(10, 2)
   estado            EstadoReserva @default(SOLICITADA)
   montoAcordado     Decimal       @db.Decimal(10, 2)
   moneda            String        @default("PEN")

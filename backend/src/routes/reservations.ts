@@ -278,6 +278,12 @@ export function registerReservationsRoutes(
           ingreso: r.ingreso.toISOString().slice(0, 10),
           salida: r.salida.toISOString().slice(0, 10),
           noches: r.noches,
+          cantidadHuespedes: r.cantidadHuespedes ?? undefined,
+          horaCheckIn: r.horaCheckIn || undefined,
+          horaCheckOut: r.horaCheckOut || undefined,
+          precioBaseNocheSnapshot: r.precioBaseNocheSnapshot ? Number(r.precioBaseNocheSnapshot) : undefined,
+          precioLimpiezaSnapshot: r.precioLimpiezaSnapshot ? Number(r.precioLimpiezaSnapshot) : undefined,
+          subtotalSnapshot: r.subtotalSnapshot ? Number(r.subtotalSnapshot) : undefined,
           estado: r.estado,
           montoAcordado: Number(r.montoAcordado),
           moneda: r.moneda,
@@ -332,6 +338,12 @@ export function registerReservationsRoutes(
           ingreso: r.ingreso.toISOString().slice(0, 10),
           salida: r.salida.toISOString().slice(0, 10),
           noches: r.noches,
+          cantidadHuespedes: r.cantidadHuespedes ?? undefined,
+          horaCheckIn: r.horaCheckIn || undefined,
+          horaCheckOut: r.horaCheckOut || undefined,
+          precioBaseNocheSnapshot: r.precioBaseNocheSnapshot ? Number(r.precioBaseNocheSnapshot) : undefined,
+          precioLimpiezaSnapshot: r.precioLimpiezaSnapshot ? Number(r.precioLimpiezaSnapshot) : undefined,
+          subtotalSnapshot: r.subtotalSnapshot ? Number(r.subtotalSnapshot) : undefined,
           estado: r.estado,
           montoAcordado: Number(r.montoAcordado),
           moneda: r.moneda,
@@ -359,6 +371,9 @@ export function registerReservationsRoutes(
         huespedId: string;
         ingreso: string;
         salida: string;
+        cantidadHuespedes?: number;
+        horaCheckIn?: string;
+        horaCheckOut?: string;
         montoAcordado: number;
         moneda?: string;
         origen?: 'WEB' | 'DIRECTO' | 'AIRBNB';
@@ -375,6 +390,9 @@ export function registerReservationsRoutes(
           huespedId,
           ingreso,
           salida,
+          cantidadHuespedes,
+          horaCheckIn,
+          horaCheckOut,
           montoAcordado,
           moneda = 'PEN',
           origen = 'WEB',
@@ -419,6 +437,38 @@ export function registerReservationsRoutes(
             error: {
               code: 'VALIDATION_ERROR',
               message: 'El monto acordado debe ser un número finito mayor a 0.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const numHuespedes = cantidadHuespedes !== undefined ? Number(cantidadHuespedes) : undefined;
+        if (numHuespedes !== undefined && (!Number.isInteger(numHuespedes) || numHuespedes <= 0)) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'La cantidad de huéspedes debe ser un número entero mayor a 0.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
+        if (horaCheckIn && !TIME_REGEX.test(horaCheckIn.trim())) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El formato de horaCheckIn debe ser HH:mm (ej. 15:00).',
+              requestId: request.id,
+            },
+          });
+        }
+
+        if (horaCheckOut && !TIME_REGEX.test(horaCheckOut.trim())) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El formato de horaCheckOut debe ser HH:mm (ej. 11:00).',
               requestId: request.id,
             },
           });
@@ -479,6 +529,21 @@ export function registerReservationsRoutes(
               throw err;
             }
 
+            // Validar capacidad de huéspedes
+            if (numHuespedes !== undefined && numHuespedes > propiedad.capacidadHuespedes) {
+              const err = new Error(
+                `La cantidad de huéspedes (${numHuespedes}) excede la capacidad máxima de la propiedad (${propiedad.capacidadHuespedes}).`
+              );
+              (err as any).statusCode = 400;
+              (err as any).code = 'CAPACITY_EXCEEDED';
+              throw err;
+            }
+
+            // Snapshots financieros para trazabilidad
+            const precioBaseNocheSnapshot = propiedad.precioBaseNoche;
+            const precioLimpiezaSnapshot = propiedad.precioLimpieza;
+            const subtotalSnapshot = (Number(propiedad.precioBaseNoche) * noches) + Number(propiedad.precioLimpieza);
+
             // B. Verificar huésped
             const huesped = await tx.huesped.findUnique({ where: { id: huespedId } });
             if (!huesped) {
@@ -523,6 +588,12 @@ export function registerReservationsRoutes(
                 ingreso: ingresoDate,
                 salida: salidaDate,
                 noches,
+                cantidadHuespedes: numHuespedes ?? null,
+                horaCheckIn: horaCheckIn?.trim() || null,
+                horaCheckOut: horaCheckOut?.trim() || null,
+                precioBaseNocheSnapshot,
+                precioLimpiezaSnapshot,
+                subtotalSnapshot,
                 estado: 'SOLICITADA',
                 montoAcordado: numMonto,
                 moneda,
@@ -620,6 +691,12 @@ export function registerReservationsRoutes(
             ingreso: result.ingreso.toISOString().slice(0, 10),
             salida: result.salida.toISOString().slice(0, 10),
             noches: result.noches,
+            cantidadHuespedes: result.cantidadHuespedes ?? undefined,
+            horaCheckIn: result.horaCheckIn || undefined,
+            horaCheckOut: result.horaCheckOut || undefined,
+            precioBaseNocheSnapshot: result.precioBaseNocheSnapshot ? Number(result.precioBaseNocheSnapshot) : undefined,
+            precioLimpiezaSnapshot: result.precioLimpiezaSnapshot ? Number(result.precioLimpiezaSnapshot) : undefined,
+            subtotalSnapshot: result.subtotalSnapshot ? Number(result.subtotalSnapshot) : undefined,
             estado: result.estado,
             montoAcordado: Number(result.montoAcordado),
             moneda: result.moneda,

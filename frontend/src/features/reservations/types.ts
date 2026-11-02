@@ -12,6 +12,12 @@ export interface Reservation {
   ingreso: string; // 'YYYY-MM-DD'
   salida: string;  // 'YYYY-MM-DD'
   noches: number;
+  cantidadHuespedes?: number;
+  horaCheckIn?: string;
+  horaCheckOut?: string;
+  precioBaseNocheSnapshot?: number;
+  precioLimpiezaSnapshot?: number;
+  subtotalSnapshot?: number;
   estado: EstadoReserva;
   montoAcordado: number;
   moneda: string;  // 'PEN' | 'USD'
@@ -34,6 +40,9 @@ export interface CreateReservationDto {
   huespedId: string;
   ingreso: string;
   salida: string;
+  cantidadHuespedes?: number;
+  horaCheckIn?: string;
+  horaCheckOut?: string;
   montoAcordado: number;
   moneda?: string;
   origen?: OrigenReserva;

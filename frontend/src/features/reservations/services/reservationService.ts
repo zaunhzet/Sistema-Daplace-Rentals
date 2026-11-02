@@ -98,6 +98,10 @@ export function validateReservationPayload(
     errors.montoAcordado = 'El precio acordado debe ser un monto mayor a 0.';
   }
 
+  if (dto.cantidadHuespedes !== undefined && (!Number.isInteger(dto.cantidadHuespedes) || dto.cantidadHuespedes <= 0)) {
+    errors.cantidadHuespedes = 'La cantidad de huéspedes debe ser un número entero mayor a 0.';
+  }
+
   return {
     isValid: Object.keys(errors).length === 0,
     errors,

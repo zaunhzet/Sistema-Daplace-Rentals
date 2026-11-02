@@ -24,7 +24,11 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
   const [huespedId, setHuespedId] = useState('');
   const [ingreso, setIngreso] = useState('');
   const [salida, setSalida] = useState('');
+  const [cantidadHuespedes, setCantidadHuespedes] = useState<number>(2);
+  const [horaCheckIn, setHoraCheckIn] = useState('15:00');
+  const [horaCheckOut, setHoraCheckOut] = useState('11:00');
   const [montoAcordado, setMontoAcordado] = useState<number>(0);
+  const [isManualPrice, setIsManualPrice] = useState(false);
   const [moneda, setMoneda] = useState('PEN');
   const [origen, setOrigen] = useState<OrigenReserva>('WEB');
   const [referenciaCanal, setReferenciaCanal] = useState('');
@@ -45,7 +49,11 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
       setHuespedId(guests.length > 0 ? guests[0].id : '');
       setIngreso('');
       setSalida('');
+      setCantidadHuespedes(2);
+      setHoraCheckIn('15:00');
+      setHoraCheckOut('11:00');
       setMontoAcordado(0);
+      setIsManualPrice(false);
       setMoneda('PEN');
       setOrigen('WEB');
       setReferenciaCanal('');
@@ -55,31 +63,43 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
     }
   }, [isOpen]);
 
-  // Recalculate estimated price when dates or property change
+  const selectedProp = properties.find((p) => p.id === propiedadId);
+  const nights = calculateNights(ingreso, salida);
+  const tarifaNoches = (selectedProp?.precioBaseNoche || 0) * (nights > 0 ? nights : 0);
+  const tarifaLimpieza = selectedProp?.precioLimpieza || 0;
+  const calculatedTotal = nights > 0 ? tarifaNoches + tarifaLimpieza : 0;
+
+  // Recalcular cotización automática cuando cambian fechas o propiedad, a menos que se haya fijado precio manual
   useEffect(() => {
-    const selectedProp = properties.find((p) => p.id === propiedadId);
     if (selectedProp) {
       setMoneda(selectedProp.moneda || 'PEN');
-      const nights = calculateNights(ingreso, salida);
-      if (nights > 0 && selectedProp.precioBaseNoche) {
-        setMontoAcordado(nights * selectedProp.precioBaseNoche);
+      if (!isManualPrice && nights > 0) {
+        setMontoAcordado(calculatedTotal);
       }
     }
-  }, [propiedadId, ingreso, salida, properties]);
+  }, [propiedadId, ingreso, salida, selectedProp, isManualPrice, calculatedTotal, nights]);
 
   if (!isOpen) return null;
-
-  const nights = calculateNights(ingreso, salida);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setGeneralError(null);
+
+    if (selectedProp && selectedProp.capacidadHuespedes && cantidadHuespedes > selectedProp.capacidadHuespedes) {
+      setErrors({
+        cantidadHuespedes: `La cantidad de huéspedes (${cantidadHuespedes}) excede la capacidad máxima de la propiedad (${selectedProp.capacidadHuespedes}).`,
+      });
+      return;
+    }
 
     const dto: CreateReservationDto = {
       propiedadId,
       huespedId,
       ingreso,
       salida,
+      cantidadHuespedes: Number(cantidadHuespedes),
+      horaCheckIn: horaCheckIn || undefined,
+      horaCheckOut: horaCheckOut || undefined,
       montoAcordado: Number(montoAcordado),
       moneda,
       origen,
@@ -256,6 +276,102 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
             </div>
           )}
 
+          {/* Cantidad de Huéspedes */}
+          <div>
+            <label htmlFor="res-huespedes" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+              Cantidad de Huéspedes <span className="text-red-500">*</span>
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                id="res-huespedes"
+                type="number"
+                min="1"
+                max={selectedProp?.capacidadHuespedes || 100}
+                value={cantidadHuespedes}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value, 10) || 1;
+                  setCantidadHuespedes(val);
+                  if (errors.cantidadHuespedes) setErrors({ ...errors, cantidadHuespedes: '' });
+                }}
+                className="w-32 rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 focus:border-[#183b32] focus:outline-hidden"
+              />
+              <span className="text-xs text-stone-500">
+                Capacidad máxima de la propiedad:{' '}
+                <strong className="text-stone-800">{selectedProp?.capacidadHuespedes || 2} personas</strong>
+              </span>
+            </div>
+            {errors.cantidadHuespedes && (
+              <p className="mt-1 text-xs text-red-600 font-medium">{errors.cantidadHuespedes}</p>
+            )}
+          </div>
+
+          {/* Horarios Operativos de Check-in y Check-out */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="res-hora-checkin" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Hora Estimada de Check-in
+              </label>
+              <input
+                id="res-hora-checkin"
+                type="time"
+                value={horaCheckIn}
+                onChange={(e) => setHoraCheckIn(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 focus:border-[#183b32] focus:outline-hidden"
+              />
+            </div>
+            <div>
+              <label htmlFor="res-hora-checkout" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Hora Estimada de Check-out
+              </label>
+              <input
+                id="res-hora-checkout"
+                type="time"
+                value={horaCheckOut}
+                onChange={(e) => setHoraCheckOut(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 focus:border-[#183b32] focus:outline-hidden"
+              />
+            </div>
+          </div>
+
+          {/* Desglose de Cotización Automática */}
+          {nights > 0 && selectedProp && (
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 text-xs space-y-2">
+              <p className="font-semibold text-stone-700 uppercase tracking-wider text-[11px]">
+                Desglose de Cotización Sugerida
+              </p>
+              <div className="flex justify-between text-stone-600">
+                <span>{nights} noche{nights > 1 ? 's' : ''} × {moneda} {selectedProp.precioBaseNoche || 0}:</span>
+                <span className="font-mono font-medium">{moneda} {tarifaNoches.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-stone-600">
+                <span>Tarifa de Limpieza:</span>
+                <span className="font-mono font-medium">{moneda} {tarifaLimpieza.toFixed(2)}</span>
+              </div>
+              <div className="border-t border-stone-200 pt-1.5 flex justify-between font-bold text-stone-900 text-sm">
+                <span>Total Cotizado:</span>
+                <span className="font-mono text-[#183b32]">{moneda} {calculatedTotal.toFixed(2)}</span>
+              </div>
+
+              {isManualPrice && montoAcordado !== calculatedTotal && (
+                <div className="mt-2 pt-2 border-t border-amber-200/60 flex items-center justify-between text-amber-900 bg-amber-50 rounded-lg p-2.5">
+                  <span className="text-[11px]">
+                    Precio manual: <strong>{moneda} {montoAcordado.toFixed(2)}</strong> (sugerido: {moneda} {calculatedTotal.toFixed(2)}).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMontoAcordado(calculatedTotal);
+                      setIsManualPrice(false);
+                    }}
+                    className="text-[11px] font-semibold text-[#183b32] underline hover:text-[#0f2721] cursor-pointer shrink-0 ml-2"
+                  >
+                    Usar precio calculado
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Precio Acordado y Moneda */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -270,6 +386,7 @@ export const ReservationFormModal: React.FC<ReservationFormModalProps> = ({
                 value={montoAcordado || ''}
                 onChange={(e) => {
                   setMontoAcordado(parseFloat(e.target.value) || 0);
+                  setIsManualPrice(true);
                   if (errors.montoAcordado) setErrors({ ...errors, montoAcordado: '' });
                 }}
                 placeholder="0.00"

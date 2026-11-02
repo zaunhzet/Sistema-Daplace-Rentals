@@ -36,6 +36,10 @@ export function validateProperty(
     errors.precioBaseNoche = 'El precio base por noche debe ser mayor a 0.';
   }
 
+  if (dto.precioLimpieza !== undefined && dto.precioLimpieza < 0) {
+    errors.precioLimpieza = 'El precio de limpieza debe ser mayor o igual a 0.';
+  }
+
   return {
     isValid: Object.keys(errors).length === 0,
     errors,

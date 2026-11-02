@@ -34,6 +34,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
   const [estadoPublicacion, setEstadoPublicacion] = useState<EstadoPublicacion>('BORRADOR');
   const [capacidadHuespedes, setCapacidadHuespedes] = useState<number>(2);
   const [precioBaseNoche, setPrecioBaseNoche] = useState<number>(250);
+  const [precioLimpieza, setPrecioLimpieza] = useState<number>(0);
   const [moneda, setMoneda] = useState('PEN');
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -52,6 +53,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
       setEstadoPublicacion(propertyToEdit.estadoPublicacion);
       setCapacidadHuespedes(propertyToEdit.capacidadHuespedes ?? 2);
       setPrecioBaseNoche(propertyToEdit.precioBaseNoche ?? 250);
+      setPrecioLimpieza(propertyToEdit.precioLimpieza ?? 0);
       setMoneda(propertyToEdit.moneda || 'PEN');
     } else {
       setNombre('');
@@ -61,6 +63,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
       setEstadoPublicacion('BORRADOR');
       setCapacidadHuespedes(2);
       setPrecioBaseNoche(250);
+      setPrecioLimpieza(0);
       setMoneda('PEN');
     }
     setErrors({});
@@ -81,6 +84,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
       estadoPublicacion,
       capacidadHuespedes,
       precioBaseNoche,
+      precioLimpieza,
       moneda,
     };
 
@@ -257,11 +261,11 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
             </div>
           </div>
 
-          {/* Capacidad y Precio Base */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          {/* Capacidad, Precios y Moneda */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <label htmlFor="prop-capacidad" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-                Capacidad (Huéspedes)
+                Capacidad
               </label>
               <input
                 id="prop-capacidad"
@@ -278,7 +282,7 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
 
             <div>
               <label htmlFor="prop-precio" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
-                Precio Base / Noche
+                Tarifa / Noche
               </label>
               <input
                 id="prop-precio"
@@ -290,6 +294,25 @@ export const PropertyFormModal: React.FC<PropertyFormModalProps> = ({
               />
               {errors.precioBaseNoche && (
                 <p className="mt-1 text-xs text-red-600 font-medium">{errors.precioBaseNoche}</p>
+              )}
+            </div>
+
+            <div>
+              <label htmlFor="prop-limpieza" className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-1">
+                Tarifa Limpieza
+              </label>
+              <input
+                id="prop-limpieza"
+                type="number"
+                min={0}
+                step="0.01"
+                value={precioLimpieza}
+                onChange={(e) => setPrecioLimpieza(parseFloat(e.target.value) || 0)}
+                placeholder="0.00"
+                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-sm text-stone-900 focus:border-[#183b32] focus:outline-hidden"
+              />
+              {errors.precioLimpieza && (
+                <p className="mt-1 text-xs text-red-600 font-medium">{errors.precioLimpieza}</p>
               )}
             </div>
 

@@ -119,7 +119,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           </div>
 
           {/* Commercial / Operating details */}
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Capacidad</p>
               <p className="mt-1 text-lg font-bold text-stone-800">
@@ -130,6 +130,12 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Precio Base Noche</p>
               <p className="mt-1 text-lg font-bold text-stone-800">
                 {property.moneda === 'USD' ? '$' : 'S/'} {property.precioBaseNoche ?? '—'}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-stone-200 bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-stone-500">Tarifa Limpieza</p>
+              <p className="mt-1 text-lg font-bold text-stone-800">
+                {property.moneda === 'USD' ? '$' : 'S/'} {property.precioLimpieza ?? 0}
               </p>
             </div>
             <div className="rounded-2xl border border-stone-200 bg-white p-4">
