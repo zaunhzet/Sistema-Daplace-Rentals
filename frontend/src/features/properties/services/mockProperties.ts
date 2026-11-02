@@ -30,6 +30,7 @@ export const INITIAL_PROPIETARIOS_MOCK: Propietario[] = [
 export const INITIAL_PROPERTIES_MOCK: Property[] = [
   {
     id: 'prop-01',
+    codigo: 'PRP-000001',
     nombre: 'Departamento Miraflores Malecón Balta',
     propietarioId: 'usr-102',
     propietarioNombre: 'Carlos Eduardo Méndez',
@@ -46,6 +47,7 @@ export const INITIAL_PROPERTIES_MOCK: Property[] = [
   },
   {
     id: 'prop-02',
+    codigo: 'PRP-000002',
     nombre: 'Suite Boutique Barranco Tradicional',
     propietarioId: 'usr-103',
     propietarioNombre: 'María Elena Alarcón',
@@ -62,6 +64,7 @@ export const INITIAL_PROPERTIES_MOCK: Property[] = [
   },
   {
     id: 'prop-03',
+    codigo: 'PRP-000003',
     nombre: 'Loft Ejecutivo San Isidro Golf',
     propietarioId: 'usr-101',
     propietarioNombre: 'Inversiones San Isidro S.A.C.',
@@ -78,6 +81,7 @@ export const INITIAL_PROPERTIES_MOCK: Property[] = [
   },
   {
     id: 'prop-04',
+    codigo: 'PRP-000004',
     nombre: 'Casa de Playa Punta Hermosa',
     propietarioId: 'usr-102',
     propietarioNombre: 'Carlos Eduardo Méndez',
@@ -94,6 +98,7 @@ export const INITIAL_PROPERTIES_MOCK: Property[] = [
   },
   {
     id: 'prop-05',
+    codigo: 'PRP-000005',
     nombre: 'Estudio Centro Financiero',
     propietarioId: 'usr-104',
     propietarioNombre: 'Grupo Inmobiliario del Sur',

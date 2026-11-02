@@ -4,6 +4,7 @@ export type OrigenReserva = 'WEB' | 'DIRECTO' | 'AIRBNB';
 
 export interface Reservation {
   id: string;
+  codigo?: string;
   propiedadId: string;
   propiedadNombre: string;
   huespedId: string;
@@ -64,6 +65,16 @@ export interface ReservationFilterParams {
   desde?: string;
   hasta?: string;
   search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedReservations {
+  data: Reservation[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
 }
 
 export interface AvailabilityCheckResult {

@@ -21,6 +21,7 @@ export interface CreatePropietarioDto {
 
 export interface Property {
   id: string;
+  codigo?: string;
   nombre: string;
   propietarioId: string;
   propietarioNombre: string;

@@ -15,6 +15,7 @@ export interface ReservaRelacionada {
 
 export interface Guest {
   id: string;
+  codigo?: string;
   nombreCompleto: string;
   telefono: string;
   email: string;

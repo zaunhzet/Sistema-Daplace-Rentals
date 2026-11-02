@@ -3,6 +3,7 @@ import type {
   ConfirmationRequirementsResult,
   CreateContractDto,
   CreateReservationDto,
+  PaginatedReservations,
   Reservation,
   ReservationContract,
   ReservationFilterParams,
@@ -110,6 +111,7 @@ export function validateReservationPayload(
 
 export interface IReservationService {
   getReservations(filters?: ReservationFilterParams): Promise<Reservation[]>;
+  getReservationsPaginated?(filters?: ReservationFilterParams): Promise<PaginatedReservations>;
   getReservationById(id: string): Promise<Reservation | null>;
   getReservationsByGuestId(guestId: string): Promise<Reservation[]>;
   getReservationsByPropertyId(propiedadId: string): Promise<Reservation[]>;
@@ -223,13 +225,37 @@ class MockReservationService implements IReservationService {
       result = result.filter(
         (r) =>
           r.id.toLowerCase().includes(q) ||
+          (r.codigo && r.codigo.toLowerCase().includes(q)) ||
           r.propiedadNombre.toLowerCase().includes(q) ||
           r.huespedNombre.toLowerCase().includes(q) ||
           (r.referenciaCanal && r.referenciaCanal.toLowerCase().includes(q))
       );
     }
 
+    if (filters.page !== undefined) {
+      const pageNum = Math.max(1, filters.page);
+      const pageSize = filters.pageSize ? Math.min(100, Math.max(1, filters.pageSize)) : 20;
+      const skip = (pageNum - 1) * pageSize;
+      result = result.slice(skip, skip + pageSize);
+    }
+
     return result;
+  }
+
+  public async getReservationsPaginated(filters?: ReservationFilterParams): Promise<PaginatedReservations> {
+    const all = await this.getReservations({ ...filters, page: undefined, pageSize: undefined });
+    const pageNum = filters?.page ? Math.max(1, filters.page) : 1;
+    const pageSize = filters?.pageSize ? Math.min(100, Math.max(1, filters.pageSize)) : 20;
+    const skip = (pageNum - 1) * pageSize;
+    const total = all.length;
+    const data = all.slice(skip, skip + pageSize);
+    return {
+      data,
+      total,
+      page: pageNum,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
   }
 
   public async getReservationById(id: string): Promise<Reservation | null> {
@@ -764,9 +790,57 @@ export class ApiReservationService implements IReservationService {
     if (filters?.search) {
       params.set('search', filters.search);
     }
+    if (filters?.page !== undefined) {
+      params.set('page', String(filters.page));
+    }
+    if (filters?.pageSize !== undefined) {
+      params.set('pageSize', String(filters.pageSize));
+    }
 
     const qs = params.toString();
-    return apiClient<Reservation[]>(`/api/reservas${qs ? `?${qs}` : ''}`);
+    const res = await apiClient<Reservation[] | PaginatedReservations>(`/api/reservas${qs ? `?${qs}` : ''}`);
+    if (Array.isArray(res)) {
+      return res;
+    }
+    return (res as PaginatedReservations).data || [];
+  }
+
+  public async getReservationsPaginated(filters?: ReservationFilterParams): Promise<PaginatedReservations> {
+    const params = new URLSearchParams();
+    if (filters?.propiedadId && filters.propiedadId !== 'TODAS') {
+      params.set('propiedadId', filters.propiedadId);
+    }
+    if (filters?.huespedId && filters.huespedId !== 'TODOS') {
+      params.set('huespedId', filters.huespedId);
+    }
+    if (filters?.estado && filters.estado !== 'TODOS') {
+      params.set('estado', filters.estado);
+    }
+    if (filters?.desde) {
+      params.set('desde', filters.desde);
+    }
+    if (filters?.hasta) {
+      params.set('hasta', filters.hasta);
+    }
+    if (filters?.search) {
+      params.set('search', filters.search);
+    }
+    params.set('page', String(filters?.page || 1));
+    params.set('pageSize', String(filters?.pageSize || 20));
+
+    const qs = params.toString();
+    const res = await apiClient<PaginatedReservations | Reservation[]>(`/api/reservas${qs ? `?${qs}` : ''}`);
+    if ('data' in (res as any)) {
+      return res as PaginatedReservations;
+    }
+    const arr = res as Reservation[];
+    return {
+      data: arr,
+      total: arr.length,
+      page: Number(filters?.page || 1),
+      pageSize: Number(filters?.pageSize || 20),
+      totalPages: Math.ceil(arr.length / Number(filters?.pageSize || 20)),
+    };
   }
 
   public async getReservationById(id: string): Promise<Reservation | null> {

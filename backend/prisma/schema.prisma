@@ -139,6 +139,7 @@ model Usuario {
 
 model Propiedad {
   id                 String            @id @default(uuid())
+  codigo             String?           @unique
   nombre             String
   propietarioId      String
   direccion          String
@@ -165,6 +166,7 @@ model Propiedad {
 
 model Huesped {
   id              String         @id @default(uuid())
+  codigo          String?        @unique
   nombreCompleto  String
   telefono        String?
   email           String?
@@ -185,6 +187,7 @@ model Huesped {
 
 model Reserva {
   id                String        @id @default(uuid())
+  codigo            String?       @unique
   propiedadId       String
   huespedId         String
   ingreso           DateTime      @db.Date

@@ -220,12 +220,14 @@ export function registerReservationsRoutes(
         desde?: string;
         hasta?: string;
         search?: string;
+        page?: string | number;
+        pageSize?: string | number;
       };
     }>(
       '/api/reservas',
       { preHandler: requireAuth(['ADMIN', 'OPERADOR']) },
-      async (request) => {
-        const { propiedadId, huespedId, estado, desde, hasta, search } = request.query;
+      async (request, reply) => {
+        const { propiedadId, huespedId, estado, desde, hasta, search, page, pageSize } = request.query;
 
         const where: any = {};
 
@@ -253,30 +255,23 @@ export function registerReservationsRoutes(
           const q = search.trim();
           where.OR = [
             { id: { contains: q, mode: 'insensitive' } },
+            { codigo: { contains: q, mode: 'insensitive' } },
             { propiedad: { nombre: { contains: q, mode: 'insensitive' } } },
             { huesped: { nombreCompleto: { contains: q, mode: 'insensitive' } } },
             { referenciaCanal: { contains: q, mode: 'insensitive' } },
           ];
         }
 
-        const reservas = await prisma.reserva.findMany({
-          where,
-          include: {
-            propiedad: { select: { id: true, nombre: true } },
-            huesped: { select: { id: true, nombreCompleto: true, email: true, telefono: true } },
-          },
-          orderBy: { ingreso: 'desc' },
-        });
-
-        return reservas.map((r) => ({
+        const mapReserva = (r: any) => ({
           id: r.id,
+          codigo: r.codigo || undefined,
           propiedadId: r.propiedadId,
-          propiedadNombre: r.propiedad.nombre,
+          propiedadNombre: r.propiedad?.nombre,
           huespedId: r.huespedId,
-          huespedNombre: r.huesped.nombreCompleto,
-          huespedContacto: r.huesped.telefono || r.huesped.email || undefined,
-          ingreso: r.ingreso.toISOString().slice(0, 10),
-          salida: r.salida.toISOString().slice(0, 10),
+          huespedNombre: r.huesped?.nombreCompleto,
+          huespedContacto: r.huesped?.telefono || r.huesped?.email || undefined,
+          ingreso: r.ingreso instanceof Date ? r.ingreso.toISOString().slice(0, 10) : r.ingreso,
+          salida: r.salida instanceof Date ? r.salida.toISOString().slice(0, 10) : r.salida,
           noches: r.noches,
           cantidadHuespedes: r.cantidadHuespedes ?? undefined,
           horaCheckIn: r.horaCheckIn || undefined,
@@ -291,15 +286,59 @@ export function registerReservationsRoutes(
           referenciaCanal: r.referenciaCanal || undefined,
           notas: r.notas || undefined,
           motivoCancelacion: r.motivoCancelacion || undefined,
-          plazoIniciadoEn: r.plazoIniciadoEn ? r.plazoIniciadoEn.toISOString() : undefined,
-          venceEn: r.venceEn ? r.venceEn.toISOString() : undefined,
+          plazoIniciadoEn: r.plazoIniciadoEn ? (r.plazoIniciadoEn instanceof Date ? r.plazoIniciadoEn.toISOString() : r.plazoIniciadoEn) : undefined,
+          venceEn: r.venceEn ? (r.venceEn instanceof Date ? r.venceEn.toISOString() : r.venceEn) : undefined,
           politicaPlazoVersion: r.politicaPlazoVersion || undefined,
           politicaPlazoSnapshot: r.politicaPlazoSnapshot || undefined,
-          avisoProgramadoEn: r.avisoProgramadoEn ? r.avisoProgramadoEn.toISOString() : undefined,
-          expiradaEn: r.expiradaEn ? r.expiradaEn.toISOString() : undefined,
-          creadaEn: r.creadaEn.toISOString(),
-          actualizadaEn: r.actualizadaEn.toISOString(),
-        }));
+          avisoProgramadoEn: r.avisoProgramadoEn ? (r.avisoProgramadoEn instanceof Date ? r.avisoProgramadoEn.toISOString() : r.avisoProgramadoEn) : undefined,
+          expiradaEn: r.expiradaEn ? (r.expiradaEn instanceof Date ? r.expiradaEn.toISOString() : r.expiradaEn) : undefined,
+          creadaEn: r.creadaEn instanceof Date ? r.creadaEn.toISOString() : r.creadaEn,
+          actualizadaEn: r.actualizadaEn instanceof Date ? r.actualizadaEn.toISOString() : r.actualizadaEn,
+        });
+
+        const includeRelations = {
+          propiedad: { select: { id: true, nombre: true } },
+          huesped: { select: { id: true, nombreCompleto: true, email: true, telefono: true } },
+        };
+
+        if (page !== undefined) {
+          const pageNum = Math.max(1, parseInt(String(page), 10) || 1);
+          const limit = pageSize ? Math.min(100, Math.max(1, parseInt(String(pageSize), 10) || 20)) : 20;
+          const skip = (pageNum - 1) * limit;
+
+          const [total, reservas] = await Promise.all([
+            prisma.reserva.count({ where }),
+            prisma.reserva.findMany({
+              where,
+              include: includeRelations,
+              orderBy: { ingreso: 'desc' },
+              skip,
+              take: limit,
+            }),
+          ]);
+
+          const totalPages = Math.ceil(total / limit);
+
+          reply.header('X-Total-Count', total.toString());
+          reply.header('X-Page', pageNum.toString());
+          reply.header('X-Page-Size', limit.toString());
+
+          return {
+            data: reservas.map(mapReserva),
+            total,
+            page: pageNum,
+            pageSize: limit,
+            totalPages,
+          };
+        }
+
+        const reservas = await prisma.reserva.findMany({
+          where,
+          include: includeRelations,
+          orderBy: { ingreso: 'desc' },
+        });
+
+        return reservas.map(mapReserva);
       }
     );
 
@@ -330,6 +369,7 @@ export function registerReservationsRoutes(
 
         return {
           id: r.id,
+          codigo: r.codigo || undefined,
           propiedadId: r.propiedadId,
           propiedadNombre: r.propiedad.nombre,
           huespedId: r.huespedId,
@@ -683,6 +723,7 @@ export function registerReservationsRoutes(
 
           return reply.status(201).send({
             id: result.id,
+            codigo: result.codigo || undefined,
             propiedadId: result.propiedadId,
             propiedadNombre: result.propiedad.nombre,
             huespedId: result.huespedId,

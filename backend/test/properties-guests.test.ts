@@ -138,11 +138,20 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
       assert.equal(created.propietarioNombre, 'Carlos Eduardo Méndez');
       assert.equal(created.precioLimpieza, 80);
 
+      assert.ok(created.codigo, 'Debe asignar código legible a la propiedad');
+      assert.match(created.codigo, /^PRP-\d{6}$/);
+
       // Verificar persistencia real en PostgreSQL
       const inDb = await db.prisma.propiedad.findUnique({ where: { id: 'prop-test-01' } });
       assert.ok(inDb, 'La propiedad debe existir en PostgreSQL');
       assert.equal(inDb.nombre, 'Penthouse San Isidro Club');
       assert.equal(Number(inDb.precioLimpieza), 80);
+      assert.equal(inDb.codigo, created.codigo);
+
+      // Búsqueda por código legible
+      const searchCode = await app.inject({ method: 'GET', url: `/api/propiedades?search=${created.codigo}` });
+      assert.equal(searchCode.statusCode, 200);
+      assert.ok(searchCode.json().some((p: any) => p.codigo === created.codigo));
 
       // Verificar auditoría
       const audit = await db.prisma.auditoriaEvento.findFirst({
@@ -314,12 +323,21 @@ describe('Hito 2 — API Fastify para Propiedades y Huéspedes (PostgreSQL)', ()
         },
       });
       assert.equal(validRes.statusCode, 201);
-      assert.equal(validRes.json().id, 'hue-test-01');
+      const createdGuest = validRes.json();
+      assert.equal(createdGuest.id, 'hue-test-01');
+      assert.ok(createdGuest.codigo, 'Debe asignar código legible al huésped');
+      assert.match(createdGuest.codigo, /^HSP-\d{6}$/);
 
       // Verificar en BD
       const inDb = await db.prisma.huesped.findUnique({ where: { id: 'hue-test-01' } });
       assert.ok(inDb, 'El huésped debe persistir en PostgreSQL');
       assert.equal(inDb.nombreCompleto, 'Beatriz Morales Salcedo');
+      assert.equal(inDb.codigo, createdGuest.codigo);
+
+      // Búsqueda por código de huésped
+      const searchCode = await app.inject({ method: 'GET', url: `/api/huespedes?search=${createdGuest.codigo}` });
+      assert.equal(searchCode.statusCode, 200);
+      assert.ok(searchCode.json().some((g: any) => g.codigo === createdGuest.codigo));
     });
 
     it('11. PATCH /api/huespedes/:id — actualiza datos de huésped y audita', async () => {

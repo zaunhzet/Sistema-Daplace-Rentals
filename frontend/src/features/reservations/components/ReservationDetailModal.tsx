@@ -372,7 +372,12 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
         <div className="flex items-start justify-between border-b border-stone-200 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-bold text-stone-700">
+              {reservation.codigo && (
+                <span className="rounded-md bg-[#183b32] px-2.5 py-0.5 font-mono text-xs font-bold text-white tracking-wide shadow-2xs">
+                  {reservation.codigo}
+                </span>
+              )}
+              <span className="rounded-md bg-stone-100 px-2 py-0.5 font-mono text-xs font-medium text-stone-700">
                 {reservation.id}
               </span>
               <span className="rounded-md bg-stone-100 px-2 py-0.5 text-xs text-stone-600 font-mono">
