@@ -12,6 +12,7 @@ interface PaymentFormModalProps {
   onSubmit: (dto: CreatePaymentDto) => Promise<void>;
   reservations: Reservation[];
   preselectedReservaId?: string;
+  preselectedReservation?: Reservation | null;
 }
 
 export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
@@ -20,6 +21,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   onSubmit,
   reservations,
   preselectedReservaId,
+  preselectedReservation,
 }) => {
   const [reservaId, setReservaId] = useState<string>('');
   const [importe, setImporte] = useState<string>('');
@@ -47,8 +49,6 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const initialReserva = preselectedReservaId || (reservations.length > 0 ? reservations[0]?.id : '');
-      setReservaId(initialReserva || '');
       setImporte('');
       setConcepto('ADELANTO');
       setMetodoPago('TRANSFERENCIA');
@@ -65,15 +65,50 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       setEvidenciaUrl('');
       setErrors({});
 
-      const found = reservations.find((r) => r.id === initialReserva);
-      if (found) {
-        setSelectedResObj(found);
-        setMoneda(found.moneda || 'PEN');
+      if (preselectedReservation) {
+        setReservaId(preselectedReservation.id);
+        setSelectedResObj(preselectedReservation);
+        setMoneda(preselectedReservation.moneda || 'PEN');
+        return;
+      }
+
+      if (preselectedReservaId) {
+        setReservaId(preselectedReservaId);
+        const found = reservations.find((r) => r.id === preselectedReservaId);
+        if (found) {
+          setSelectedResObj(found);
+          setMoneda(found.moneda || 'PEN');
+        } else {
+          setSelectedResObj(null);
+        }
+        return;
+      }
+
+      const defaultReservation = reservations.length > 0 ? reservations[0] : null;
+      setReservaId(defaultReservation?.id || '');
+      if (defaultReservation) {
+        setSelectedResObj(defaultReservation);
+        setMoneda(defaultReservation.moneda || 'PEN');
       } else {
         setSelectedResObj(null);
       }
     }
-  }, [isOpen, preselectedReservaId, reservations]);
+  }, [isOpen, preselectedReservaId, preselectedReservation]);
+
+  useEffect(() => {
+    if (
+      isOpen &&
+      !preselectedReservation &&
+      !preselectedReservaId &&
+      !reservaId &&
+      reservations.length > 0
+    ) {
+      const defaultReservation = reservations[0];
+      setReservaId(defaultReservation.id);
+      setSelectedResObj(defaultReservation);
+      setMoneda(defaultReservation.moneda || 'PEN');
+    }
+  }, [isOpen, preselectedReservation, preselectedReservaId, reservaId, reservations]);
 
   const selectedReservation = selectedResObj || reservations.find((r) => r.id === reservaId);
 

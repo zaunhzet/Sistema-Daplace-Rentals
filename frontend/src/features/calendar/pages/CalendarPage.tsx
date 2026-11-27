@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { AlertCircle, CheckCircle, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
-import type { CalendarDay, MonthOccupancySummary } from '../types';
+import type { CalendarAgendaData, CalendarDay, MonthOccupancySummary } from '../types';
 import type { Property } from '../../properties/types';
 import type { Reservation } from '../../reservations/types';
 import { calendarService, getMonthName, resolveInitialCalendarDateState } from '../services/calendarService';
@@ -9,14 +9,17 @@ import { reservationService } from '../../reservations/services/reservationServi
 import { CalendarGrid } from '../components/CalendarGrid';
 import { CalendarWeekView } from '../components/CalendarWeekView';
 import { CalendarDayView } from '../components/CalendarDayView';
+import { CalendarAgendaView } from '../components/CalendarAgendaView';
 import { CalendarLegend } from '../components/CalendarLegend';
 import { ReservationDetailModal } from '../../reservations/components/ReservationDetailModal';
 import { ReservationDateEditModal } from '../../reservations/components/ReservationDateEditModal';
 import { createCalendarPageCoordinator } from '../../reservations/services/reservationPageCoordinator';
 import { useAuth } from '../../auth/AuthContext';
+import type { UserRole } from '../../auth/types';
+import { canAccessPath } from '../../../shared/auth/permissions';
 import { loadPersistentState, savePersistentState } from '../../../shared/utils/persistence';
 
-export type CalendarViewMode = 'mes' | 'semana' | 'dia';
+export type CalendarViewMode = 'mes' | 'semana' | 'dia' | 'agenda';
 
 interface PersistentCalendarState {
   propertyId?: string;
@@ -55,6 +58,15 @@ export const CalendarPage: React.FC = () => {
     occupancyRate: 0,
   });
   const [loading, setLoading] = useState(true);
+
+  // Agenda diaria state
+  const [agendaPropertyId, setAgendaPropertyId] = useState<string>('TODAS');
+  const [agendaData, setAgendaData] = useState<CalendarAgendaData | null>(null);
+  const [agendaLoading, setAgendaLoading] = useState(false);
+  const [agendaError, setAgendaError] = useState<string | null>(null);
+  const [loadingReservationId, setLoadingReservationId] = useState<string | null>(null);
+  const agendaSeqRef = useRef(0);
+  const agendaDetailSeqRef = useRef(0);
 
   // Modal detail
   const [selectedReservation, setSelectedReservation] = useState<Reservation | null>(null);
@@ -122,6 +134,32 @@ export const CalendarPage: React.FC = () => {
     await coordinatorRef.current.loadCalendar(selectedPropertyId, currentYear, currentMonth, silent);
   }, [selectedPropertyId, currentYear, currentMonth]);
 
+  const loadAgenda = useCallback(
+    async (silent = false) => {
+      if (viewMode !== 'agenda') return;
+      const seq = ++agendaSeqRef.current;
+      if (!silent) {
+        setAgendaLoading(true);
+      }
+      setAgendaError(null);
+      try {
+        const propFilter = agendaPropertyId === 'TODAS' ? undefined : agendaPropertyId;
+        const data = await calendarService.getDailyAgenda(selectedDateStr, propFilter);
+        if (seq !== agendaSeqRef.current) return;
+        setAgendaData(data);
+      } catch (err: unknown) {
+        if (seq !== agendaSeqRef.current) return;
+        const msg = err instanceof Error ? err.message : 'Error al cargar la agenda diaria.';
+        setAgendaError(msg);
+      } finally {
+        if (seq === agendaSeqRef.current) {
+          setAgendaLoading(false);
+        }
+      }
+    },
+    [viewMode, selectedDateStr, agendaPropertyId]
+  );
+
   useEffect(() => {
     loadProperties();
   }, [loadProperties]);
@@ -130,11 +168,55 @@ export const CalendarPage: React.FC = () => {
     loadCalendar();
   }, [loadCalendar]);
 
+  useEffect(() => {
+    agendaDetailSeqRef.current += 1;
+    setLoadingReservationId(null);
+
+    if (viewMode !== 'agenda') {
+      agendaSeqRef.current += 1;
+      setAgendaLoading(false);
+      setAgendaError(null);
+      return;
+    }
+
+    let active = true;
+    const seq = ++agendaSeqRef.current;
+    setAgendaLoading(true);
+    setAgendaError(null);
+
+    const propFilter = agendaPropertyId === 'TODAS' ? undefined : agendaPropertyId;
+    calendarService
+      .getDailyAgenda(selectedDateStr, propFilter)
+      .then((data) => {
+        if (!active || seq !== agendaSeqRef.current) return;
+        setAgendaData(data);
+      })
+      .catch((err: unknown) => {
+        if (!active || seq !== agendaSeqRef.current) return;
+        const msg = err instanceof Error ? err.message : 'Error al cargar la agenda diaria.';
+        setAgendaError(msg);
+      })
+      .finally(() => {
+        if (active && seq === agendaSeqRef.current) {
+          setAgendaLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+      agendaDetailSeqRef.current += 1;
+    };
+  }, [viewMode, selectedDateStr, agendaPropertyId]);
+
   // Refresco al recuperar foco y polling técnico configurable (45s) sin solapes ni consumo en segundo plano
   useEffect(() => {
     const handleFocus = () => {
       if (document.visibilityState !== 'hidden') {
-        void loadCalendar(true);
+        if (viewMode === 'agenda') {
+          void loadAgenda(true);
+        } else {
+          void loadCalendar(true);
+        }
       }
     };
 
@@ -142,7 +224,11 @@ export const CalendarPage: React.FC = () => {
 
     const interval = setInterval(() => {
       if (document.visibilityState !== 'hidden') {
-        void loadCalendar(true);
+        if (viewMode === 'agenda') {
+          void loadAgenda(true);
+        } else {
+          void loadCalendar(true);
+        }
       }
     }, 45000);
 
@@ -150,7 +236,7 @@ export const CalendarPage: React.FC = () => {
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
     };
-  }, [loadCalendar]);
+  }, [viewMode, loadCalendar, loadAgenda]);
 
   const shiftDate = (dateStr: string, daysOffset: number): string => {
     const parts = dateStr.split('-');
@@ -232,6 +318,41 @@ export const CalendarPage: React.FC = () => {
     setSelectedDateStr(`${y}-${String(m).padStart(2, '0')}-${d}`);
   };
 
+  const handleAgendaDateChange = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
+    setSelectedDateStr(value);
+    const [y, m] = value.split('-').map(Number);
+    if (y !== currentYear || m !== currentMonth) {
+      setCurrentYear(y);
+      setCurrentMonth(m);
+    }
+  };
+
+  const handleSelectAgendaReservation = async (reservaId: string) => {
+    const seq = ++agendaDetailSeqRef.current;
+    setLoadingReservationId(reservaId);
+    try {
+      const res = await reservationService.getReservationById(reservaId);
+      if (seq !== agendaDetailSeqRef.current) return;
+      if (!res) {
+        setNotification('Error: No se encontró el detalle de la reserva seleccionada.');
+        setTimeout(() => setNotification(null), 5000);
+        return;
+      }
+      setSelectedReservation(res);
+      setIsDetailOpen(true);
+    } catch (err: unknown) {
+      if (seq !== agendaDetailSeqRef.current) return;
+      const msg = err instanceof Error ? err.message : 'No se pudo cargar el detalle de la reserva.';
+      setNotification(`Error: ${msg}`);
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      if (seq === agendaDetailSeqRef.current) {
+        setLoadingReservationId(null);
+      }
+    }
+  };
+
   // Actions from modal con manejo estricto de errores y recarga sin falso éxito
   const handleConfirmReservation = async (id: string) => {
     try {
@@ -240,12 +361,18 @@ export const CalendarPage: React.FC = () => {
       setNotification(`Reserva ${confirmed.id} confirmada exitosamente.`);
       setTimeout(() => setNotification(null), 4000);
       await loadCalendar();
+      if (viewMode === 'agenda') {
+        await loadAgenda(true);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al confirmar la reserva.';
       setNotification(`Error: ${msg}`);
       setTimeout(() => setNotification(null), 6000);
       try {
         await loadCalendar();
+        if (viewMode === 'agenda') {
+          await loadAgenda(true);
+        }
       } catch {
         // Preservar el error original
       }
@@ -260,12 +387,18 @@ export const CalendarPage: React.FC = () => {
       setNotification(`Reserva ${cancelled.id} cancelada. Disponibilidad liberada en calendario.`);
       setTimeout(() => setNotification(null), 4000);
       await loadCalendar();
+      if (viewMode === 'agenda') {
+        await loadAgenda(true);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al cancelar la reserva.';
       setNotification(`Error: ${msg}`);
       setTimeout(() => setNotification(null), 6000);
       try {
         await loadCalendar();
+        if (viewMode === 'agenda') {
+          await loadAgenda(true);
+        }
       } catch {
         // Preservar el error original
       }
@@ -274,6 +407,12 @@ export const CalendarPage: React.FC = () => {
   };
 
   const selectedProperty = properties.find((p) => p.id === selectedPropertyId);
+  const inspectedProperty =
+    viewMode === 'agenda'
+      ? agendaPropertyId === 'TODAS'
+        ? undefined
+        : properties.find((p) => p.id === agendaPropertyId)
+      : selectedProperty;
 
   return (
     <div className="w-full space-y-4">
@@ -295,10 +434,19 @@ export const CalendarPage: React.FC = () => {
           </label>
           <select
             id="calendar-property-select"
-            value={selectedPropertyId}
-            onChange={(e) => setSelectedPropertyId(e.target.value)}
+            value={viewMode === 'agenda' ? agendaPropertyId : selectedPropertyId}
+            onChange={(e) => {
+              if (viewMode === 'agenda') {
+                setAgendaPropertyId(e.target.value);
+              } else {
+                setSelectedPropertyId(e.target.value);
+              }
+            }}
             className="w-full rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs sm:text-sm font-medium text-stone-900 focus:border-[#183b32] focus:outline-hidden shadow-2xs cursor-pointer"
           >
+            {viewMode === 'agenda' && (
+              <option value="TODAS">Todas las propiedades</option>
+            )}
             {properties.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.nombre} {p.estadoOperativo !== 'OPERATIVA' ? `(${p.estadoOperativo})` : ''}
@@ -325,14 +473,14 @@ export const CalendarPage: React.FC = () => {
       )}
 
       {/* Property Condition Notice */}
-      {selectedProperty && (!selectedProperty.activa || selectedProperty.estadoOperativo !== 'OPERATIVA') && (
+      {inspectedProperty && (!inspectedProperty.activa || inspectedProperty.estadoOperativo !== 'OPERATIVA') && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 flex items-center gap-2.5">
           <AlertCircle size={18} className="shrink-0 text-amber-700" aria-hidden="true" />
           <div>
             <span className="font-bold">Aviso de condición operativa: </span>
             <span className="text-amber-900">
-              Inmueble <strong>{selectedProperty.estadoOperativo}</strong>{' '}
-              {!selectedProperty.activa ? '(Desactivado)' : ''}. Los días reflejan su no disponibilidad.
+              Inmueble <strong>{inspectedProperty.estadoOperativo}</strong>{' '}
+              {!inspectedProperty.activa ? '(Desactivado)' : ''}. Los días reflejan su no disponibilidad.
             </span>
           </div>
         </div>
@@ -377,6 +525,17 @@ export const CalendarPage: React.FC = () => {
             >
               Día
             </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('agenda')}
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors cursor-pointer ${
+                viewMode === 'agenda'
+                  ? 'bg-white text-stone-900 shadow-2xs'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              Agenda diaria
+            </button>
           </div>
 
           <div className="inline-flex items-center rounded-lg border border-stone-200 bg-stone-50/50 p-0.5 shadow-2xs">
@@ -413,33 +572,56 @@ export const CalendarPage: React.FC = () => {
               {viewMode === 'mes' && `${getMonthName(currentMonth)} ${currentYear}`}
               {viewMode === 'semana' && `Semana (${selectedDateStr})`}
               {viewMode === 'dia' && `Día: ${selectedDateStr}`}
+              {viewMode === 'agenda' && `Agenda: ${selectedDateStr}`}
             </span>
+            {viewMode === 'agenda' && (
+              <input
+                type="date"
+                aria-label="Seleccionar fecha de agenda"
+                value={selectedDateStr}
+                onChange={(e) => handleAgendaDateChange(e.target.value)}
+                className="rounded-lg border border-stone-300 bg-white px-2.5 py-1 text-xs font-medium text-stone-900 focus:border-[#183b32] focus:outline-hidden cursor-pointer"
+              />
+            )}
           </div>
         </div>
 
         {/* Compact Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-3 text-xs">
-          <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Días Mes</span>
-            <span className="font-bold text-sm sm:text-base text-stone-900">{summary.totalDays}</span>
+        {viewMode !== 'agenda' && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 lg:gap-3 text-xs">
+            <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">Días Mes</span>
+              <span className="font-bold text-sm sm:text-base text-stone-900">{summary.totalDays}</span>
+            </div>
+            <div className="rounded-lg bg-blue-50/60 border border-blue-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">Ocupados</span>
+              <span className="font-bold text-sm sm:text-base text-blue-900">{summary.occupiedDays}</span>
+            </div>
+            <div className="rounded-lg bg-emerald-50/60 border border-emerald-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Disponibles</span>
+              <span className="font-bold text-sm sm:text-base text-emerald-900">{summary.availableDays}</span>
+            </div>
+            <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">Ocupación</span>
+              <span className="font-bold text-sm sm:text-base text-stone-900">{summary.occupancyRate}%</span>
+            </div>
           </div>
-          <div className="rounded-lg bg-blue-50/60 border border-blue-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-blue-700">Ocupados</span>
-            <span className="font-bold text-sm sm:text-base text-blue-900">{summary.occupiedDays}</span>
-          </div>
-          <div className="rounded-lg bg-emerald-50/60 border border-emerald-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Disponibles</span>
-            <span className="font-bold text-sm sm:text-base text-emerald-900">{summary.availableDays}</span>
-          </div>
-          <div className="rounded-lg bg-stone-50 border border-stone-200/60 px-3 py-1.5 flex items-center justify-between sm:flex-col sm:items-start sm:justify-center">
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-stone-600">Ocupación</span>
-            <span className="font-bold text-sm sm:text-base text-stone-900">{summary.occupancyRate}%</span>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Calendar Views */}
-      {loading ? (
+      {viewMode === 'agenda' ? (
+        <CalendarAgendaView
+          fecha={selectedDateStr}
+          data={agendaData}
+          loading={agendaLoading}
+          error={agendaError}
+          loadingReservationId={loadingReservationId}
+          canInspectCheckout={canAccessPath(user?.rol as UserRole | undefined, '/mantenimiento')}
+          onRetry={() => void loadAgenda(false)}
+          onSelectReservationId={(reservaId) => void handleSelectAgendaReservation(reservaId)}
+        />
+      ) : loading ? (
         <div className="rounded-3xl border border-stone-200 bg-white p-16 text-center text-sm text-stone-500">
           Cargando disponibilidad...
         </div>
@@ -481,7 +663,7 @@ export const CalendarPage: React.FC = () => {
       )}
 
       {/* Legend */}
-      <CalendarLegend />
+      {viewMode !== 'agenda' && <CalendarLegend />}
 
       {/* Modals for Direct Reservation Inspection */}
       <ReservationDetailModal
@@ -509,6 +691,9 @@ export const CalendarPage: React.FC = () => {
           setNotification(`Fechas actualizadas correctamente.`);
           setTimeout(() => setNotification(null), 4000);
           await loadCalendar();
+          if (viewMode === 'agenda') {
+            await loadAgenda(true);
+          }
         }}
       />
     </div>

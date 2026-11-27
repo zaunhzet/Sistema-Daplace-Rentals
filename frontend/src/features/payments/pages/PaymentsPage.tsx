@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { Plus, ShieldAlert, CheckCircle2, Clock, Ban, X } from 'lucide-react';
 import type { CreatePaymentDto, Payment, PaymentFilterParams, ReconcilePaymentDto, RejectPaymentDto } from '../types';
 import { paymentService } from '../services/paymentService';
@@ -6,6 +7,8 @@ import { propertyService } from '../../properties';
 import { reservationService } from '../../reservations';
 import type { Property } from '../../properties';
 import type { Reservation } from '../../reservations';
+import { useAuth } from '../../auth/AuthContext';
+import { hasPermission } from '../../../shared/auth/permissions';
 import { PaymentFilters } from '../components/PaymentFilters';
 import { PaymentList } from '../components/PaymentList';
 import { PaymentFormModal } from '../components/PaymentFormModal';
@@ -15,7 +18,20 @@ import { PaymentRejectModal } from '../components/PaymentRejectModal';
 import { fromCents, formatMoney, toCents } from '../../../shared/money';
 import { isMockMode } from '../../../shared/api/config';
 
+const readReservaIdParam = (search: string): string | null => {
+  const value = new URLSearchParams(search).get('reservaId')?.trim();
+  return value ? value : null;
+};
+
 export const PaymentsPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { session } = useAuth();
+  const canManagePayments = hasPermission(session.user?.rol, 'manage:payments');
+
+  const initialUrlReservaId = readReservaIdParam(location.search);
+  const lastUrlReservaIdRef = useRef<string | null>(initialUrlReservaId);
+
   const [payments, setPayments] = useState<Payment[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -26,44 +42,161 @@ export const PaymentsPage: React.FC = () => {
   const [filters, setFilters] = useState<PaymentFilterParams>({
     search: '',
     propiedadId: 'TODAS',
-    reservaId: 'TODAS',
+    reservaId: initialUrlReservaId || 'TODAS',
     estado: 'TODOS',
   });
+  const filtersRef = useRef<PaymentFilterParams>(filters);
+  filtersRef.current = filters;
+  const loadSeqRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   // Modales
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
+  const [preselectedReservation, setPreselectedReservation] = useState<Reservation | null>(null);
+  const [pendingNavReservationId, setPendingNavReservationId] = useState<string | null>(null);
+  const navRequestSeqRef = useRef(0);
   const [detailPayment, setDetailPayment] = useState<Payment | null>(null);
   const [reconcilePayment, setReconcilePayment] = useState<Payment | null>(null);
   const [rejectPayment, setRejectPayment] = useState<Payment | null>(null);
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      loadSeqRef.current += 1;
+    };
+  }, []);
+
+  const loadData = useCallback(async (targetFilters?: PaymentFilterParams) => {
+    const requestSeq = ++loadSeqRef.current;
+    const activeFilters = targetFilters ?? filtersRef.current;
     setLoading(true);
     try {
       const [fetchedPayments, fetchedProps, fetchedReservations] = await Promise.all([
-        paymentService.getPayments(filters),
+        paymentService.getPayments(activeFilters),
         propertyService.getProperties(),
         reservationService.getReservations(),
       ]);
+      if (!isMountedRef.current || requestSeq !== loadSeqRef.current) return;
       setPayments(fetchedPayments);
       setProperties(fetchedProps);
       setReservations(fetchedReservations);
     } catch {
+      if (!isMountedRef.current || requestSeq !== loadSeqRef.current) return;
       setFeedback({ type: 'error', message: 'Error al cargar los datos financieros.' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && requestSeq === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    void loadData(filters);
+    return () => {
+      loadSeqRef.current += 1;
+    };
+  }, [filters, loadData]);
+
+  // Captura el contexto de navegación una sola vez y lo limpia del historial
+  useEffect(() => {
+    const state = location.state as { registerPaymentForReservationId?: unknown } | null;
+    const rawId = state?.registerPaymentForReservationId;
+    if (typeof rawId === 'string' && rawId.trim() !== '') {
+      setPendingNavReservationId(rawId.trim());
+      navigate(`${location.pathname}${location.search}`, { replace: true, state: null });
+    }
+  }, [location.pathname, location.search, location.state, navigate]);
+
+  // Resuelve la reserva por ID y valida permiso antes de abrir el formulario
+  useEffect(() => {
+    if (!pendingNavReservationId) return;
+    let active = true;
+    const requestedId = pendingNavReservationId;
+    const requestSeq = ++navRequestSeqRef.current;
+
+    if (!canManagePayments) {
+      setFeedback({
+        type: 'error',
+        message: 'No cuentas con permisos para registrar abonos en esta reserva.',
+      });
+      setPendingNavReservationId(null);
+      return;
+    }
+
+    reservationService
+      .getReservationById(requestedId)
+      .then((resolved) => {
+        if (!active || requestSeq !== navRequestSeqRef.current) return;
+        if (!resolved) {
+          setFeedback({
+            type: 'error',
+            message: 'No se encontró la reserva solicitada para registrar el abono.',
+          });
+          return;
+        }
+        setFeedback(null);
+        setPreselectedReservation(resolved);
+        setIsFormOpen(true);
+      })
+      .catch((err: unknown) => {
+        if (!active || requestSeq !== navRequestSeqRef.current) return;
+        setFeedback({
+          type: 'error',
+          message:
+            err instanceof Error
+              ? err.message
+              : 'No se pudo consultar la reserva solicitada para registrar el abono.',
+        });
+      })
+      .finally(() => {
+        if (active && requestSeq === navRequestSeqRef.current) {
+          setPendingNavReservationId(null);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [pendingNavReservationId, canManagePayments]);
+
+  // Sincroniza filtro de reserva cuando cambia ?reservaId= en la URL
+  useEffect(() => {
+    const urlReservaId = readReservaIdParam(location.search);
+    if (urlReservaId !== lastUrlReservaIdRef.current) {
+      lastUrlReservaIdRef.current = urlReservaId;
+      setFilters((prev) => ({
+        ...prev,
+        reservaId: urlReservaId || 'TODAS',
+      }));
+    }
+  }, [location.search]);
+
+  const clearReservaIdFromUrl = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('reservaId')) return;
+    params.delete('reservaId');
+    const nextSearch = params.toString();
+    lastUrlReservaIdRef.current = null;
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true, state: location.state }
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
 
   // Manejo de filtros
   const handleFilterChange = (newFilters: Partial<PaymentFilterParams>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
+    if ('reservaId' in newFilters) {
+      clearReservaIdFromUrl();
+    }
   };
 
   const handleResetFilters = () => {
+    clearReservaIdFromUrl();
     setFilters({
       search: '',
       propiedadId: 'TODAS',
@@ -168,14 +301,21 @@ export const PaymentsPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsFormOpen(true)}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#162A2C] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#183b32] transition-colors cursor-pointer self-start sm:self-auto"
-        >
-          <Plus size={16} aria-hidden="true" />
-          <span>Registrar Abono</span>
-        </button>
+        {canManagePayments && (
+          <button
+            type="button"
+            onClick={() => {
+              navRequestSeqRef.current += 1;
+              setPendingNavReservationId(null);
+              setPreselectedReservation(null);
+              setIsFormOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#162A2C] px-3.5 py-2 text-xs sm:text-sm font-semibold text-white shadow-2xs hover:bg-[#183b32] transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            <Plus size={16} aria-hidden="true" />
+            <span>Registrar Abono</span>
+          </button>
+        )}
       </div>
 
       {/* Alerta de feedback */}
@@ -296,9 +436,13 @@ export const PaymentsPage: React.FC = () => {
       {/* Modales */}
       <PaymentFormModal
         isOpen={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
+        onClose={() => {
+          setIsFormOpen(false);
+          setPreselectedReservation(null);
+        }}
         onSubmit={handleCreatePayment}
         reservations={reservations}
+        preselectedReservation={preselectedReservation}
       />
 
       <PaymentDetailModal

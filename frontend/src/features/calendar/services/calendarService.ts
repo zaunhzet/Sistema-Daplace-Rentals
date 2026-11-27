@@ -1,7 +1,16 @@
-import type { CalendarDay, DayOccupancyStatus, MonthOccupancySummary } from '../types';
+import type {
+  CalendarAgendaData,
+  CalendarAgendaItem,
+  CalendarAgendaMaintenanceProperty,
+  CalendarAgendaOpenOrder,
+  CalendarDay,
+  DayOccupancyStatus,
+  MonthOccupancySummary,
+} from '../types';
 import type { Reservation } from '../../reservations/types';
 import { reservationService } from '../../reservations/services/reservationService';
 import { propertyService } from '../../properties/services/propertyService';
+import { maintenanceService } from '../../maintenance/services/maintenanceService';
 import { apiClient } from '../../../shared/api/client';
 import { isMockMode } from '../../../shared/api/config';
 
@@ -108,6 +117,18 @@ export function getMonthName(month: number): string {
 export interface ICalendarService {
   getMonthDays(propiedadId: string, year: number, month: number): Promise<CalendarDay[]>;
   getMonthSummary(days: CalendarDay[]): MonthOccupancySummary;
+  getDailyAgenda(fecha: string, propiedadId?: string): Promise<CalendarAgendaData>;
+}
+
+function sortAgendaItems(items: CalendarAgendaItem[]): CalendarAgendaItem[] {
+  return [...items].sort((a, b) => {
+    const ha = a.hora && a.hora.trim() !== '' ? a.hora.trim() : null;
+    const hb = b.hora && b.hora.trim() !== '' ? b.hora.trim() : null;
+    if (ha === null && hb === null) return 0;
+    if (ha === null) return 1;
+    if (hb === null) return -1;
+    return ha.localeCompare(hb);
+  });
 }
 
 class CalendarService implements ICalendarService {
@@ -258,6 +279,104 @@ class CalendarService implements ICalendarService {
       occupancyRate,
     };
   }
+
+  public async getDailyAgenda(fecha: string, propiedadId?: string): Promise<CalendarAgendaData> {
+    const [allReservations, allProperties, allOrders] = await Promise.all([
+      reservationService.getReservations(propiedadId ? { propiedadId } : undefined),
+      propertyService.getProperties(),
+      maintenanceService.getOrders(propiedadId ? { propiedadId } : {}).catch(() => []),
+    ]);
+
+    const activeReservations = allReservations.filter(
+      (r) =>
+        !['CANCELADA', 'EXPIRADA'].includes(r.estado) &&
+        (!propiedadId || r.propiedadId === propiedadId)
+    );
+
+    const llegadas: CalendarAgendaItem[] = activeReservations
+      .filter((r) => r.ingreso === fecha)
+      .map((r) => ({
+        reservaId: r.id,
+        codigo: r.codigo,
+        propiedadId: r.propiedadId,
+        propiedadNombre: r.propiedadNombre,
+        huespedNombre: r.huespedNombre,
+        estado: r.estado as CalendarAgendaItem['estado'],
+        hora: r.horaCheckIn || null,
+      }));
+
+    const salidas: CalendarAgendaItem[] = activeReservations
+      .filter((r) => r.salida === fecha)
+      .map((r) => ({
+        reservaId: r.id,
+        codigo: r.codigo,
+        propiedadId: r.propiedadId,
+        propiedadNombre: r.propiedadNombre,
+        huespedNombre: r.huespedNombre,
+        estado: r.estado as CalendarAgendaItem['estado'],
+        hora: r.horaCheckOut || null,
+      }));
+
+    const propiedadesEnMantenimiento: CalendarAgendaMaintenanceProperty[] = allProperties
+      .filter(
+        (p) =>
+          p.estadoOperativo === 'EN_MANTENIMIENTO' &&
+          (!propiedadId || p.id === propiedadId)
+      )
+      .map((p) => ({
+        propiedadId: p.id,
+        propiedadNombre: p.nombre,
+      }))
+      .sort(
+        (a, b) =>
+          a.propiedadNombre.localeCompare(b.propiedadNombre, 'es') ||
+          a.propiedadId.localeCompare(b.propiedadId)
+      );
+
+    const prioRank: Record<CalendarAgendaOpenOrder['prioridad'], number> = {
+      URGENTE: 0,
+      ALTA: 1,
+      MEDIA: 2,
+      BAJA: 3,
+    };
+    const statusRank: Record<CalendarAgendaOpenOrder['estado'], number> = {
+      EN_PROGRESO: 0,
+      PENDIENTE: 1,
+    };
+
+    const ordenesAbiertas: CalendarAgendaOpenOrder[] = allOrders
+      .filter(
+        (o) =>
+          (o.estado === 'PENDIENTE' || o.estado === 'EN_PROGRESO') &&
+          (!propiedadId || o.propiedadId === propiedadId)
+      )
+      .map((o) => ({
+        ordenId: o.id,
+        propiedadId: o.propiedadId,
+        propiedadNombre: o.propiedadNombre || '',
+        titulo: o.titulo,
+        estado: o.estado as CalendarAgendaOpenOrder['estado'],
+        prioridad: o.prioridad as CalendarAgendaOpenOrder['prioridad'],
+      }))
+      .sort(
+        (a, b) =>
+          (prioRank[a.prioridad] ?? 99) - (prioRank[b.prioridad] ?? 99) ||
+          (statusRank[a.estado] ?? 99) - (statusRank[b.estado] ?? 99) ||
+          a.propiedadNombre.localeCompare(b.propiedadNombre, 'es') ||
+          a.titulo.localeCompare(b.titulo, 'es') ||
+          a.ordenId.localeCompare(b.ordenId)
+      );
+
+    return {
+      fecha,
+      llegadas: sortAgendaItems(llegadas),
+      salidas: sortAgendaItems(salidas),
+      mantenimiento: {
+        propiedadesEnMantenimiento,
+        ordenesAbiertas,
+      },
+    };
+  }
 }
 
 export { CalendarService as MockCalendarService };
@@ -272,6 +391,17 @@ export class ApiCalendarService implements ICalendarService {
       `/api/calendario?propiedadId=${encodeURIComponent(propiedadId)}&year=${year}&month=${month}`
     );
     return data.days;
+  }
+
+  public async getDailyAgenda(fecha: string, propiedadId?: string): Promise<CalendarAgendaData> {
+    const params = new URLSearchParams({ fecha });
+    if (propiedadId) {
+      params.set('propiedadId', propiedadId);
+    }
+    const res = await apiClient<{ data: CalendarAgendaData }>(
+      `/api/calendario/agenda?${params.toString()}`
+    );
+    return res.data;
   }
 
   public getMonthSummary(days: CalendarDay[]): MonthOccupancySummary {
