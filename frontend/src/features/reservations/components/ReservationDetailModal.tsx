@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router';
 import { AlertCircle, CheckCircle2, Clock, FileText, Plus, ShieldAlert, X } from 'lucide-react';
 import type {
   ConfirmationRequirementsResult,
@@ -8,6 +9,10 @@ import type {
 import { reservationService } from '../services/reservationService';
 import { ApiError } from '../../../shared/api/client';
 import { TechnicalIdBadge } from '../../../shared/components/TechnicalIdBadge';
+import { useAuth } from '../../auth/AuthContext';
+import { canAccessPath, hasPermission } from '../../../shared/auth/permissions';
+import { ReservationFinancialSummary } from './ReservationFinancialSummary';
+import { ReservationGuaranteeSummary } from './ReservationGuaranteeSummary';
 import {
   formatNights,
   formatTimeHHmm,
@@ -144,6 +149,8 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
   onCancel,
   onOpenEditDates,
 }) => {
+  const { session } = useAuth();
+  const navigate = useNavigate();
   const [isCanceling, setIsCanceling] = useState(false);
   const [cancelMotivo, setCancelMotivo] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
@@ -445,6 +452,47 @@ export const ReservationDetailModal: React.FC<ReservationDetailModalProps> = ({
               )}
             </div>
           </div>
+
+          {canAccessPath(session.user?.rol, '/pagos') && (
+            <ReservationFinancialSummary
+              key={reservation.id}
+              reservationId={reservation.id}
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    to={`/pagos?${new URLSearchParams({ reservaId: reservation.id }).toString()}`}
+                    onClick={onClose}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-50 transition-colors"
+                  >
+                    <span>Ver historial de pagos</span>
+                  </Link>
+                  {hasPermission(session.user?.rol, 'manage:payments') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        navigate('/pagos', {
+                          state: { registerPaymentForReservationId: reservation.id },
+                        });
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-[#162A2C] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#183b32] transition-colors cursor-pointer"
+                    >
+                      <Plus size={14} aria-hidden="true" />
+                      <span>Registrar abono</span>
+                    </button>
+                  )}
+                </div>
+              }
+            />
+          )}
+
+          {canAccessPath(session.user?.rol, '/garantias') && (
+            <ReservationGuaranteeSummary
+              key={`guarantee-${reservation.id}`}
+              reservationId={reservation.id}
+              onNavigate={onClose}
+            />
+          )}
 
           {/* Dates Interval */}
           <div className="rounded-2xl border border-stone-200 bg-white p-5">

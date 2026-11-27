@@ -9,6 +9,129 @@ export function formatDateKey(year: number, month: number, day: number): string 
   return `${y}-${m}-${d}`;
 }
 
+interface AgendaItem {
+  reservaId: string;
+  codigo: string | undefined;
+  propiedadId: string;
+  propiedadNombre: string;
+  huespedNombre: string;
+  estado: string;
+  hora: string | null;
+}
+
+interface AgendaMaintenanceProperty {
+  propiedadId: string;
+  propiedadNombre: string;
+}
+
+interface AgendaOpenMaintenanceOrder {
+  ordenId: string;
+  propiedadId: string;
+  propiedadNombre: string;
+  titulo: string;
+  estado: 'PENDIENTE' | 'EN_PROGRESO';
+  prioridad: 'BAJA' | 'MEDIA' | 'ALTA' | 'URGENTE';
+}
+
+interface AgendaMaintenanceBlock {
+  propiedadesEnMantenimiento: AgendaMaintenanceProperty[];
+  ordenesAbiertas: AgendaOpenMaintenanceOrder[];
+}
+
+const MAINTENANCE_PRIORITY_RANK: Record<AgendaOpenMaintenanceOrder['prioridad'], number> = {
+  URGENTE: 0,
+  ALTA: 1,
+  MEDIA: 2,
+  BAJA: 3,
+};
+
+const MAINTENANCE_STATUS_RANK: Record<AgendaOpenMaintenanceOrder['estado'], number> = {
+  EN_PROGRESO: 0,
+  PENDIENTE: 1,
+};
+
+function compareMaintenanceProperties(
+  a: AgendaMaintenanceProperty,
+  b: AgendaMaintenanceProperty
+): number {
+  const nameCmp = a.propiedadNombre.localeCompare(b.propiedadNombre, 'es');
+  if (nameCmp !== 0) return nameCmp;
+  return a.propiedadId.localeCompare(b.propiedadId);
+}
+
+function compareOpenMaintenanceOrders(
+  a: AgendaOpenMaintenanceOrder,
+  b: AgendaOpenMaintenanceOrder
+): number {
+  const prioCmp =
+    (MAINTENANCE_PRIORITY_RANK[a.prioridad] ?? 99) -
+    (MAINTENANCE_PRIORITY_RANK[b.prioridad] ?? 99);
+  if (prioCmp !== 0) return prioCmp;
+
+  const statusCmp =
+    (MAINTENANCE_STATUS_RANK[a.estado] ?? 99) -
+    (MAINTENANCE_STATUS_RANK[b.estado] ?? 99);
+  if (statusCmp !== 0) return statusCmp;
+
+  const propCmp = a.propiedadNombre.localeCompare(b.propiedadNombre, 'es');
+  if (propCmp !== 0) return propCmp;
+
+  const titleCmp = a.titulo.localeCompare(b.titulo, 'es');
+  if (titleCmp !== 0) return titleCmp;
+
+  return a.ordenId.localeCompare(b.ordenId);
+}
+
+function parseCivilDate(rawFecha?: string): {
+  year: number;
+  month: number;
+  day: number;
+  fecha: string;
+} | null {
+  if (typeof rawFecha !== 'string') return null;
+  const fecha = rawFecha.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const candidate = new Date(Date.UTC(year, month - 1, day));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return { year, month, day, fecha };
+}
+
+function compareAgendaItems(a: AgendaItem, b: AgendaItem): number {
+  if (a.hora !== null && b.hora !== null) {
+    const horaCmp = a.hora.localeCompare(b.hora);
+    if (horaCmp !== 0) return horaCmp;
+  } else if (a.hora !== null) {
+    return -1;
+  } else if (b.hora !== null) {
+    return 1;
+  }
+
+  const propCmp = a.propiedadNombre.localeCompare(b.propiedadNombre, 'es');
+  if (propCmp !== 0) return propCmp;
+
+  const codeCmp = (a.codigo || a.reservaId).localeCompare(b.codigo || b.reservaId);
+  if (codeCmp !== 0) return codeCmp;
+
+  return a.reservaId.localeCompare(b.reservaId);
+}
+
 export function registerCalendarRoutes(prisma: PrismaClient): FastifyPluginAsync {
   return async (app) => {
     app.get<{
@@ -250,6 +373,194 @@ export function registerCalendarRoutes(prisma: PrismaClient): FastifyPluginAsync
             occupiedDays,
             availableDays,
             occupancyRate,
+          },
+        };
+      }
+    );
+
+    app.get<{
+      Querystring: {
+        fecha?: string;
+        propiedadId?: string;
+      };
+    }>(
+      '/api/calendario/agenda',
+      { preHandler: requireAuth(['ADMIN', 'OPERADOR', 'PROPIETARIO']) },
+      async (request, reply) => {
+        const parsedDate = parseCivilDate(request.query.fecha);
+        if (!parsedDate) {
+          return reply.status(400).send({
+            error: {
+              code: 'VALIDATION_ERROR',
+              message: 'El parámetro "fecha" es obligatorio y debe tener formato válido YYYY-MM-DD.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        const { year, month, day, fecha } = parsedDate;
+        const rawPropiedadId = request.query.propiedadId;
+        const propiedadId =
+          typeof rawPropiedadId === 'string' && rawPropiedadId.trim()
+            ? rawPropiedadId.trim()
+            : undefined;
+
+        if (request.user?.rol === 'PROPIETARIO' && !request.user.usuarioId) {
+          return reply.status(403).send({
+            error: {
+              code: 'DOMAIN_IDENTITY_REQUIRED',
+              message: 'Se requiere una identidad transaccional (usuarioId) vinculada para consultar la agenda de propietario.',
+              requestId: request.id,
+            },
+          });
+        }
+
+        if (propiedadId) {
+          const propiedad = await prisma.propiedad.findUnique({
+            where: { id: propiedadId },
+          });
+
+          if (!propiedad) {
+            return reply.status(404).send({
+              error: {
+                code: 'PROPERTY_NOT_FOUND',
+                message: `Propiedad no encontrada con ID "${propiedadId}".`,
+                requestId: request.id,
+              },
+            });
+          }
+
+          if (
+            request.user?.rol === 'PROPIETARIO' &&
+            propiedad.propietarioId !== request.user.usuarioId
+          ) {
+            return reply.status(403).send({
+              error: {
+                code: 'FORBIDDEN',
+                message: 'No tiene autorización para consultar la agenda de esta propiedad.',
+                requestId: request.id,
+              },
+            });
+          }
+        }
+
+        const targetDate = new Date(Date.UTC(year, month - 1, day));
+        const nextDate = new Date(Date.UTC(year, month - 1, day + 1));
+
+        const scopeFilter = propiedadId
+          ? { propiedadId }
+          : request.user?.rol === 'PROPIETARIO'
+            ? { propiedad: { propietarioId: request.user.usuarioId! } }
+            : {};
+
+        const reservations = await prisma.reserva.findMany({
+          where: {
+            estado: { notIn: ['CANCELADA', 'EXPIRADA'] },
+            ...scopeFilter,
+            OR: [
+              { ingreso: { gte: targetDate, lt: nextDate } },
+              { salida: { gte: targetDate, lt: nextDate } },
+            ],
+          },
+          include: {
+            propiedad: { select: { id: true, nombre: true } },
+            huesped: { select: { nombreCompleto: true } },
+          },
+        });
+
+        const toAgendaItem = (
+          r: (typeof reservations)[number],
+          hora: string | null
+        ): AgendaItem => ({
+          reservaId: r.id,
+          codigo: r.codigo || undefined,
+          propiedadId: r.propiedadId,
+          propiedadNombre: r.propiedad?.nombre || '',
+          huespedNombre: r.huesped?.nombreCompleto || 'Huésped',
+          estado: r.estado,
+          hora,
+        });
+
+        const llegadas: AgendaItem[] = [];
+        const salidas: AgendaItem[] = [];
+
+        for (const r of reservations) {
+          if (r.ingreso.toISOString().slice(0, 10) === fecha) {
+            llegadas.push(toAgendaItem(r, r.horaCheckIn?.trim() || null));
+          }
+          if (r.salida.toISOString().slice(0, 10) === fecha) {
+            salidas.push(toAgendaItem(r, r.horaCheckOut?.trim() || null));
+          }
+        }
+
+        llegadas.sort(compareAgendaItems);
+        salidas.sort(compareAgendaItems);
+
+        const canViewMaintenance =
+          request.user?.rol === 'ADMIN' || request.user?.rol === 'OPERADOR';
+
+        let mantenimiento: AgendaMaintenanceBlock | null = null;
+
+        if (canViewMaintenance) {
+          const [maintenanceProps, openOrders] = await Promise.all([
+            prisma.propiedad.findMany({
+              where: {
+                ...(propiedadId ? { id: propiedadId } : {}),
+                estadoOperativo: 'EN_MANTENIMIENTO',
+              },
+              select: {
+                id: true,
+                nombre: true,
+              },
+            }),
+            prisma.ordenTrabajo.findMany({
+              where: {
+                ...(propiedadId ? { propiedadId } : {}),
+                estado: { in: ['PENDIENTE', 'EN_PROGRESO'] },
+              },
+              select: {
+                id: true,
+                propiedadId: true,
+                titulo: true,
+                estado: true,
+                prioridad: true,
+                propiedad: {
+                  select: { nombre: true },
+                },
+              },
+            }),
+          ]);
+
+          const propiedadesEnMantenimiento: AgendaMaintenanceProperty[] = maintenanceProps
+            .map((p) => ({
+              propiedadId: p.id,
+              propiedadNombre: p.nombre,
+            }))
+            .sort(compareMaintenanceProperties);
+
+          const ordenesAbiertas: AgendaOpenMaintenanceOrder[] = openOrders
+            .map((o) => ({
+              ordenId: o.id,
+              propiedadId: o.propiedadId,
+              propiedadNombre: o.propiedad?.nombre || '',
+              titulo: o.titulo,
+              estado: o.estado as AgendaOpenMaintenanceOrder['estado'],
+              prioridad: o.prioridad as AgendaOpenMaintenanceOrder['prioridad'],
+            }))
+            .sort(compareOpenMaintenanceOrders);
+
+          mantenimiento = {
+            propiedadesEnMantenimiento,
+            ordenesAbiertas,
+          };
+        }
+
+        return {
+          data: {
+            fecha,
+            llegadas,
+            salidas,
+            mantenimiento,
           },
         };
       }

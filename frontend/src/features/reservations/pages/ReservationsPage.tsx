@@ -141,11 +141,6 @@ export const ReservationsPage: React.FC = () => {
       showSuccess(`Solicitud de reserva ${created.id} registrada con éxito.`);
       await loadData();
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        showError(err.message);
-      } else {
-        showError('Error al registrar la solicitud.');
-      }
       try {
         await loadData(true);
       } catch {

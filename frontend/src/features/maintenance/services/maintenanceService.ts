@@ -7,7 +7,7 @@ import type {
   MaintenanceSingleResponse,
   UpdateOrderStatusDto,
 } from '../types';
-import { apiClient } from '../../../shared/api/client';
+import { apiClient, ApiError } from '../../../shared/api/client';
 import { isMockMode } from '../../../shared/api/config';
 
 export const MOCK_ORDERS: MaintenanceOrder[] = [
@@ -124,6 +124,25 @@ class MaintenanceService {
     }
   }
 
+  public async getOrderById(id: string): Promise<MaintenanceOrder | null> {
+    if (isMockMode()) {
+      const found = this.orders.find((o) => o.id === id);
+      return found ? { ...found } : null;
+    }
+
+    try {
+      const res = await apiClient<MaintenanceSingleResponse>(
+        `/api/mantenimiento/ordenes/${encodeURIComponent(id)}`
+      );
+      return res.data;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   public async createOrder(dto: CreateOrderDto): Promise<MaintenanceOrder> {
     if (isMockMode()) {
       const newOrder: MaintenanceOrder = {
@@ -207,8 +226,24 @@ class MaintenanceService {
 
       order.estado = dto.estado;
       if (dto.costoReal !== undefined) order.costoReal = dto.costoReal;
-      if (dto.notasResolucion) order.notasResolucion = dto.notasResolucion;
-      if (dto.estado === 'COMPLETADA') order.completadoEn = new Date().toISOString();
+      if (dto.notasResolucion?.trim()) order.notasResolucion = dto.notasResolucion.trim();
+      if (dto.estado === 'COMPLETADA') {
+        order.completadoEn = new Date().toISOString();
+        const otherOpenCount = this.orders.filter(
+          (o) =>
+            o.propiedadId === order.propiedadId &&
+            o.id !== order.id &&
+            (o.estado === 'PENDIENTE' || o.estado === 'EN_PROGRESO')
+        ).length;
+        if (otherOpenCount === 0 && order.propiedadEstadoOperativo === 'EN_MANTENIMIENTO') {
+          order.propiedadEstadoOperativo = 'OPERATIVA';
+          for (const sibling of this.orders) {
+            if (sibling.propiedadId === order.propiedadId) {
+              sibling.propiedadEstadoOperativo = 'OPERATIVA';
+            }
+          }
+        }
+      }
       order.actualizadoEn = new Date().toISOString();
       return { ...order };
     }

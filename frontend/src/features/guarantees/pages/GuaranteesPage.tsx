@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router';
 import { Plus, ShieldCheck, ShieldAlert, RotateCcw, X } from 'lucide-react';
 import type { CreateGuaranteeDto, Guarantee, GuaranteeFilterParams, RegisterGuaranteeMovementDto } from '../types';
 import { guaranteeService } from '../services/guaranteeService';
@@ -14,7 +15,17 @@ import { GuaranteeMovementModal } from '../components/GuaranteeMovementModal';
 import { fromCents, formatMoney, toCents } from '../../../shared/money';
 import { isMockMode } from '../../../shared/api/config';
 
+const readReservaIdParam = (search: string): string | null => {
+  const value = new URLSearchParams(search).get('reservaId')?.trim();
+  return value ? value : null;
+};
+
 export const GuaranteesPage: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const initialUrlReservaId = readReservaIdParam(location.search);
+  const lastUrlReservaIdRef = useRef<string | null>(initialUrlReservaId);
+
   const [guarantees, setGuarantees] = useState<Guarantee[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -25,9 +36,13 @@ export const GuaranteesPage: React.FC = () => {
   const [filters, setFilters] = useState<GuaranteeFilterParams>({
     search: '',
     propiedadId: 'TODAS',
-    reservaId: 'TODAS',
+    reservaId: initialUrlReservaId || 'TODAS',
     estado: 'TODOS',
   });
+  const filtersRef = useRef<GuaranteeFilterParams>(filters);
+  filtersRef.current = filters;
+  const loadSeqRef = useRef(0);
+  const isMountedRef = useRef(true);
 
   // Modales
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -37,33 +52,81 @@ export const GuaranteesPage: React.FC = () => {
     'RETENCION' | 'DEVOLUCION_TOTAL' | 'DEVOLUCION_PARCIAL'
   >('DEVOLUCION_TOTAL');
 
-  const loadData = useCallback(async () => {
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      loadSeqRef.current += 1;
+    };
+  }, []);
+
+  const loadData = useCallback(async (targetFilters?: GuaranteeFilterParams) => {
+    const requestSeq = ++loadSeqRef.current;
+    const activeFilters = targetFilters ?? filtersRef.current;
     setLoading(true);
     try {
       const [fetchedGuarantees, fetchedProps, fetchedReservations] = await Promise.all([
-        guaranteeService.getGuarantees(filters),
+        guaranteeService.getGuarantees(activeFilters),
         propertyService.getProperties(),
         reservationService.getReservations(),
       ]);
+      if (!isMountedRef.current || requestSeq !== loadSeqRef.current) return;
       setGuarantees(fetchedGuarantees);
       setProperties(fetchedProps);
       setReservations(fetchedReservations);
     } catch {
+      if (!isMountedRef.current || requestSeq !== loadSeqRef.current) return;
       setFeedback({ type: 'error', message: 'Error al cargar el módulo de garantías.' });
     } finally {
-      setLoading(false);
+      if (isMountedRef.current && requestSeq === loadSeqRef.current) {
+        setLoading(false);
+      }
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    void loadData(filters);
+    return () => {
+      loadSeqRef.current += 1;
+    };
+  }, [filters, loadData]);
+
+  // Sincroniza filtro de reserva cuando cambia ?reservaId= en la URL
+  useEffect(() => {
+    const urlReservaId = readReservaIdParam(location.search);
+    if (urlReservaId !== lastUrlReservaIdRef.current) {
+      lastUrlReservaIdRef.current = urlReservaId;
+      setFilters((prev) => ({
+        ...prev,
+        reservaId: urlReservaId || 'TODAS',
+      }));
+    }
+  }, [location.search]);
+
+  const clearReservaIdFromUrl = useCallback(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('reservaId')) return;
+    params.delete('reservaId');
+    const nextSearch = params.toString();
+    lastUrlReservaIdRef.current = null;
+    navigate(
+      {
+        pathname: location.pathname,
+        search: nextSearch ? `?${nextSearch}` : '',
+      },
+      { replace: true, state: location.state }
+    );
+  }, [location.pathname, location.search, location.state, navigate]);
 
   const handleFilterChange = (newFilters: Partial<GuaranteeFilterParams>) => {
     setFilters((prev) => ({ ...prev, ...newFilters }));
+    if ('reservaId' in newFilters) {
+      clearReservaIdFromUrl();
+    }
   };
 
   const handleResetFilters = () => {
+    clearReservaIdFromUrl();
     setFilters({
       search: '',
       propiedadId: 'TODAS',
