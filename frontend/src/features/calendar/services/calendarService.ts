@@ -12,6 +12,91 @@ export function formatDateKey(year: number, month: number, day: number): string 
   return `${y}-${m}-${d}`;
 }
 
+export interface CalendarDatePreferenceInput {
+  year?: unknown;
+  month?: unknown;
+  selectedDate?: unknown;
+}
+
+export interface ResolvedCalendarDateState {
+  year: number;
+  month: number;
+  selectedDate: string;
+}
+
+const CALENDAR_MIN_YEAR = 2000;
+const CALENDAR_MAX_YEAR = 2100;
+const DATE_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidCalendarYear(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= CALENDAR_MIN_YEAR &&
+    value <= CALENDAR_MAX_YEAR
+  );
+}
+
+function isValidCalendarMonth(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 1 &&
+    value <= 12
+  );
+}
+
+function isValidCalendarDateKey(value: unknown): value is string {
+  if (typeof value !== 'string' || !DATE_KEY_PATTERN.test(value)) {
+    return false;
+  }
+  const [yStr, mStr, dStr] = value.split('-');
+  const y = Number(yStr);
+  const m = Number(mStr);
+  const d = Number(dStr);
+  if (!isValidCalendarYear(y) || !isValidCalendarMonth(m) || d < 1 || d > 31) {
+    return false;
+  }
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
+/**
+ * Resuelve la fecha civil local actual para inicializar el calendario sin conversión a UTC.
+ */
+export function getLocalCalendarDateState(now: Date = new Date()): ResolvedCalendarDateState {
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  return {
+    year,
+    month,
+    selectedDate: formatDateKey(year, month, day),
+  };
+}
+
+/**
+ * Conserva preferencias de fecha válidas y usa la fecha civil actual si faltan o son inválidas.
+ */
+export function resolveInitialCalendarDateState(
+  prefs?: CalendarDatePreferenceInput | null,
+  now: Date = new Date()
+): ResolvedCalendarDateState {
+  if (
+    prefs &&
+    isValidCalendarYear(prefs.year) &&
+    isValidCalendarMonth(prefs.month) &&
+    isValidCalendarDateKey(prefs.selectedDate)
+  ) {
+    return {
+      year: prefs.year,
+      month: prefs.month,
+      selectedDate: prefs.selectedDate,
+    };
+  }
+  return getLocalCalendarDateState(now);
+}
+
 export function getMonthName(month: number): string {
   const names = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',

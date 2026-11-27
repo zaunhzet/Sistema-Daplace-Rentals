@@ -3,7 +3,7 @@ import { AlertCircle, CheckCircle, ChevronLeft, ChevronRight, Calendar as Calend
 import type { CalendarDay, MonthOccupancySummary } from '../types';
 import type { Property } from '../../properties/types';
 import type { Reservation } from '../../reservations/types';
-import { calendarService, getMonthName } from '../services/calendarService';
+import { calendarService, getMonthName, resolveInitialCalendarDateState } from '../services/calendarService';
 import { propertyService } from '../../properties/services/propertyService';
 import { reservationService } from '../../reservations/services/reservationService';
 import { CalendarGrid } from '../components/CalendarGrid';
@@ -40,11 +40,12 @@ export const CalendarPage: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>(initialPrefs.propertyId || '');
 
-  // Default to November 2026 (target MVP demo timeframe) or persisted state
-  const [currentYear, setCurrentYear] = useState<number>(initialPrefs.year || 2026);
-  const [currentMonth, setCurrentMonth] = useState<number>(initialPrefs.month || 11);
+  const initialDateState = resolveInitialCalendarDateState(initialPrefs);
+
+  const [currentYear, setCurrentYear] = useState<number>(initialDateState.year);
+  const [currentMonth, setCurrentMonth] = useState<number>(initialDateState.month);
   const [viewMode, setViewMode] = useState<CalendarViewMode>(initialPrefs.viewMode || 'mes');
-  const [selectedDateStr, setSelectedDateStr] = useState<string>(initialPrefs.selectedDate || '2026-11-01');
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(initialDateState.selectedDate);
 
   const [days, setDays] = useState<CalendarDay[]>([]);
   const [summary, setSummary] = useState<MonthOccupancySummary>({

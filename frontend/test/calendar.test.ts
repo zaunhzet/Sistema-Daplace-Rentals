@@ -1,6 +1,6 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { calendarService } from '../src/features/calendar';
+import { calendarService, resolveInitialCalendarDateState } from '../src/features/calendar';
 import { reservationService } from '../src/features/reservations';
 import { propertyService } from '../src/features/properties';
 
@@ -101,5 +101,90 @@ describe('Calendar & Availability Module — Unit Tests (UI-ANDRE-002)', () => {
     assert.equal(summary.occupiedDays, 5);
     assert.equal(summary.availableDays, 25);
     assert.equal(summary.occupancyRate, Math.round((5 / 30) * 100)); // 17%
+  });
+});
+
+describe('Calendar initial date state resolution', () => {
+  it('defaults year, month and selectedDate together to the injected local civil date when preferences are missing', () => {
+    const fixedClock = new Date(2026, 11, 10, 14, 30, 0);
+
+    assert.deepEqual(resolveInitialCalendarDateState(undefined, fixedClock), {
+      year: 2026,
+      month: 12,
+      selectedDate: '2026-12-10',
+    });
+    assert.deepEqual(resolveInitialCalendarDateState({}, fixedClock), {
+      year: 2026,
+      month: 12,
+      selectedDate: '2026-12-10',
+    });
+  });
+
+  it('preserves valid persisted date preferences without imposing extra coupling between month and selectedDate', () => {
+    const fixedClock = new Date(2026, 11, 10, 14, 30, 0);
+
+    assert.deepEqual(
+      resolveInitialCalendarDateState(
+        { year: 2027, month: 1, selectedDate: '2027-01-15' },
+        fixedClock
+      ),
+      {
+        year: 2027,
+        month: 1,
+        selectedDate: '2027-01-15',
+      }
+    );
+
+    assert.deepEqual(
+      resolveInitialCalendarDateState(
+        { year: 2026, month: 11, selectedDate: '2026-12-01' },
+        fixedClock
+      ),
+      {
+        year: 2026,
+        month: 11,
+        selectedDate: '2026-12-01',
+      }
+    );
+  });
+
+  it('recovers a valid local civil date when persisted month is out of range or selectedDate is impossible', () => {
+    const fixedClock = new Date(2026, 11, 10, 14, 30, 0);
+    const expected = { year: 2026, month: 12, selectedDate: '2026-12-10' };
+
+    assert.deepEqual(
+      resolveInitialCalendarDateState({ year: 2026, month: 13, selectedDate: '2026-12-15' }, fixedClock),
+      expected
+    );
+    assert.deepEqual(
+      resolveInitialCalendarDateState({ year: 2026, month: 0, selectedDate: '2026-12-15' }, fixedClock),
+      expected
+    );
+    assert.deepEqual(
+      resolveInitialCalendarDateState({ year: 2026, month: 2, selectedDate: '2026-02-30' }, fixedClock),
+      expected
+    );
+    assert.deepEqual(
+      resolveInitialCalendarDateState({ year: 2026, month: 4, selectedDate: '2026-04-31' }, fixedClock),
+      expected
+    );
+    assert.deepEqual(
+      resolveInitialCalendarDateState({ year: Number.NaN, month: 11, selectedDate: '2026-11-01' }, fixedClock),
+      expected
+    );
+  });
+
+  it('uses local civil date near midnight instead of shifting to the next day via UTC toISOString()', () => {
+    const nearMidnightLocal = new Date(2026, 11, 10, 23, 45, 0);
+    // Simula un desplazamiento UTC (ej. UTC-5 a las 23:45 locales ya es 2026-12-11T04:45:00Z)
+    Object.defineProperty(nearMidnightLocal, 'toISOString', {
+      value: () => '2026-12-11T04:45:00.000Z',
+    });
+
+    assert.deepEqual(resolveInitialCalendarDateState({}, nearMidnightLocal), {
+      year: 2026,
+      month: 12,
+      selectedDate: '2026-12-10',
+    });
   });
 });

@@ -481,7 +481,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           {/* Clave de idempotencia (avanzada) */}
           <div>
             <label htmlFor="pago-idempotency" className="block text-[11px] font-semibold text-stone-500 mb-1">
-              CLAVE DE IDEMPOTENCIA (MOCK TRACER)
+              Clave de idempotencia (opcional)
             </label>
             <input
               id="pago-idempotency"
@@ -490,6 +490,9 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
               onChange={(e) => setIdempotencyKey(e.target.value)}
               className="w-full rounded-xl border border-stone-200 bg-stone-100 px-3 py-1.5 text-[11px] font-mono text-stone-600"
             />
+            <p className="mt-1 text-[11px] text-stone-500">
+              Si reutilizas una clave, conserva los mismos datos del pago.
+            </p>
           </div>
 
           {/* Notas */}
