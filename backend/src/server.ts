@@ -6,8 +6,9 @@ import { PrismaAuthRepository } from './modules/auth/auth.repository.js';
 
 dotenv.config({ path: fileURLToPath(new URL('../../.env', import.meta.url)) });
 
-const host = process.env.API_HOST ?? '127.0.0.1';
-const port = Number(process.env.API_PORT ?? '3000');
+const isVercel = process.env.VERCEL === '1';
+const host = isVercel ? '0.0.0.0' : (process.env.API_HOST ?? '127.0.0.1');
+const port = Number(isVercel ? (process.env.PORT ?? process.env.API_PORT ?? '3000') : (process.env.API_PORT ?? '3000'));
 const databaseUrl = process.env.DATABASE_URL;
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -42,13 +43,18 @@ const app = buildApp({
 
 app.addHook('onClose', async () => database.close());
 
-try {
-  await app.listen({ host, port });
-  if (process.env.ENABLE_DEMO_AUTH_BYPASS === 'true') {
-    app.log.warn('[SECURITY NOTICE] ENABLE_DEMO_AUTH_BYPASS está activado en desarrollo local. El acceso administrativo no requiere token JWT.');
+// Avoid blocking the module import while the platform initializes its HTTP listener.
+async function start() {
+  try {
+    await app.listen({ host, port });
+    if (process.env.ENABLE_DEMO_AUTH_BYPASS === 'true') {
+      app.log.warn('[SECURITY NOTICE] ENABLE_DEMO_AUTH_BYPASS está activado en desarrollo local. El acceso administrativo no requiere token JWT.');
+    }
+  } catch (error) {
+    app.log.error(error);
+    await app.close();
+    process.exitCode = 1;
   }
-} catch (error) {
-  app.log.error(error);
-  await app.close();
-  process.exitCode = 1;
 }
+
+void start();
