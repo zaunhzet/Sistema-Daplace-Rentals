@@ -6,8 +6,8 @@ import type {
 } from './types';
 
 export const API_BASE_URL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_BASE_URL) ||
-  'http://127.0.0.1:3000';
+  import.meta.env?.VITE_API_BASE_URL ||
+  (import.meta.env?.PROD ? '' : 'http://127.0.0.1:3000');
 
 let inMemoryAccessToken: string | null = null;
 let activeRefreshPromise: Promise<RefreshResponse> | null = null;
