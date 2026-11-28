@@ -34,7 +34,7 @@ export class ApiError extends Error {
 
 export function getApiBaseUrl(): string {
   // En navegador con Vite dev server, la ruta relativa aprovecha el proxy '/api' sin problemas de CORS
-  if (typeof window !== 'undefined' && window.location) {
+  if (import.meta.env?.PROD || (typeof window !== 'undefined' && window.location)) {
     return '';
   }
   return 'http://127.0.0.1:3000';

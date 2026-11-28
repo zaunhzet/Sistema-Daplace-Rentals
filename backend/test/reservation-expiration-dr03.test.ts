@@ -5,7 +5,7 @@ import { Prisma } from '../src/generated/prisma/client.js';
 import { buildApp } from '../src/app/app.js';
 import { seedDatabase } from '../src/scripts/seed.js';
 import { getRequiredTestDatabaseUrl, safeResetTestDatabase, createDatabase } from './test-helpers.js';
-import { createSyntheticClock } from '../src/modules/reservations/expirationClock.js';
+import { createSyntheticClock, productionExpirationClock } from '../src/modules/reservations/expirationClock.js';
 import { expireLockedReservation, expireDueBatch } from '../src/modules/reservations/expirationService.js';
 import pg from 'pg';
 import {
@@ -1000,12 +1000,12 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
       const resId = cRes.json().id;
 
       const claimed = await claimDueNotices(db.prisma, {
-        now: new Date('2026-11-03T12:00:00Z'),
+        now: claimTime,
       });
       const item = claimed.find((x) => x.reservaId === resId);
       assert.ok(item, 'Debe haber reclamado el aviso programado de la reserva creada');
 
-      const processRes = await processClaimedNotice(db.prisma, item, mockSender, claimTime);
+      const processRes = await processClaimedNotice(db.prisma, item, mockSender, undefined, createSyntheticClock(claimTime));
       assert.equal(processRes.status, 'ENVIADO');
 
       const updatedNotice = await db.prisma.avisoReserva.findUnique({ where: { id: item.id } });
@@ -1059,13 +1059,12 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
         });
       });
 
-      const claimed = await claimDueNotices(db.prisma, {
-        now: new Date('2026-11-04T10:05:00Z'),
-      });
+      const claimTime = new Date('2026-11-04T10:05:00Z');
+      const claimed = await claimDueNotices(db.prisma, { now: claimTime });
       const item = claimed.find((x) => x.id === notice.id);
       assert.ok(item);
 
-      const res = await processClaimedNotice(db.prisma, item, mockSender, new Date());
+      const res = await processClaimedNotice(db.prisma, item, mockSender, undefined, createSyntheticClock(claimTime));
       assert.equal(res.status, 'FALLIDO'); // Status retornado del procesamiento de reintentos
 
       const updatedNotice = await db.prisma.avisoReserva.findUnique({ where: { id: notice.id } });
@@ -1090,18 +1089,17 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
 
       // res-01 está en CONFIRMADA -> un aviso EXPIRACION_PROXIMA es obsoleto
       const mockSender = new MockNoticeSender();
-      const claimed = await claimDueNotices(db.prisma, {
-        now: new Date('2026-11-03T12:00:00Z'),
-      });
+      const claimTime = new Date('2026-11-03T12:00:00Z');
+      const claimed = await claimDueNotices(db.prisma, { now: claimTime });
       const item = claimed.find((x) => x.id === notice.id);
-      if (item) {
-        const res = await processClaimedNotice(db.prisma, item, mockSender, new Date());
-        assert.equal(res.status, 'CANCELADO');
+      assert.ok(item, 'Debe haber reclamado el aviso obsoleto');
+      const res = await processClaimedNotice(db.prisma, item, mockSender, undefined, createSyntheticClock(claimTime));
+      assert.equal(res.status, 'CANCELADO');
 
-        const inDb = await db.prisma.avisoReserva.findUnique({ where: { id: notice.id } });
-        assert.equal(inDb?.estado, 'CANCELADO');
-        assert.ok(inDb?.motivoCancelacion?.includes('RESERVA_NO_SOLICITADA'));
-      }
+      const inDb = await db.prisma.avisoReserva.findUnique({ where: { id: notice.id } });
+      assert.equal(inDb?.estado, 'CANCELADO');
+      assert.ok(inDb?.motivoCancelacion?.includes('RESERVA_NO_SOLICITADA'));
+      assert.equal(inDb?.proveedorId, null);
     });
 
     it('N07: Falla de un aviso no revierte la expiración ya comprometida en base de datos', async () => {
@@ -1456,6 +1454,11 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
 
       // 4. Activado con --mock en daplace_test en modo once: procesa avisos elegibles
       const resId = 'res-n12-runner';
+      const databaseNow = await productionExpirationClock.now(db.prisma);
+      const hour = 60 * 60 * 1000;
+      const startedAt = new Date(databaseNow.getTime() - hour);
+      const dueAt = new Date(databaseNow.getTime() - hour / 2);
+      const expiresAt = new Date(databaseNow.getTime() + hour);
       await db.prisma.reserva.upsert({
         where: { id: resId },
         create: {
@@ -1469,12 +1472,16 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
           montoAcordado: 800,
           moneda: 'PEN',
           origen: 'DIRECTO',
-          plazoIniciadoEn: new Date('2026-10-01T00:00:00Z'),
-          venceEn: new Date('2026-11-04T10:00:00Z'),
+          plazoIniciadoEn: startedAt,
+          venceEn: expiresAt,
           politicaPlazoVersion: 'v1.0-directo-72h',
           politicaPlazoSnapshot: {},
         },
-        update: { estado: 'SOLICITADA' },
+        update: {
+          estado: 'SOLICITADA',
+          plazoIniciadoEn: startedAt,
+          venceEn: expiresAt,
+        },
       });
 
       const notice = await db.prisma.$transaction(async (tx) => {
@@ -1484,8 +1491,8 @@ describe('DR-03: Expiración Automática, Disponibilidad y Avisos Durables — S
           canal: 'EMAIL',
           plantilla: 'RECORDATORIO_PREAVISO',
           politicaVersion: 'v1.0-directo-72h',
-          venceEnSnapshot: new Date('2026-11-04T10:00:00Z'),
-          programadoPara: new Date('2026-10-01T10:00:00Z'), // En el pasado
+          venceEnSnapshot: expiresAt,
+          programadoPara: dueAt,
         });
       });
 
